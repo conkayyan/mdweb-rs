@@ -131,6 +131,15 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
         });
     }
 
+    // Sitemap: unprefixed, spans all languages.
+    if segs.len() == 1 && segs[0] == "sitemap.xml" {
+        let body = feed::sitemap_xml(site);
+        return Ok(Response {
+            body: body.into_bytes(),
+            content_type: "application/xml; charset=utf-8",
+        });
+    }
+
     // RSS feed for the default language at /rss.xml; for other languages at
     // /<lang>/rss.xml. Detect both shapes after stripping the lang prefix
     // below.

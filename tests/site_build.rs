@@ -237,6 +237,55 @@ base_url = "http://example.com""#,
 }
 
 #[test]
+fn sitemap_lists_home_categories_and_articles() {
+    let dir = tempdir("sitemap");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+base_url = "http://example.com"
+languages = ["en", "zh"]"#,
+    );
+    write(
+        &dir,
+        "posts/hello.md",
+        "---\ntitle: Hello\ndate: 2026-08-01\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "posts/hello.zh.md",
+        "---\ntitle: 你好\ndate: 2026-08-01\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "about.md",
+        "---\ntitle: About\nlayout: page\n---\nbody\n",
+    );
+    let site = Site::build(&dir, None).expect("build");
+    let xml = mdweb::feed::sitemap_xml(&site);
+    assert!(xml.starts_with("<?xml"));
+    assert!(xml.contains("<urlset"));
+    assert!(xml.contains("http://example.com/"), "home URL");
+    assert!(
+        xml.contains("http://example.com/zh/"),
+        "default language prefix should be reachable at /zh/"
+    );
+    assert!(
+        xml.contains("http://example.com/posts/hello/"),
+        "english article URL"
+    );
+    assert!(
+        xml.contains("http://example.com/zh/posts/hello/"),
+        "chinese article URL"
+    );
+    assert!(
+        xml.contains("http://example.com/about/"),
+        "page layout should also be in the sitemap"
+    );
+    assert!(xml.contains("<lastmod>2026-08-01"), "date becomes lastmod");
+}
+
+#[test]
 fn search_page_lists_matching_articles() {
     let dir = tempdir("searchpg");
     write(&dir, "site.toml", r#"title = "X""#);
@@ -254,6 +303,8 @@ fn search_page_lists_matching_articles() {
     let site = Site::build(&dir, None).expect("build");
     let html = mdweb::render::render_search(&site, "en", "sourdough").expect("render");
     assert!(html.contains("Cooking bread"), "matching article should appear");
+    // "Rust intro" still shows in the recent-nav sidebar; scope the check to
+    // the search-result section so the test reflects actual filtering.
     assert!(
         !html.contains("search-result-title\">Rust intro"),
         "non-matching article should not appear in the result list"
@@ -290,4 +341,3 @@ fn search_results_can_be_queried_directly() {
     let none = mdweb::feed::search_results(&site, "   ", "en");
     assert!(none.is_empty());
 }
-

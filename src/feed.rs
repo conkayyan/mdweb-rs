@@ -12,7 +12,7 @@
 //! `search_results` runs the matching logic on the server side so the
 //! `/search?q=...` page can render without round-tripping through JSON.
 
-use crate::content::{Article, Site};
+use crate::content::{Article, Category, Site};
 
 /// Strip HTML tags from a markdown-rendered string. Used to keep the search
 /// index small (no `<p>` / `<strong>` tokens for the browser to chew on).
@@ -304,3 +304,95 @@ fn rfc822_from_iso(iso: &str) -> String {
     format!("{y:04}-{m:02}-{d:02}T{time}Z")
 }
 
+/// Sitemap XML 0.9 covering every home, category, article and page across all
+/// configured languages. `<lastmod>` falls back through `updated_iso` →
+/// `date_iso` → empty so consumers can choose what to honor.
+pub fn sitemap_xml(site: &Site) -> String {
+    let base = site.config.base_url.trim_end_matches('/').to_string();
+    let mut urls: Vec<(String, Option<String>)> = Vec::new();
+    urls.push((site.config.lang_prefix(&site.default_lang), None));
+
+    fn walk_cat(
+        cats: &[Category],
+        lang: &str,
+        out: &mut Vec<(String, Option<String>)>,
+    ) {
+        for c in cats {
+            if let Some(url) = c.urls.get(lang) {
+                if !url.is_empty() && url != "#" {
+                    out.push((url.clone(), None));
+                }
+            }
+            walk_cat(&c.children, lang, out);
+        }
+    }
+
+    for lang in &site.languages {
+        walk_cat(&site.tree, lang, &mut urls);
+    }
+
+    for a in &site.articles {
+        if a.draft {
+            continue;
+        }
+        let lastmod = a
+            .updated_iso
+            .as_deref()
+            .or(a.date_iso.as_deref())
+            .filter(|s| !s.is_empty());
+        urls.push((a.url.clone(), lastmod.map(|s| s.to_string())));
+    }
+
+    // Stable, de-duped order: language-prefix then alpha.
+    urls.sort_by(|a, b| a.0.cmp(&b.0));
+    urls.dedup_by(|a, b| a.0 == b.0);
+
+    let mut out = String::with_capacity(1024 + urls.len() * 200);
+    out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    out.push_str("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
+    for (rel, lastmod) in &urls {
+        let loc = format!("{base}{rel}");
+        out.push_str("  <url>\n");
+        out.push_str(&format!("    <loc>{}</loc>\n", xml_escape(&loc)));
+        if let Some(lm) = lastmod {
+            out.push_str(&format!("    <lastmod>{}</lastmod>\n", xml_escape(lm)));
+        }
+        out.push_str("  </url>\n");
+    }
+    out.push_str("</urlset>\n");
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_html_removes_tags() {
+        assert_eq!(strip_html("<p>hello <strong>world</strong></p>"), "hello world");
+    }
+
+    #[test]
+    fn json_str_escapes() {
+        assert_eq!(json_str("a\"b"), "\"a\\\"b\"");
+        assert_eq!(json_str("line\nbreak"), "\"line\\nbreak\"");
+    }
+
+    #[test]
+    fn xml_escapes_specials() {
+        assert_eq!(xml_escape("a&b<c>d"), "a&amp;b&lt;c&gt;d");
+    }
+
+    #[test]
+    fn rfc822_from_iso_handles_basic_date() {
+        assert_eq!(rfc822_from_iso("2026-08-01"), "2026-08-01T00:00:00Z");
+    }
+
+    #[test]
+    fn rfc822_from_iso_passes_through_full_iso() {
+        assert_eq!(
+            rfc822_from_iso("2026-08-01T12:34:56Z"),
+            "2026-08-01T12:34:56Z"
+        );
+    }
+}
