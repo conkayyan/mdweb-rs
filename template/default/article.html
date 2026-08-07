@@ -4,7 +4,7 @@
 <article class="post">
   <h1 class="post-title">{{ article.title }}</h1>
   <div class="post-meta">
-    {% if article.date %}<span>{{ t.published }} <time datetime="{{ article.date_iso }}">{{ article.date }}</time></span>{% endif %}
+    {% if article.date_display %}<span>{{ t.published }} <time datetime="{{ article.date_display }}">{{ article.date_display }}</time></span>{% endif %}
     {% if article.updated %}<span>{{ t.updated }} <time datetime="{{ article.updated_iso }}">{{ article.updated }}</time></span>{% endif %}
     {% if article.author %}<span>{{ t.author }} {{ article.author }}</span>{% endif %}
     {% if article.reading_minutes %}<span class="reading-time">{{ article.reading_minutes }} {{ t.reading_time }}</span>{% endif %}

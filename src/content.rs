@@ -87,6 +87,13 @@ impl Article {
         minutes.ceil() as i64
     }
 
+    /// Always-on display date: the frontmatter `date` if set. Returns an
+    /// empty string when the MD header omits `date:`, so authors can leave
+    /// the field off if they don't want a creation date on the listing.
+    pub fn date_display(&self) -> String {
+        self.date.clone().unwrap_or_default()
+    }
+
     /// Serialise to a template value.
     pub fn to_value(&self) -> Value {
         let mut m = BTreeMap::new();
@@ -98,6 +105,7 @@ impl Article {
         m.insert("date_iso".into(), opt_str(self.date_iso.as_deref()));
         m.insert("updated".into(), opt_str(self.updated.as_deref()));
         m.insert("updated_iso".into(), opt_str(self.updated_iso.as_deref()));
+        m.insert("date_display".into(), opt_str(Some(&self.date_display())));
         m.insert("author".into(), Value::str(&self.author));
         m.insert("reading_minutes".into(), Value::int(self.reading_minutes()));
         m.insert(
@@ -146,15 +154,67 @@ pub struct Category {
 }
 
 impl Category {
-    fn nav_value(&self, lang: &str) -> Value {
+    /// Serialise a category for navigation listings (sidebar tree, subcategory
+    /// list, etc.). Surfaces translations so templates can render language
+    /// badges for every available variant.
+    fn nav_value(&self, lang: &str, config: &Config, default_lang: &str) -> Value {
+        let title = self
+            .titles
+            .get(lang)
+            .cloned()
+            .unwrap_or_else(|| self.slug.clone());
+        let url = self
+            .urls
+            .get(lang)
+            .cloned()
+            .unwrap_or_else(|| "#".to_string());
+        let mut translations: Vec<Value> = Vec::new();
+        for (other_lang, other_url) in &self.urls {
+            if other_lang == lang || other_url.is_empty() || other_url == "#" {
+                continue;
+            }
+            translations.push(Value::Map(BTreeMap::from([
+                ("lang".to_string(), Value::str(other_lang)),
+                (
+                    "title".to_string(),
+                    Value::str(
+                        self.titles
+                            .get(other_lang)
+                            .cloned()
+                            .unwrap_or_else(|| self.slug.clone()),
+                    ),
+                ),
+                ("url".to_string(), Value::str(other_url)),
+                (
+                    "display_name".to_string(),
+                    Value::str(&config.display_name_for(other_lang)),
+                ),
+            ])));
+        }
+        translations.sort_by(|a, b| {
+            let al = a
+                .as_map()
+                .and_then(|m| m.get("lang"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let bl = b
+                .as_map()
+                .and_then(|m| m.get("lang"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            al.cmp(bl)
+        });
         Value::Map(BTreeMap::from([
+            ("title".to_string(), Value::str(&title)),
+            ("url".to_string(), Value::str(&url)),
+            ("translations".to_string(), Value::Arr(translations)),
             (
-                "title".into(),
-                Value::str(self.titles.get(lang).cloned().unwrap_or_else(|| self.slug.clone())),
-            ),
-            (
-                "url".into(),
-                Value::str(self.urls.get(lang).cloned().unwrap_or_else(|| "#".into())),
+                "lang".to_string(),
+                Value::str(if self.titles.contains_key(lang) {
+                    lang
+                } else {
+                    default_lang
+                }),
             ),
         ]))
     }
@@ -473,7 +533,7 @@ impl Site {
         arts.sort_by_key(|a| {
             std::cmp::Reverse(a.path("sort_ts").and_then(|v| v.as_int()).unwrap_or(0))
         });
-        let children: Vec<Value> = cat.children.iter().map(|c| c.nav_value(lang)).collect();
+        let children: Vec<Value> = cat.children.iter().map(|c| c.nav_value(lang, &self.config, &self.default_lang)).collect();
         Value::Map(BTreeMap::from([
             (
                 "title".to_string(),
