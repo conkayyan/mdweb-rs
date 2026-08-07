@@ -46,6 +46,7 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
         .collect();
     let rss_url = format!("{}rss.xml", config.lang_prefix(lang));
     let search_action = format!("{}search", config.lang_prefix(lang));
+    let sitemap_url = "/sitemap.xml".to_string();
     let mut t = BTreeMap::new();
     for (key, _) in I18N_DEFAULTS {
         t.insert((*key).to_string(), Value::str(&config.t(key, lang)));
@@ -96,6 +97,9 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
         ("recent".to_string(), recent),
         ("friend_links".to_string(), Value::Arr(friend_links)),
         ("rss_url".to_string(), Value::str(&rss_url)),
+        ("sitemap_url".to_string(), Value::str(&sitemap_url)),
+        ("show_rss".to_string(), Value::Bool(config.show_rss)),
+        ("show_sitemap".to_string(), Value::Bool(config.show_sitemap)),
         ("search_action".to_string(), Value::str(&search_action)),
         ("search_query".to_string(), Value::str(current_query)),
         ("current_year".to_string(), Value::str(&year)),

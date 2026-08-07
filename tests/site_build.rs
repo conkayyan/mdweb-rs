@@ -172,7 +172,7 @@ fn missing_custom_theme_falls_back_to_embedded() {
 }
 
 #[test]
-fn sidebar_renders_search_input_and_rss_link() {
+fn sidebar_renders_search_input() {
     let dir = tempdir("search");
     write(&dir, "site.toml", r#"title = "X""#);
     write(&dir, "content/_index.md", "---\n---\nbody\n");
@@ -188,7 +188,6 @@ fn sidebar_renders_search_input_and_rss_link() {
         html.contains("side-search-input"),
         "sidebar should expose the search input"
     );
-    assert!(html.contains("rss.xml"), "sidebar should link to the RSS feed");
     assert!(
         html.contains("application/rss+xml"),
         "base.html should advertise the RSS feed via <link rel=alternate>"
@@ -577,6 +576,78 @@ fn directory_drives_template_selection() {
 }
 
 #[test]
+fn show_rss_and_sitemap_toggle_footer_links() {
+    use mdweb::config::Config;
+    let dir_on = tempdir("toggleon");
+    write(
+        &dir_on,
+        "site.toml",
+        r#"title = "X"
+show_rss = true
+show_sitemap = true"#,
+    );
+    write(&dir_on, "content/_index.md", "---\n---\nbody\n");
+    let site_on = Site::build(&dir_on, None).expect("build");
+    assert!(site_on.config.show_rss);
+    assert!(site_on.config.show_sitemap);
+    let html_on = mdweb::render::render_home(&site_on, "en").expect("render on");
+    assert!(html_on.contains("footer-links"), "footer-links block visible when on");
+    assert!(html_on.contains("<a href=\"/rss.xml\""), "RSS footer link visible when on");
+    assert!(html_on.contains("<a href=\"/sitemap.xml\""), "sitemap footer link visible when on");
+
+    let dir_off = tempdir("toggleoff");
+    write(
+        &dir_off,
+        "site.toml",
+        r#"title = "X"
+show_rss = false
+show_sitemap = false"#,
+    );
+    write(&dir_off, "content/_index.md", "---\n---\nbody\n");
+    let site_off = Site::build(&dir_off, None).expect("build");
+    assert!(!site_off.config.show_rss);
+    assert!(!site_off.config.show_sitemap);
+    let html_off = mdweb::render::render_home(&site_off, "en").expect("render off");
+    assert!(!html_off.contains("footer-links"), "footer-links block hidden when both off");
+    assert!(!html_off.contains("<a href=\"/rss.xml\""), "RSS footer link hidden when off");
+    assert!(!html_off.contains("<a href=\"/sitemap.xml\""), "sitemap footer link hidden when off");
+
+    // Default = both on when unset.
+    let cfg: Config = Default::default();
+    assert!(cfg.show_rss);
+    assert!(cfg.show_sitemap);
+}
+
+#[test]
+fn sidebar_drops_rss_link() {
+    // RSS was previously surfaced as a small link in the sidebar search
+    // nav; it now lives only in the footer (and only when show_rss = true).
+    let dir = tempdir("nosidebars");
+    write(&dir, "site.toml", r#"title = "X""#);
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    write(
+        &dir,
+        "content/posts/hello.md",
+        "---\ntitle: Hello\ndate: 2026-08-01\n---\nbody\n",
+    );
+    let site = Site::build(&dir, None).expect("build");
+    let html = mdweb::render::render_home(&site, "en").expect("render");
+    assert!(
+        !html.contains("rss-link"),
+        "sidebar no longer exposes the rss-link class"
+    );
+    // The sidebar used to include a sidebar RSS link button; verify that
+    // nothing in the sidebar still points at /rss.xml as a sidebar link
+    // (vs. the <link rel=alternate> in <head>, which we keep).
+    let sidebar_start = html.find("<aside class=\"sidebar\"").unwrap_or(0);
+    let sidebar_end = html.find("</aside>").unwrap_or(html.len());
+    let sidebar = &html[sidebar_start..sidebar_end];
+    assert!(
+        !sidebar.contains("/rss.xml"),
+        "RSS must not appear as a sidebar link (footer-only now)"
+    );
+}
+    #[test]
 fn root_level_md_files_become_root_pages() {
     // `content/about.md` (directly under content/) is a top-level page with
     // an empty path and a flat URL `/about/`. It must NOT appear in the

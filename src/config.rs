@@ -61,6 +61,10 @@ pub struct Config {
     pub i18n: BTreeMap<String, BTreeMap<String, String>>,
     /// Friend links parsed from `[[friend_links]]` tables in site.toml.
     pub friend_links: Vec<FriendLink>,
+    /// Whether to surface the RSS feed link in templates. Default `true`.
+    pub show_rss: bool,
+    /// Whether to surface the sitemap link in templates. Default `true`.
+    pub show_sitemap: bool,
     pub extra: Value,
 }
 
@@ -85,6 +89,8 @@ impl Default for Config {
             langs: BTreeMap::new(),
             i18n: BTreeMap::new(),
             friend_links: Vec::new(),
+            show_rss: true,
+            show_sitemap: true,
             extra: Value::map(),
         }
     }
@@ -139,6 +145,12 @@ impl Config {
         }
         cfg.params = m.get("params").cloned().unwrap_or_else(Value::map);
         cfg.meta = m.get("meta").cloned().unwrap_or_else(Value::map);
+        if let Some(b) = m.get("show_rss").and_then(|v| v.as_bool()) {
+            cfg.show_rss = b;
+        }
+        if let Some(b) = m.get("show_sitemap").and_then(|v| v.as_bool()) {
+            cfg.show_sitemap = b;
+        }
         if let Some(Value::Arr(items)) = m.get("friend_links") {
             for item in items {
                 if let Value::Map(entry) = item {

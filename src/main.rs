@@ -301,6 +301,11 @@ language = "en"
 languages = ["en", "zh"]
 theme = "default"
 
+# Syndication: toggle visibility of the RSS feed and sitemap links in the
+# footer. Both default to `true`; flip to `false` to hide.
+show_rss = true
+show_sitemap = true
+
 [lang.en]
 title = "My Blog"
 display_name = "English"
