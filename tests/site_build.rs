@@ -68,12 +68,12 @@ fn home_content_resolves_per_language() {
     write(&dir, "site.toml", r#"languages = ["en", "zh"]"#);
     write(
         &dir,
-        "_index.md",
+        "content/_index.md",
         "---\ntitle: Home\nlayout: index\n---\nEnglish body\n",
     );
     write(
         &dir,
-        "_index.zh.md",
+        "content/_index.zh.md",
         "---\ntitle: 首页\nlayout: index\n---\n中文内容\n",
     );
 
@@ -150,7 +150,7 @@ fn custom_theme_in_template_dir_is_picked_up() {
         r##"<!doctype html><html><head><title>{{ title }}</title></head>
 <body><main>{{ home.content | safe }}</main><footer>CUSTOM</footer></body></html>"##,
     );
-    write(&dir, "_index.md", "---\nlayout: index\n---\nbody\n");
+    write(&dir, "content/_index.md", "---\nlayout: index\n---\nbody\n");
 
     let site = Site::build(&dir, None).expect("build");
     let html = mdweb::render::render_home(&site, "en").expect("render");
@@ -164,7 +164,7 @@ fn custom_theme_in_template_dir_is_picked_up() {
 fn missing_custom_theme_falls_back_to_embedded() {
     let dir = tempdir("missing");
     write(&dir, "site.toml", r#"theme = "nope""#);
-    write(&dir, "_index.md", "---\nlayout: index\n---\nbody\n");
+    write(&dir, "content/_index.md", "---\nlayout: index\n---\nbody\n");
 
     let site = Site::build(&dir, None).expect("build");
     let html = mdweb::render::render_home(&site, "en").expect("render");
@@ -175,10 +175,10 @@ fn missing_custom_theme_falls_back_to_embedded() {
 fn sidebar_renders_search_input_and_rss_link() {
     let dir = tempdir("search");
     write(&dir, "site.toml", r#"title = "X""#);
-    write(&dir, "_index.md", "---\nlayout: index\n---\nbody\n");
+    write(&dir, "content/_index.md", "---\nlayout: index\n---\nbody\n");
     write(
         &dir,
-        "posts/hello.md",
+        "content/posts/hello.md",
         "---\ntitle: Hello\ndate: 2026-08-01\ntags: [rust]\n---\nbody\n",
     );
 
@@ -201,7 +201,7 @@ fn search_index_lists_articles_in_json() {
     write(&dir, "site.toml", r#"title = "X""#);
     write(
         &dir,
-        "posts/hello.md",
+        "content/posts/hello.md",
         "---\ntitle: Hello\ndate: 2026-08-01\ntags: [rust]\n---\nHello world\n",
     );
     let site = Site::build(&dir, None).expect("build");
@@ -223,7 +223,7 @@ base_url = "http://example.com""#,
     );
     write(
         &dir,
-        "posts/hello.md",
+        "content/posts/hello.md",
         "---\ntitle: Hello\ndate: 2026-08-01\n---\nbody\n",
     );
     let site = Site::build(&dir, None).expect("build");
@@ -248,17 +248,17 @@ languages = ["en", "zh"]"#,
     );
     write(
         &dir,
-        "posts/hello.md",
+        "content/posts/hello.md",
         "---\ntitle: Hello\ndate: 2026-08-01\n---\nbody\n",
     );
     write(
         &dir,
-        "posts/hello.zh.md",
+        "content/posts/hello.zh.md",
         "---\ntitle: 你好\ndate: 2026-08-01\n---\nbody\n",
     );
     write(
         &dir,
-        "about.md",
+        "content/pages/about.md",
         "---\ntitle: About\nlayout: page\n---\nbody\n",
     );
     let site = Site::build(&dir, None).expect("build");
@@ -279,7 +279,7 @@ languages = ["en", "zh"]"#,
         "chinese article URL"
     );
     assert!(
-        xml.contains("http://example.com/about/"),
+        xml.contains("http://example.com/pages/about/"),
         "page layout should also be in the sitemap"
     );
     assert!(xml.contains("<lastmod>2026-08-01"), "date becomes lastmod");
@@ -291,12 +291,12 @@ fn search_page_lists_matching_articles() {
     write(&dir, "site.toml", r#"title = "X""#);
     write(
         &dir,
-        "posts/rust-intro.md",
+        "content/posts/rust-intro.md",
         "---\ntitle: Rust intro\ndate: 2026-08-01\ntags: [rust]\n---\nRust is fast.\n",
     );
     write(
         &dir,
-        "posts/cooking.md",
+        "content/posts/cooking.md",
         "---\ntitle: Cooking bread\ndate: 2026-08-02\ntags: [food]\n---\nSourdough tips.\n",
     );
 
@@ -326,12 +326,12 @@ fn search_results_can_be_queried_directly() {
     write(&dir, "site.toml", r#"title = "X""#);
     write(
         &dir,
-        "posts/rust-intro.md",
+        "content/posts/rust-intro.md",
         "---\ntitle: Rust intro\n---\nRust is fast.\n",
     );
     write(
         &dir,
-        "posts/cooking.md",
+        "content/posts/cooking.md",
         "---\ntitle: Cooking\n---\nBread and rust ovens.\n",
     );
     let site = Site::build(&dir, None).expect("build");

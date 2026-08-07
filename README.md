@@ -4,11 +4,12 @@
 of Markdown documents into a live, multi-language web blog — no build step, no database,
 no JavaScript framework, and **zero external dependencies** (stdlib only).
 
-It is a complete standalone program: `mdweb new` scaffolds a demo site, `mdweb run`
-serves it as a realtime blog. You just edit Markdown and refresh your browser.
+It is a complete standalone program: `mdweb create` scaffolds a demo site, `mdweb new`
+creates a new page or post in an existing site, `mdweb run` serves it as a realtime
+blog. You just edit Markdown and refresh your browser.
 
 ```text
-$ mdweb new ./my-blog
+$ mdweb create ./my-blog
 created demo site at ./my-blog
   run:  mdweb run ./my-blog
 
@@ -24,15 +25,16 @@ press Ctrl-C to stop
 
 - **Doc-driven site structure** — the `doc/` directory tree is rendered as category
   levels automatically (`posts/` → `/posts/`, `notes/` → `/notes/`, …).
-- **Layout slots** — a `_layout/` directory holds `header`, `footer`, `side` and
-  `inject` fragments; the `inject` slot is the natural place for analytics /
-  statistics JS.
+- **Layout slots** — a `template/<theme>/layout/` directory holds `header`,
+  `footer`, `side` and `inject` fragments; the `inject` slot is the natural
+  place for analytics / statistics JS.
 - **Configurable metadata** — global site config via `site.toml`; per-article
   metadata via frontmatter. Templates + parameters make it easy to customise.
 - **Multi-language** — one site, many languages, selected by filename suffix such as
   `hello.zh.md`. A default language and optional language-prefixed URLs.
 - **Article metadata** — created/updated dates, author, tags, custom `meta` map.
-- **`mdweb new`** — generate a demo doc + template site.
+- **`mdweb create`** — generate a demo doc + template site.
+- **`mdweb new`** — create a new page or post in an existing site.
 - **`mdweb run`** — serve any doc directory live; uses the system default theme unless
   you pass `--template` or set `theme` in `site.toml`.
 - **Small markdown renderer** — headings, paragraphs, fenced code blocks, blockquotes,
@@ -52,7 +54,7 @@ cargo build --release
 
 ```bash
 # 1. create a demo site (docs + a copy of the default template)
-mdweb new my-blog
+mdweb create my-blog
 
 # 2. serve it (default port 8080, or pick your own)
 mdweb run my-blog --port 8080
@@ -66,14 +68,22 @@ mdweb run my-blog --port 8080
 mdweb <VERSION> - a static blog engine written in pure Rust.
 
 USAGE:
-    mdweb run   [PATH] [--host HOST] [--port PORT] [--template DIR]
-    mdweb new   <PATH>
+    mdweb create <PATH>
+    mdweb new    <TYPE> <NAME> <SITE_PATH>
+    mdweb run    [PATH] [--host HOST] [--port PORT] [--template DIR]
 
 COMMANDS:
-    new <PATH>   Create a demo site (docs + template) at PATH.
-    run          Serve a doc directory as a realtime web blog. PATH defaults
-                 to the current directory. Uses the system default template
-                 unless --template DIR or site.toml [theme].
+    create <PATH>              Scaffold a demo site (docs + template + samples) at PATH.
+    new <TYPE> <NAME> <PATH>   Create a new page or post in an existing site.
+                               TYPE = page | post.
+                               If PATH is the site root (has site.toml), post
+                               defaults to content/posts/, page defaults to
+                               content/pages/. Otherwise the file is placed at
+                               PATH/NAME.md. NAME may contain '/' for sub-directories.
+    run                        Serve a doc directory as a realtime web blog. PATH
+                               defaults to the current directory. Uses the system
+                               default template unless --template DIR or
+                               site.toml [theme].
 
 OPTIONS:
     --host <H>      Bind host (default 127.0.0.1)
@@ -83,46 +93,150 @@ OPTIONS:
     -V, --version   Show version.
 ```
 
+## Creating pages and posts
+
+`mdweb new` creates a single page or post inside an existing site. It needs
+three arguments: the type (`page` or `post`), the file name, and the path
+to the site (or a sub-directory within it).
+
+```bash
+# 1. scaffold a new site
+mdweb create ./my-blog
+mdweb run ./my-blog
+
+# 2. add a post (PATH is the site root → file lands in content/posts/)
+mdweb new post hello-world ./my-blog
+# → ./my-blog/content/posts/hello-world.md
+
+# 3. add a page (PATH is the site root → file lands in content/pages/)
+mdweb new page about ./my-blog
+# → ./my-blog/content/pages/about.md
+
+# 4. add a post inside an existing category
+mdweb new post my-post ./my-blog/content/posts/web
+# → ./my-blog/content/posts/web/my-post.md
+
+# 5. add a page inside a sub-directory (parent is auto-created)
+mdweb new page contact ./my-blog/content/pages/info
+# → ./my-blog/content/pages/info/contact.md
+
+# 6. NAME may contain '/' for sub-directories
+mdweb new post tips/shortcuts ./my-blog
+# → ./my-blog/content/posts/tips/shortcuts.md
+```
+
+Notes:
+
+- The `.md` extension is added automatically if you omit it.
+- If the target file already exists, the command fails without overwriting.
+- The content is taken from `samples/page.md` or `samples/post.md` (both
+  included by `mdweb create`). Each sample is a complete, commented
+  reference — copy the file and edit the frontmatter + body to taste.
+- Frontmatter comments (`# ...`) are part of the bundled samples and are
+  valid YAML — the parser skips them, so the file renders correctly out
+  of the box.
+
 ## Site layout
 
 ```
 my-blog/
 ├── site.toml              # global site configuration (TOML)
-├── _index.md              # homepage content (frontmatter + markdown)
-├── about.md               # a normal page (layout: "page" renders with page.html)
-├── _layout/               # doc-level layout slots override the theme partials
-│   ├── header.html
-│   ├── footer.html
-│   ├── side.html
-│   └── inject.html        # put analytics / statistics JS here
-├── _static/               # extra static assets served under /static/
-├── posts/
-│   ├── _index.md          # category page for /posts/
-│   ├── hello-world.md     # article for the default language
-│   └── hello-world.zh.md  # the same article in another language
-├── notes/
-│   ├── _index.md
-│   └── tips.md
+├── samples/               # commented reference samples for page / post
+│   ├── page.md            # source for `mdweb new page`
+│   └── post.md            # source for `mdweb new post`
+├── content/               # everything you write — content path = web routing
+│   ├── _index.md          # → /          (home page; one per language)
+│   ├── _index.zh.md       # → /zh/
+│   ├── pages/             # pages → /pages/<slug>/; not in the chronological feed
+│   │   ├── _index.md
+│   │   └── about.md
+│   └── posts/             # posts → /posts/<slug>/; appear in feeds and listings
+│       ├── _index.md      # category page for /posts/
+│       ├── hello-world.md
+│       ├── hello-world.zh.md
+│       └── web/           # nested sub-categories
+│           ├── _index.md
+│           └── frontend/
+│               ├── _index.md
+│               └── react.md
 └── template/              # site-local template theme (see Themes)
-    ├── base.html
-    ├── index.html
-    ├── category.html
-    ├── article.html
-    ├── page.html
-    ├── 404.html
-    └── partials/
-        ├── header.html
-        ├── footer.html
-        ├── side.html
-        └── inject.html
+    └── default/           # the active theme (theme = "default" in site.toml)
+        ├── base.html
+        ├── index.html
+        ├── category.html
+        ├── article.html
+        ├── page.html
+        ├── 404.html
+        ├── partials/      # theme defaults
+        │   ├── header.html
+        │   ├── footer.html
+        │   ├── side.html
+        │   └── inject.html
+        ├── layout/        # site-level slot overrides (shadow theme partials)
+        │   ├── header.html
+        │   ├── footer.html
+        │   ├── side.html
+        │   └── inject.html
+        └── static/        # site-level static assets, served at /static/
+            └── style.css
 ```
 
 Notes:
 
-- `_index.md` in a directory becomes that category's index page.
+- `content/` is a transparent container — its name does not appear in URLs.
+  `/content/posts/hello-world.md` is served at `/posts/hello-world/`, and
+  `content/_index.md` is served at `/`.
+- `content/_index.md` is the home page; only `_index.md` and `_index.<lang>.md`
+  are accepted at the top of `content/`. Other top-level files are ignored.
+- `_index.md` in a sub-directory becomes that category's index page.
 - A directory's `_index.md` title/summary/description configure the category.
-- Files in `_layout/` shadow the theme's `partials/` with the same name.
-- `_static/` files are served at `/static/<path>`.
+- Files in `template/<theme>/layout/` (header/footer/side/inject) shadow the
+  theme's `partials/` with the same name.
+- Files in `template/<theme>/static/` are served at `/static/<path>`.
+
+## Static assets
+
+Drop user-owned assets (CSS, images, fonts, favicons, …) into
+`template/<theme>/static/`. The server maps `template/<theme>/static/<path>`
+to the URL `/static/<path>` so any file under that directory is reachable
+at the matching URL. Replacement themes get their own `static/` directory.
+
+```
+template/default/static/
+├── style.css            → /static/style.css
+├── favicon.ico          → /static/favicon.ico
+└── images/
+    ├── avatar.png       → /static/images/avatar.png
+    └── hero.jpg         → /static/images/hero.jpg
+```
+
+### Referencing from HTML
+
+Use absolute paths in templates — they're unambiguous and survive template
+moves:
+
+```html
+<link rel="stylesheet" href="/static/style.css">
+<img src="/static/images/avatar.png" alt="avatar">
+```
+
+### Referencing from CSS
+
+CSS `url(...)` paths are resolved **by the browser** relative to the
+CSS file's URL, not its filesystem path. Since `style.css` is served at
+`/static/style.css`, its sibling images must live under `/static/`:
+
+```css
+/* template/default/static/style.css */
+body {
+  background-image: url("./images/bg.png");   /* → /static/images/bg.png  ✓ */
+  background-image: url("images/bg.png");     /* → /static/images/bg.png  ✓ */
+  background-image: url("../images/bg.png");  /* → /images/bg.png         ✗ */
+}
+```
+
+Stick to paths that stay within `/static/` — `../` will leave the static
+namespace and 404.
 
 ## Configuration (`site.toml`)
 
@@ -237,7 +351,7 @@ or duplicate it under a new name to switch.
 
 Resolution order for a slot/partial name:
 
-1. `_layout/<name>.html` from the doc directory (highest priority)
+1. `template/<theme>/layout/<name>.html` from the doc directory (highest priority)
 2. `template/<theme>/partials/<name>.html`
 3. the built-in default partial
 

@@ -25,7 +25,7 @@ pub mod theme_files {
     pub const STYLE: &str = include_str!("../static/style.css");
 }
 
-/// Layout partials from the doc's `_layout/` directory.
+/// Layout partials from the doc's `template/<theme>/layout/` directory.
 #[derive(Debug, Clone, Default)]
 pub struct Layout {
     pub header: Option<String>,
@@ -35,21 +35,22 @@ pub struct Layout {
 }
 
 impl Layout {
-    pub fn load(doc_root: &Path) -> Layout {
+    pub fn load(doc_root: &Path, theme: &str) -> Layout {
         let mut l = Layout::default();
-        let p = doc_root.join("_layout").join("header.html");
+        let layout_dir = doc_root.join("template").join(theme).join("layout");
+        let p = layout_dir.join("header.html");
         if let Ok(s) = std::fs::read_to_string(&p) {
             l.header = Some(s);
         }
-        let p = doc_root.join("_layout").join("footer.html");
+        let p = layout_dir.join("footer.html");
         if let Ok(s) = std::fs::read_to_string(&p) {
             l.footer = Some(s);
         }
-        let p = doc_root.join("_layout").join("side.html");
+        let p = layout_dir.join("side.html");
         if let Ok(s) = std::fs::read_to_string(&p) {
             l.side = Some(s);
         }
-        let p = doc_root.join("_layout").join("inject.html");
+        let p = layout_dir.join("inject.html");
         if let Ok(s) = std::fs::read_to_string(&p) {
             l.inject = Some(s);
         }
@@ -177,6 +178,7 @@ pub struct Site {
     pub doc_root: PathBuf,
     pub languages: Vec<String>,
     pub default_lang: String,
+    pub theme: String,
     pub tree: Vec<Category>,
     pub articles: Vec<Article>,
     pub home_content: BTreeMap<String, String>,
@@ -200,9 +202,14 @@ impl Site {
         } else {
             languages[0].clone()
         };
-        let layout = Layout::load(&doc_root);
+        let theme_name = if config.theme.is_empty() {
+            "default".to_string()
+        } else {
+            config.theme.clone()
+        };
+        let layout = Layout::load(&doc_root, &theme_name);
         let (engine, engine_embedded) =
-            load_engine(&config, &doc_root, &layout, template_override)?;
+            load_engine(&config, &doc_root, &layout, &theme_name, template_override)?;
 
         let mut list: Vec<(String, PathBuf)> = Vec::new();
         walk_doc(&doc_root, &doc_root, &mut list);
@@ -409,6 +416,7 @@ impl Site {
             doc_root,
             languages,
             default_lang,
+            theme: theme_name.to_string(),
             tree,
             articles,
             home_content,
@@ -515,9 +523,10 @@ impl Site {
 }
 
 fn load_engine(
-    config: &Config,
+    _config: &Config,
     doc_root: &Path,
     layout: &Layout,
+    theme_name: &str,
     override_dir: Option<PathBuf>,
 ) -> Result<(Engine, bool), String> {
     let mut engine = Engine::new();
@@ -529,11 +538,6 @@ fn load_engine(
         load_dir_templates(&mut engine, &dir)?;
         false
     } else {
-        let theme_name = if config.theme.is_empty() {
-            "default"
-        } else {
-            config.theme.as_str()
-        };
         let theme_dir = doc_root.join("template").join(theme_name);
         if theme_dir.is_dir() {
             load_embedded(&mut engine)?;
@@ -622,17 +626,62 @@ fn walk_doc(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) {
         let p = e.path();
         let name = e.file_name().to_string_lossy().to_string();
         if name.starts_with('.')
-            || name == "_layout"
             || name == "template"
-            || name == "_static"
             || name == "static"
+            || name == "samples"
         {
             continue;
         }
         if p.is_dir() {
-            walk_doc(&p, base, out);
+            if name == "content" {
+                // content/ is a transparent container: recurse into it but
+                // strip the prefix so URLs / categories are not prefixed with
+                // `content/`. content/ itself is not a category.
+                walk_content(&p, base, out);
+            } else {
+                walk_doc(&p, base, out);
+            }
         } else if let Ok(rel) = p.strip_prefix(base) {
             out.push((rel.to_string_lossy().replace('\\', "/"), p));
+        }
+    }
+}
+
+/// Walk inside the `content/` container. Strips the leading `content/` from
+/// every emitted path so discovery is otherwise identical to `walk_doc`.
+///
+/// At the top level of `content/`, only `_index.md` and `_<lang>.md` variants
+/// are kept — these define the home page (e.g. `content/_index.md` → `/`).
+/// Other top-level files are ignored; put new content under a sub-directory
+/// (`content/posts/`, `content/pages/`, …).
+fn walk_content(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        let name = e.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') {
+            continue;
+        }
+        if p.is_dir() {
+            walk_content(&p, base, out);
+        } else if let Ok(rel) = p.strip_prefix(base) {
+            let rel_str = rel.to_string_lossy().replace('\\', "/");
+            // At the top level of content/, only accept _index.md and
+            // _index.<lang>.md — these are the home page variants.
+            let top_level = rel_str.strip_prefix("content/").unwrap_or(&rel_str);
+            if !top_level.contains('/') {
+                let stem = name.strip_suffix(".md").unwrap_or(&name);
+                if stem != "_index" && !stem.starts_with("_index.") {
+                    continue;
+                }
+            }
+            let stripped = rel_str
+                .strip_prefix("content/")
+                .unwrap_or(&rel_str)
+                .to_string();
+            out.push((stripped, p));
         }
     }
 }

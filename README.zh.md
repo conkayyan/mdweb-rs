@@ -4,11 +4,12 @@
 文档渲染成实时更新的多语言博客——无需构建步骤、无需数据库、无需任何前端框架，
 并且**不依赖任何外部 crate**（仅使用标准库）。
 
-它是一个完整的独立程序：`mdweb new` 生成演示站点，`mdweb run` 将其作为实时博客
-启动。你只需要编辑 Markdown 文件并刷新浏览器。
+它是一个完整的独立程序：`mdweb create` 生成演示站点，`mdweb new` 在已有站点中
+创建新的 page 或 post，`mdweb run` 将其作为实时博客启动。你只需要编辑 Markdown
+文件并刷新浏览器。
 
 ```text
-$ mdweb new ./my-blog
+$ mdweb create ./my-blog
 created demo site at ./my-blog
   run:  mdweb run ./my-blog
 
@@ -24,14 +25,16 @@ press Ctrl-C to stop
 
 - **文档即站点结构** — `doc/` 目录树会自动渲染为分类层级（`posts/` → `/posts/`，
   `notes/` → `/notes/`，以此类推）。
-- **布局插槽** — `_layout/` 目录存放 `header`、`footer`、`side`、`inject` 片段；
+- **布局插槽** — `template/<theme>/layout/` 目录存放 `header`、`footer`、
+  `side`、`inject` 片段；
   `inject` 插槽天然适合放置统计/分析 JS 代码。
 - **可配置元信息** — 站点全局配置通过 `site.toml`，文章元信息通过 frontmatter。
   模板 + 参数模式，方便 DIY 定制。
 - **多语言支持** — 一个站点多种语言，通过文件名后缀识别，例如 `hello.zh.md`。
   支持默认语言与可选的语言前缀 URL。
 - **文章元信息** — 创建/更新时间、作者、标签、自定义 `meta` 映射。
-- **`mdweb new`** — 一键生成演示站点（doc + template）。
+- **`mdweb create`** — 一键生成演示站点（doc + template + samples）。
+- **`mdweb new`** — 在已有站点中创建新的 page 或 post。
 - **`mdweb run`** — 实时启动任意 doc 目录；除非传入 `--template` 或在 `site.toml`
   中配置 `theme`，否则使用系统内置默认模板。
 - **内置 Markdown 渲染器** — 标题、段落、围栏代码块、引用、有序/无序（可嵌套）列表、
@@ -50,7 +53,7 @@ cargo build --release
 
 ```bash
 # 1. 创建演示站点（doc + 一份默认模板的副本）
-mdweb new my-blog
+mdweb create my-blog
 
 # 2. 启动服务（默认端口 8080，也可自定义）
 mdweb run my-blog --port 8080
@@ -64,14 +67,21 @@ mdweb run my-blog --port 8080
 mdweb <VERSION> - 一个用纯 Rust 编写的静态博客引擎。
 
 USAGE:
-    mdweb run   [PATH] [--host HOST] [--port PORT] [--template DIR]
-    mdweb new   <PATH>
+    mdweb create <PATH>
+    mdweb new    <TYPE> <NAME> <SITE_PATH>
+    mdweb run    [PATH] [--host HOST] [--port PORT] [--template DIR]
 
 COMMANDS:
-    new <PATH>   Create a demo site (docs + template) at PATH.
-    run          Serve a doc directory as a realtime web blog. PATH defaults
-                 to the current directory. Uses the system default template
-                 unless --template DIR or site.toml [theme].
+    create <PATH>              在 PATH 处搭建演示站点（docs + template + samples）。
+    new <TYPE> <NAME> <PATH>   在已有站点中创建单个 page 或 post。
+                               TYPE = page | post。
+                               若 PATH 是站点根（含 site.toml），post 默认落到
+                               content/posts/，page 默认落到 content/pages/；
+                               否则文件直接放在 PATH/NAME.md。
+                               NAME 中可包含 '/'，用于在子目录中创建文件。
+    run                        将一个 doc 目录以实时博客形式启动。PATH 默认
+                               为当前目录。除非传入 --template DIR 或在
+                               site.toml 中设置 [theme]，否则使用系统默认模板。
 
 OPTIONS:
     --host <H>      Bind host (default 127.0.0.1)
@@ -81,46 +91,144 @@ OPTIONS:
     -V, --version   Show version.
 ```
 
+## 创建 page 和 post
+
+`mdweb new` 会在已有站点中创建单个 page 或 post。它需要三个参数：类型（`page`
+或 `post`）、文件名，以及站点路径（也可以是该站点内的子目录）。
+
+```bash
+# 1. 搭建站点
+mdweb create ./my-blog
+mdweb run ./my-blog
+
+# 2. 新增一篇文章（PATH 是站点根，文件落在 content/posts/）
+mdweb new post hello-world ./my-blog
+# → ./my-blog/content/posts/hello-world.md
+
+# 3. 新增一个页面（PATH 是站点根，文件落在 content/pages/）
+mdweb new page about ./my-blog
+# → ./my-blog/content/pages/about.md
+
+# 4. 在已有分类下新增文章
+mdweb new post my-post ./my-blog/content/posts/web
+# → ./my-blog/content/posts/web/my-post.md
+
+# 5. 在子目录中新增页面（父目录会自动创建）
+mdweb new page contact ./my-blog/content/pages/info
+# → ./my-blog/content/pages/info/contact.md
+
+# 6. NAME 中可包含 '/' 表示子目录
+mdweb new post tips/shortcuts ./my-blog
+# → ./my-blog/content/posts/tips/shortcuts.md
+```
+
+说明：
+
+- 不写 `.md` 后缀会自动补上。
+- 目标文件已存在时直接报错，不会覆盖。
+- 文件内容来自 `samples/page.md` 与 `samples/post.md`（由 `mdweb create`
+  写入）。两份样例都是带注释的完整 reference，复制后修改 frontmatter 与
+  正文即可。
+- Frontmatter 中的 `# ...` 注释出现在样例里，是合法的 YAML：解析器会跳过
+  这些注释，所以文件开箱即用即可正确渲染。
+
 ## 站点目录结构
 
 ```
 my-blog/
 ├── site.toml              # 全局站点配置（TOML）
-├── _index.md              # 首页内容（frontmatter + markdown）
-├── about.md               # 普通页面（layout: "page" 时使用 page.html 渲染）
-├── _layout/               # 文档级布局插槽，优先级高于主题 partials
-│   ├── header.html
-│   ├── footer.html
-│   ├── side.html
-│   └── inject.html        # 在此放置统计 / 分析 JS 代码
-├── _static/               # 额外静态资源，通过 /static/ 提供
-├── posts/
-│   ├── _index.md          # /posts/ 分类页
-│   ├── hello-world.md     # 默认语言的文章
-│   └── hello-world.zh.md  # 同一篇文章的其他语言版本
-├── notes/
-│   ├── _index.md
-│   └── tips.md
+├── samples/               # 带注释的 page / post 参考样例
+│   ├── page.md            # `mdweb new page` 的素材
+│   └── post.md            # `mdweb new post` 的素材
+├── content/               # 所有写作内容都在这里——路径即路由
+│   ├── _index.md          # → /          （首页，每个语言一个）
+│   ├── _index.zh.md       # → /zh/
+│   ├── pages/             # 页面 → /pages/<slug>/；不进时间线
+│   │   ├── _index.md
+│   │   └── about.md
+│   └── posts/             # 文章 → /posts/<slug>/；出现在列表与 Feed 中
+│       ├── _index.md      # /posts/ 分类页
+│       ├── hello-world.md
+│       ├── hello-world.zh.md
+│       └── web/           # 多级子分类
+│           ├── _index.md
+│           └── frontend/
+│               ├── _index.md
+│               └── react.md
 └── template/              # 站点本地模板主题（见“主题”一节）
-    ├── base.html
-    ├── index.html
-    ├── category.html
-    ├── article.html
-    ├── page.html
-    ├── 404.html
-    └── partials/
-        ├── header.html
-        ├── footer.html
-        ├── side.html
-        └── inject.html
+    └── default/           # 当前主题（site.toml 中 theme = "default"）
+        ├── base.html
+        ├── index.html
+        ├── category.html
+        ├── article.html
+        ├── page.html
+        ├── 404.html
+        ├── partials/      # 主题默认片段
+        │   ├── header.html
+        │   ├── footer.html
+        │   ├── side.html
+        │   └── inject.html
+        ├── layout/        # 站点级插槽覆盖（遮蔽主题 partials）
+        │   ├── header.html
+        │   ├── footer.html
+        │   ├── side.html
+        │   └── inject.html
+        └── static/        # 站点级静态资源，通过 /static/ 提供
+            └── style.css
 ```
 
 说明：
 
+- `content/` 是透明容器，不出现在 URL 中。
+  `/content/posts/hello-world.md` 对外的访问路径是 `/posts/hello-world/`；
+  `content/_index.md` 对外是 `/`。
+- `content/_index.md` 是首页；`content/` 顶层只接受 `_index.md` 与
+  `_index.<lang>.md`，其他顶层文件会被忽略。
 - 目录下的 `_index.md` 即该分类的索引页。
 - 目录 `_index.md` 的 title/summary/description 用于配置分类信息。
-- `_layout/` 下的文件会覆盖主题 `partials/` 中同名文件。
-- `_static/` 中的文件通过 `/static/<path>` 对外提供。
+- `template/<theme>/layout/` 下的文件会覆盖主题 `partials/` 中同名文件。
+- `template/<theme>/static/` 中的文件通过 `/static/<path>` 对外提供。
+
+## 静态资源
+
+把站点自有的资源（CSS、图片、字体、favicon 等）放进 `template/<theme>/static/`。
+服务器会把 `template/<theme>/static/<path>` 映射到 `/static/<path>`，
+目录下任何文件都能直接访问。换主题时新主题也有自己的 `static/` 目录。
+
+```
+template/default/static/
+├── style.css            → /static/style.css
+├── favicon.ico          → /static/favicon.ico
+└── images/
+    ├── avatar.png       → /static/images/avatar.png
+    └── hero.jpg         → /static/images/hero.jpg
+```
+
+### 在 HTML 中引用
+
+模板里建议用绝对路径——不会因为模板移动而出错：
+
+```html
+<link rel="stylesheet" href="/static/style.css">
+<img src="/static/images/avatar.png" alt="avatar">
+```
+
+### 在 CSS 中引用
+
+CSS 的 `url(...)` 是**由浏览器**按 CSS 文件的 URL 来解析相对路径的，
+而不是文件系统路径。因为 `style.css` 暴露在 `/static/style.css`，
+它的同级图片必须放在 `/static/` 之下：
+
+```css
+/* template/default/static/style.css */
+body {
+  background-image: url("./images/bg.png");   /* → /static/images/bg.png  ✓ */
+  background-image: url("images/bg.png");     /* → /static/images/bg.png  ✓ */
+  background-image: url("../images/bg.png");  /* → /images/bg.png         ✗ */
+}
+```
+
+保持在 `/static/` 命名空间内——`../` 会跳出静态目录，导致 404。
 
 ## 配置（`site.toml`）
 
@@ -234,7 +342,7 @@ meta:                    # 任意映射，模板中以 article.meta 访问
 
 模板解析顺序：
 
-1. 文档目录里的 `_layout/<name>.html`（最高优先级）
+1. 文档目录里的 `template/<theme>/layout/<name>.html`（最高优先级）
 2. `template/<theme>/partials/<name>.html`
 3. 内置默认 partial（Themes）
 
@@ -243,7 +351,7 @@ meta:                    # 任意映射，模板中以 article.meta 访问
 
 插槽 / partial 的解析优先级：
 
-1. doc 目录下的 `_layout/<name>.html`（优先级最高）
+1. doc 目录下的 `template/<theme>/layout/<name>.html`（优先级最高）
 2. `<theme>/partials/<name>.html`
 3. 内置默认 partial
 

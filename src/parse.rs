@@ -84,7 +84,8 @@ impl<'a> Cursor<'a> {
                 Some(l) => l,
                 None => break,
             };
-            if line.trim().is_empty() {
+            let trimmed_start = line.trim_start();
+            if trimmed_start.is_empty() || trimmed_start.starts_with('#') {
                 self.pos += 1;
                 continue;
             }
@@ -96,11 +97,11 @@ impl<'a> Cursor<'a> {
                 // Child content that did not belong to a key; stop.
                 break;
             }
-            if line.trim_start().starts_with('-') {
+            if trimmed_start.starts_with('-') {
                 break;
             }
             self.pos += 1;
-            let trimmed = line.trim_start();
+            let trimmed = strip_yaml_comment(line.trim_start());
             let (key, rest) = split_key_value(trimmed);
             if key.is_empty() {
                 continue;
@@ -144,7 +145,8 @@ impl<'a> Cursor<'a> {
                 Some(l) => l,
                 None => break,
             };
-            if line.trim().is_empty() {
+            let trimmed_start = line.trim_start();
+            if trimmed_start.is_empty() || trimmed_start.starts_with('#') {
                 self.pos += 1;
                 continue;
             }
@@ -157,12 +159,11 @@ impl<'a> Cursor<'a> {
                 self.pos += 1;
                 continue;
             }
-            let trimmed = line.trim_start();
-            if !trimmed.starts_with('-') {
+            if !trimmed_start.starts_with('-') {
                 break;
             }
             self.pos += 1;
-            let rest = trimmed[1..].trim();
+            let rest = strip_yaml_comment(&trimmed_start[1..]).trim();
             if rest.is_empty() {
                 let mut j = self.pos;
                 while let Some(l) = self.lines.get(j) {
@@ -276,6 +277,27 @@ fn strip_comment(line: &str) -> &str {
         if b == b'"' {
             in_str = !in_str;
         } else if b == b'#' && !in_str {
+            return &line[..i];
+        }
+    }
+    line
+}
+
+/// Strip a `# comment` suffix from a YAML line. Honours both single and double
+/// quoted strings so a literal `#` inside a value is preserved.
+fn strip_yaml_comment(line: &str) -> &str {
+    let mut in_str = false;
+    let mut in_single = false;
+    let bytes = line.as_bytes();
+    for (i, &b) in bytes.iter().enumerate() {
+        if b == b'"' && !in_single {
+            in_str = !in_str;
+        } else if b == b'\'' && !in_str {
+            in_single = !in_single;
+        } else if b == b'#' && !in_str && !in_single {
+            // Only treat # as a comment when preceded by whitespace or at
+            // start of line — bare `key:#value` is rare in YAML keys but
+            // skipping the whitespace check keeps things lenient.
             return &line[..i];
         }
     }
@@ -414,5 +436,38 @@ mod tests {
         let v = parse_toml(t).unwrap();
         let lang = v.as_map().unwrap().get("lang").unwrap().as_map().unwrap();
         assert_eq!(lang.get("en").unwrap().as_map().unwrap().get("title").unwrap().as_str(), Some("English"));
+    }
+
+    #[test]
+    fn yaml_skips_comment_lines() {
+        let src = "# header comment\ntitle: \"Hello\"\n# trailing comment\ndate: \"2024-01-01\"\n";
+        let fm = parse_yaml(src);
+        assert_eq!(fm.get("title").unwrap().as_str(), Some("Hello"));
+        assert_eq!(fm.get("date").unwrap().as_str(), Some("2024-01-01"));
+        assert_eq!(fm.len(), 2);
+    }
+
+    #[test]
+    fn yaml_skips_inline_comments() {
+        let src = "title: \"Hello\" # inline\ntags: [a, b] # tail\n";
+        let fm = parse_yaml(src);
+        assert_eq!(fm.get("title").unwrap().as_str(), Some("Hello"));
+        let tags = fm.get("tags").unwrap().as_arr().unwrap();
+        assert_eq!(tags.len(), 2);
+    }
+
+    #[test]
+    fn yaml_preserves_hash_inside_quoted_string() {
+        let src = "title: \"Hello # world\"\n";
+        let fm = parse_yaml(src);
+        assert_eq!(fm.get("title").unwrap().as_str(), Some("Hello # world"));
+    }
+
+    #[test]
+    fn frontmatter_with_comments_renders() {
+        let src = "---\n# comment\ntitle: \"Sample\"\n# another\n---\n\nbody";
+        let (fm, body) = parse_frontmatter(src);
+        assert_eq!(fm.get("title").unwrap().as_str(), Some("Sample"));
+        assert_eq!(body.trim(), "body");
     }
 }

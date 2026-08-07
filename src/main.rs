@@ -19,6 +19,7 @@ fn run(args: &[String]) -> i32 {
         return if args.len() == 1 { 0 } else { 1 };
     }
     match args[1].as_str() {
+        "create" => cmd_create(&args[2..]),
         "new" => cmd_new(&args[2..]),
         "run" => cmd_run(&args[2..]),
         "-h" | "--help" | "help" => {
@@ -42,14 +43,22 @@ fn print_help() {
         "mdweb {VERSION} - a static blog engine written in pure Rust.
 
 USAGE:
-    mdweb run   [PATH] [--host HOST] [--port PORT] [--template DIR]
-    mdweb new   <PATH>
+    mdweb create <PATH>
+    mdweb new    <TYPE> <NAME> <SITE_PATH>
+    mdweb run    [PATH] [--host HOST] [--port PORT] [--template DIR]
 
 COMMANDS:
-    new <PATH>   Create a demo site (docs + template) at PATH.
-    run          Serve a doc directory as a realtime web blog. PATH defaults
-                 to the current directory. Loads theme = <name> from
-                 template/<name>/ unless --template DIR is given.
+    create <PATH>             Scaffold a demo site (docs + template + samples) at PATH.
+    new <TYPE> <NAME> <PATH>  Create a new page or post in an existing site.
+                              TYPE = page | post.
+                              If PATH is the site root (has site.toml), post
+                              defaults to content/posts/, page defaults to
+                              content/pages/. Otherwise the file is placed at
+                              PATH/NAME.md. NAME may contain '/' for sub-directories.
+    run                       Serve a doc directory as a realtime web blog. PATH
+                              defaults to the current directory. Loads theme =
+                              <name> from template/<name>/ unless --template DIR
+                              is given.
 
 OPTIONS:
     --host <H>      Bind host (default 127.0.0.1)
@@ -132,38 +141,42 @@ fn write_file(path: &Path, content: &str) -> Result<(), String> {
     fs::write(path, content).map_err(|e| e.to_string())
 }
 
-fn cmd_new(args: &[String]) -> i32 {
+fn cmd_create(args: &[String]) -> i32 {
     let Some(dir) = args.first() else {
-        eprintln!("usage: mdweb new <PATH>");
+        eprintln!("usage: mdweb create <PATH>");
         return 1;
     };
     let dir = PathBuf::from(dir);
 
     let files: Vec<(&str, &str)> = vec![
         ("site.toml", SITE_TOML),
-        ("_index.md", INDEX_MD),
-        ("_index.zh.md", INDEX_ZH_MD),
-        ("about.md", ABOUT_MD),
-        ("about.zh.md", ABOUT_ZH_MD),
-        ("posts/_index.md", POSTS_INDEX_MD),
-        ("posts/_index.zh.md", POSTS_INDEX_ZH_MD),
-        ("posts/hello-world.md", HELLO_MD),
-        ("posts/hello-world.zh.md", HELLO_ZH_MD),
-        ("posts/web/_index.md", WEB_INDEX_MD),
-        ("posts/web/_index.zh.md", WEB_INDEX_ZH_MD),
-        ("posts/web/frontend/_index.md", FRONTEND_INDEX_MD),
-        ("posts/web/frontend/_index.zh.md", FRONTEND_INDEX_ZH_MD),
-        ("posts/web/frontend/react.md", REACT_MD),
-        ("posts/web/frontend/react.zh.md", REACT_ZH_MD),
-        ("notes/_index.md", NOTES_INDEX_MD),
-        ("notes/_index.zh.md", NOTES_INDEX_ZH_MD),
-        ("notes/tips.md", TIPS_MD),
-        ("notes/tips.zh.md", TIPS_ZH_MD),
-        ("_layout/header.html", theme_files::PARTIAL_HEADER),
-        ("_layout/footer.html", theme_files::PARTIAL_FOOTER),
-        ("_layout/side.html", theme_files::PARTIAL_SIDE),
-        ("_layout/inject.html", theme_files::PARTIAL_INJECT),
-        ("_static/style.css", theme_files::STYLE),
+        ("content/_index.md", INDEX_MD),
+        ("content/_index.zh.md", INDEX_ZH_MD),
+        ("content/pages/_index.md", PAGES_INDEX_MD),
+        ("content/pages/_index.zh.md", PAGES_INDEX_ZH_MD),
+        ("content/pages/about.md", ABOUT_MD),
+        ("content/pages/about.zh.md", ABOUT_ZH_MD),
+        ("content/posts/_index.md", POSTS_INDEX_MD),
+        ("content/posts/_index.zh.md", POSTS_INDEX_ZH_MD),
+        ("content/posts/hello-world.md", HELLO_MD),
+        ("content/posts/hello-world.zh.md", HELLO_ZH_MD),
+        ("content/posts/web/_index.md", WEB_INDEX_MD),
+        ("content/posts/web/_index.zh.md", WEB_INDEX_ZH_MD),
+        ("content/posts/web/frontend/_index.md", FRONTEND_INDEX_MD),
+        ("content/posts/web/frontend/_index.zh.md", FRONTEND_INDEX_ZH_MD),
+        ("content/posts/web/frontend/react.md", REACT_MD),
+        ("content/posts/web/frontend/react.zh.md", REACT_ZH_MD),
+        ("content/notes/_index.md", NOTES_INDEX_MD),
+        ("content/notes/_index.zh.md", NOTES_INDEX_ZH_MD),
+        ("content/notes/tips.md", TIPS_MD),
+        ("content/notes/tips.zh.md", TIPS_ZH_MD),
+        ("samples/page.md", SAMPLE_PAGE_MD),
+        ("samples/post.md", SAMPLE_POST_MD),
+        ("template/default/layout/header.html", theme_files::PARTIAL_HEADER),
+        ("template/default/layout/footer.html", theme_files::PARTIAL_FOOTER),
+        ("template/default/layout/side.html", theme_files::PARTIAL_SIDE),
+        ("template/default/layout/inject.html", theme_files::PARTIAL_INJECT),
+        ("template/default/static/style.css", theme_files::STYLE),
     ];
     for (rel, content) in files {
         let p = dir.join(rel);
@@ -198,6 +211,75 @@ fn cmd_new(args: &[String]) -> i32 {
 
     println!("created demo site at {}", dir.display());
     println!("  run:  mdweb run {}", dir.display());
+    0
+}
+
+/// `mdweb new <TYPE> <NAME> <SITE_PATH>` — create a new page or post.
+fn cmd_new(args: &[String]) -> i32 {
+    if args.len() < 3 {
+        eprintln!("usage: mdweb new <page|post> <NAME> <SITE_PATH>");
+        return 1;
+    }
+    let kind = args[0].as_str();
+    let name = args[1].trim();
+    let site = PathBuf::from(&args[2]);
+
+    if name.is_empty() {
+        eprintln!("error: NAME must not be empty");
+        return 1;
+    }
+    // When the site root is given (has site.toml), require it to exist.
+    // Otherwise the path is a storage sub-directory and will be created
+    // alongside the target file via write_file().
+    if site.join("site.toml").is_file() && !site.is_dir() {
+        eprintln!("error: site directory not found: {}", site.display());
+        return 1;
+    }
+
+    match kind {
+        "page" => cmd_new_one(name, &site, "page", SAMPLE_PAGE_MD),
+        "post" => cmd_new_one(name, &site, "post", SAMPLE_POST_MD),
+        other => {
+            eprintln!("error: unknown type '{other}' (expected 'page' or 'post')");
+            eprintln!("usage: mdweb new <page|post> <NAME> <SITE_PATH>");
+            1
+        }
+    }
+}
+
+/// Resolve the destination file path for `new`. When `<SITE_PATH>` is the site
+/// root (has `site.toml`), posts default to `content/posts/` and pages default
+/// to `content/pages/`. Otherwise the file is placed directly at
+/// `<SITE_PATH>/<NAME>.md` (the user has already chosen the destination).
+fn target_path(site: &Path, kind: &str, name: &str) -> PathBuf {
+    let file_name = if name.ends_with(".md") {
+        name.to_string()
+    } else {
+        format!("{name}.md")
+    };
+    let prefix = match kind {
+        "post" if site.join("site.toml").is_file() => "content/posts",
+        "page" if site.join("site.toml").is_file() => "content/pages",
+        _ => "",
+    };
+    if prefix.is_empty() {
+        site.join(file_name)
+    } else {
+        site.join(prefix).join(file_name)
+    }
+}
+
+fn cmd_new_one(name: &str, site: &Path, kind: &str, sample: &str) -> i32 {
+    let target = target_path(site, kind, name);
+    if target.exists() {
+        eprintln!("error: file already exists: {}", target.display());
+        return 1;
+    }
+    if let Err(e) = write_file(&target, sample) {
+        eprintln!("error writing {}: {e}", target.display());
+        return 1;
+    }
+    println!("created {kind}: {}", target.display());
     0
 }
 
@@ -303,6 +385,23 @@ summary: "所有文章都在这里。"
 ---
 
 文章按日期和分类归档。
+"#;
+
+const PAGES_INDEX_MD: &str = r#"---
+title: "Pages"
+summary: "Static pages live here."
+---
+
+Pages are standalone documents (about, contact, etc.) that aren't part of
+the chronological feed.
+"#;
+
+const PAGES_INDEX_ZH_MD: &str = r#"---
+title: "页面"
+summary: "静态页面放在这里。"
+---
+
+页面是独立的内容（关于、联系等），不在文章时间线中显示。
 "#;
 
 
@@ -416,7 +515,7 @@ tags: ["tips"]
 
 - Use double quotes around dates in frontmatter.
 - Name files like `foo.en.md` / `foo.zh.md` for translations.
-- Drop custom partials into `_layout/` to override the theme.
+- Drop custom partials into `template/default/layout/` to override the theme.
 "#;
 
 const TIPS_ZH_MD: &str = r#"---
@@ -427,6 +526,80 @@ tags: ["tips"]
 
 - 日期字段在 frontmatter 中请用双引号包裹。
 - 文件命名为 `foo.en.md` / `foo.zh.md` 即可作为不同语言版本。
-- 把自定义 partial 放到 `_layout/` 下即可覆盖默认主题。
+- 把自定义 partial 放到 `template/<theme>/layout/` 下即可覆盖默认主题。
+"#;
+
+/// Reference sample for a single page. Used by `mdweb new page` and written
+/// to `samples/page.md` by `mdweb create`. Frontmatter comments are valid
+/// YAML and are skipped by the parser.
+const SAMPLE_PAGE_MD: &str = r#"---
+# Page title (required).
+title: "Sample Page"
+
+# Layout: "page" renders with page.html from the active theme.
+layout: "page"
+
+# One-line summary (optional). Shown in category listings and used as
+# the default value for <meta name="description"> when meta.description
+# is unset.
+summary: "A one-line description of the page."
+
+# Arbitrary metadata exposed to templates as page.meta (optional).
+meta:
+  description: "A longer description for SEO."
+
+# Extra fields are available in templates as page.<name>.
+custom_field: "any value"
+---
+
+Replace this with your page content. Pages are rendered with
+`page.html` from the active theme and are typically used for
+static content like about, contact, etc.
+"#;
+
+/// Reference sample for a single post. Used by `mdweb new post` and written
+/// to `samples/post.md` by `mdweb create`. Frontmatter comments are valid
+/// YAML and are skipped by the parser.
+const SAMPLE_POST_MD: &str = r#"---
+# Post title (required).
+title: "Sample Post"
+
+# Creation date (quoted strings recommended).
+date: "2026-08-08"
+
+# Last update date (optional).
+updated: "2026-08-08"
+
+# Author (optional; falls back to site.toml's author).
+author: "Author Name"
+
+# Tags (optional array of strings).
+tags: ["mdweb", "rust"]
+
+# One-line summary (optional). Shown in category listings and used as
+# the default value for <meta name="description"> when meta.description
+# is unset.
+summary: "A one-line description."
+
+# Draft: true hides the post from listings and feeds.
+draft: false
+
+# Arbitrary metadata exposed to templates as post.meta (optional).
+meta:
+  description: "A longer description for SEO."
+
+# Extra fields are available in templates as post.<name>.
+custom_field: "any value"
+---
+
+Replace this with your post content. Posts are rendered with
+`article.html` from the active theme and appear in category
+listings and chronological feeds.
+
+```rust
+fn main() {
+    println!("Hello, mdweb!");
+}
+```
 "#;
 

@@ -212,7 +212,8 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
 }
 
 fn serve_static(site: &Arc<Site>, rel: &str) -> Option<Vec<u8>> {
-    let p = site.doc_root.join("_static").join(rel);
+    let theme = if site.theme.is_empty() { "default" } else { site.theme.as_str() };
+    let p = site.doc_root.join("template").join(theme).join("static").join(rel);
     if let Ok(data) = std::fs::read(&p) {
         return Some(data);
     }
