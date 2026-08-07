@@ -333,6 +333,7 @@ search        = "搜索"
 search_placeholder = "搜索…"
 search_no_results = "未找到相关文章。"
 rss           = "RSS 订阅"
+sitemap       = "站点地图"
 
 # Friend links — rendered in the sidebar (target="_blank").
 [[friend_links]]
