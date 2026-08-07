@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ search.query_trimmed }} · {{ t.search }} · {{ title }}{% endblock title %}
+{% block content %}
+<section class="search-page">
+  <h1 class="search-title">{{ t.search }}</h1>
+  <form class="search-form" method="get" action="{{ current_url }}" role="search">
+    <input type="search" name="q" class="search-form-input"
+           value="{{ search.query_trimmed }}"
+           placeholder="{{ t.search_placeholder }}"
+           autocomplete="off" autofocus required>
+    <button type="submit" class="search-form-submit">{{ t.search }}</button>
+  </form>
+
+  {% if search.query_trimmed %}
+  <p class="search-summary">
+    <span class="search-count">{{ search.count }}</span>
+    match{% if search.count != 1 %}es{% endif %}
+    for <q>{{ search.query_trimmed }}</q>
+  </p>
+
+  {% if search.articles %}
+  <ul class="search-results">
+    {% for a in search.articles %}
+    <li class="search-result">
+      <a class="search-result-link" href="{{ a.url }}">
+        <h2 class="search-result-title">{{ a.title }}</h2>
+        {% if a.date %}<span class="search-result-date"><time datetime="{{ a.date_iso }}">{{ a.date }}</time></span>{% endif %}
+        {% if a.summary %}<p class="search-result-summary">{{ a.summary }}</p>{% endif %}
+        {% if a.tags %}
+        <div class="search-result-tags">
+          {% for tag in a.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+        </div>
+        {% endif %}
+        <span class="search-result-lang" lang="{{ a.lang }}">{{ a.lang }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="search-empty">{{ t.search_no_results }}</p>
+  {% endif %}
+  {% endif %}
+</section>
+{% endblock content %}

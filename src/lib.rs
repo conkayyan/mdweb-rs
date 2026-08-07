@@ -1,5 +1,6 @@
 pub mod config;
 pub mod content;
+pub mod feed;
 pub mod markdown;
 pub mod parse;
 pub mod render;

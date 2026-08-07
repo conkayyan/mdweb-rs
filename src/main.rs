@@ -180,6 +180,7 @@ fn cmd_new(args: &[String]) -> i32 {
         ("template/default/category.html", theme_files::CATEGORY),
         ("template/default/article.html", theme_files::ARTICLE),
         ("template/default/page.html", theme_files::PAGE),
+        ("template/default/search.html", theme_files::SEARCH),
         ("template/default/404.html", theme_files::NOT_FOUND),
         ("template/default/partials/header.html", theme_files::PARTIAL_HEADER),
         ("template/default/partials/footer.html", theme_files::PARTIAL_FOOTER),
@@ -233,6 +234,10 @@ prev          = "上一篇"
 next          = "下一篇"
 not_found     = "页面未找到"
 not_found_desc = "您访问的页面不存在。"
+search        = "搜索"
+search_placeholder = "搜索…"
+search_no_results = "未找到相关文章。"
+rss           = "RSS 订阅"
 
 # Friend links — rendered in the sidebar (target="_blank").
 [[friend_links]]

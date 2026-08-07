@@ -30,6 +30,10 @@ pub(crate) const I18N_DEFAULTS: &[(&str, &str)] = &[
     ("next", "Next"),
     ("not_found", "Not Found"),
     ("not_found_desc", "The page you're looking for doesn't exist."),
+    ("search", "Search"),
+    ("search_placeholder", "Search…"),
+    ("search_no_results", "No matching posts."),
+    ("rss", "RSS Feed"),
 ];
 
 fn builtin_default(key: &str) -> Option<&'static str> {

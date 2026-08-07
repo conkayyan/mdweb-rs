@@ -3,6 +3,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 
 use crate::content::{theme_files, Category, Site};
+use crate::feed;
 use crate::render;
 
 /// Run the web server until the process is killed / interrupted.
@@ -66,9 +67,16 @@ fn handle(mut stream: TcpStream, site: &Arc<Site>) -> std::io::Result<()> {
         );
         return Ok(());
     }
-    let path = percent_decode(parts[1].split('?').next().unwrap_or("/"));
+    let raw_target = parts[1];
+    let path_part = raw_target.split('?').next().unwrap_or("/");
+    let query = raw_target
+        .split_once('?')
+        .map(|(_, q)| q)
+        .unwrap_or("")
+        .to_string();
+    let path = percent_decode(path_part);
 
-    match route(site, &path) {
+    match route(site, &path, &query) {
         Ok(resp) => {
             respond(&mut stream, 200, "OK", resp.content_type, &resp.body)?;
         }
@@ -96,7 +104,7 @@ struct Response {
 const HTML: &str = "text/html; charset=utf-8";
 
 /// Route a request path and return the response (body + content-type).
-fn route(site: &Arc<Site>, path: &str) -> Result<Response, String> {
+fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> {
     let clean = path.trim_matches('/');
     let segs: Vec<&str> = clean.split('/').filter(|s| !s.is_empty()).collect();
 
@@ -114,6 +122,20 @@ fn route(site: &Arc<Site>, path: &str) -> Result<Response, String> {
         return Err("not found".into());
     }
 
+    // Search index: unprefixed, spans all languages.
+    if segs.len() == 1 && segs[0] == "search.json" {
+        let body = feed::search_index_json(site);
+        return Ok(Response {
+            body: body.into_bytes(),
+            content_type: "application/json; charset=utf-8",
+        });
+    }
+
+    // RSS feed for the default language at /rss.xml; for other languages at
+    // /<lang>/rss.xml. Detect both shapes after stripping the lang prefix
+    // below.
+    let rss_request = segs.last().copied() == Some("rss.xml");
+
     // Determine language (explicit prefix, or default for unprefixed paths).
     let (lang, rest): (String, Vec<&str>) = match segs.first() {
         Some(first) if site.languages.iter().any(|l| l == first) => {
@@ -128,6 +150,26 @@ fn route(site: &Arc<Site>, path: &str) -> Result<Response, String> {
 
     if rest.is_empty() {
         return render::render_home(site, &lang).map(|h| Response {
+            body: h.into_bytes(),
+            content_type: HTML,
+        });
+    }
+
+    // RSS feed: must come before category/article resolution so it isn't
+    // swallowed by a category whose slug happens to be "rss".
+    if rss_request && rest == ["rss.xml"] {
+        let body = feed::rss_xml(site, &lang, 50)
+            .map_err(|e| format!("rss: {e}"))?;
+        return Ok(Response {
+            body: body.into_bytes(),
+            content_type: "application/rss+xml; charset=utf-8",
+        });
+    }
+
+    // Search page: /search?q=... (or /<lang>/search?q=...).
+    if rest == ["search"] {
+        let q = parse_form_query(query, "q");
+        return render::render_search(site, &lang, &q).map(|h| Response {
             body: h.into_bytes(),
             content_type: HTML,
         });
@@ -232,6 +274,23 @@ fn hexv(c: u8) -> Option<u8> {
         b'A'..=b'F' => Some(c - b'A' + 10),
         _ => None,
     }
+}
+
+/// Pull a single field out of an x-www-form-urlencoded query string.
+fn parse_form_query(query: &str, key: &str) -> String {
+    for pair in query.split('&') {
+        if pair.is_empty() {
+            continue;
+        }
+        let (k, v) = match pair.split_once('=') {
+            Some((k, v)) => (k, v),
+            None => (pair, ""),
+        };
+        if percent_decode(k) == key {
+            return percent_decode(v);
+        }
+    }
+    String::new()
 }
 
 fn respond(

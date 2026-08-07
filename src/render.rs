@@ -2,10 +2,11 @@ use std::collections::BTreeMap;
 
 use crate::config::I18N_DEFAULTS;
 use crate::content::{Article, Category, Site};
+use crate::feed;
 use crate::value::Value;
 
 /// Build the shared context for a language.
-fn base_ctx(site: &Site, lang: &str, current_url: &str) -> Value {
+fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> Value {
     let config = &site.config;
     let home_url = config.lang_prefix(lang);
     let home_active = current_url == home_url;
@@ -38,6 +39,8 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str) -> Value {
             ]))
         })
         .collect();
+    let rss_url = format!("{}rss.xml", config.lang_prefix(lang));
+    let search_action = format!("{}search", config.lang_prefix(lang));
     let mut t = BTreeMap::new();
     for (key, _) in I18N_DEFAULTS {
         t.insert((*key).to_string(), Value::str(&config.t(key, lang)));
@@ -85,6 +88,9 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str) -> Value {
         ("pages".to_string(), pages),
         ("recent".to_string(), recent),
         ("friend_links".to_string(), Value::Arr(friend_links)),
+        ("rss_url".to_string(), Value::str(&rss_url)),
+        ("search_action".to_string(), Value::str(&search_action)),
+        ("search_query".to_string(), Value::str(current_query)),
         ("current_year".to_string(), Value::str(&year)),
         ("t".to_string(), Value::Map(t)),
     ]))
@@ -180,7 +186,15 @@ fn with_layout(
     payload_key: &str,
     payload: Value,
 ) -> Result<Value, String> {
-    let mut ctx = base_ctx(site, lang, current_url);
+    // Sidebar pre-fills the search box with the current query so editing
+    // and resubmitting the form feels natural.
+    let current_query = payload
+        .as_map()
+        .and_then(|m| m.get("query"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let mut ctx = base_ctx(site, lang, current_url, &current_query);
     let headers = render_slot(site, &ctx, "header");
     let side = render_slot(site, &ctx, "side");
     let footer = render_slot(site, &ctx, "footer");
@@ -237,6 +251,38 @@ pub fn render_not_found(site: &Site, lang: &str) -> Result<String, String> {
     )]));
     let ctx = with_layout(site, lang, "", "404.html", "page", payload)?;
     render_with_context(site, "404.html", &ctx)
+}
+
+pub fn render_search(site: &Site, lang: &str, query: &str) -> Result<String, String> {
+    let hits = feed::search_results(site, query, lang);
+    let mut articles: Vec<Value> = Vec::with_capacity(hits.len());
+    for h in &hits {
+        let mut v = h.article.to_value();
+        if let Value::Map(m) = &mut v {
+            // The active language's hits surface first; tag the rest with
+            // their language code so the template can render a small badge.
+            m.insert(
+                "current_lang".to_string(),
+                Value::Bool(h.article.lang == lang),
+            );
+        }
+        articles.push(v);
+    }
+    let payload = Value::Map(BTreeMap::from([
+        ("query".to_string(), Value::str(query)),
+        ("query_trimmed".to_string(), Value::str(query.trim())),
+        ("count".to_string(), Value::int(articles.len() as i64)),
+        ("articles".to_string(), Value::Arr(articles)),
+    ]));
+    // Use lang_prefix so the URL is stable per language and matches the
+    // sidebar's `action="/<lang>/search"` shape.
+    let url = if lang == site.default_lang {
+        "/search".to_string()
+    } else {
+        format!("/{lang}/search")
+    };
+    let ctx = with_layout(site, lang, &url, "search.html", "search", payload)?;
+    render_with_context(site, "search.html", &ctx)
 }
 
 fn current_year() -> i64 {

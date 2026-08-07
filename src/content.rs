@@ -15,6 +15,7 @@ pub mod theme_files {
     pub const CATEGORY: &str = include_str!("../template/default/category.html");
     pub const ARTICLE: &str = include_str!("../template/default/article.html");
     pub const PAGE: &str = include_str!("../template/default/page.html");
+    pub const SEARCH: &str = include_str!("../template/default/search.html");
     pub const NOT_FOUND: &str = include_str!("../template/default/404.html");
     pub const PARTIAL_HEADER: &str = include_str!("../template/default/partials/header.html");
     pub const PARTIAL_FOOTER: &str = include_str!("../template/default/partials/footer.html");
@@ -570,6 +571,7 @@ fn load_embedded(engine: &mut Engine) -> Result<(), String> {
         ("category.html", theme_files::CATEGORY.to_string()),
         ("article.html", theme_files::ARTICLE.to_string()),
         ("page.html", theme_files::PAGE.to_string()),
+        ("search.html", theme_files::SEARCH.to_string()),
         ("404.html", theme_files::NOT_FOUND.to_string()),
         ("partials/header.html", theme_files::PARTIAL_HEADER.to_string()),
         ("partials/footer.html", theme_files::PARTIAL_FOOTER.to_string()),
