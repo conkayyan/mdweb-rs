@@ -137,9 +137,13 @@ title = "My Blog"
 description = "A demo site built with mdweb."
 keywords = "blog, rust"
 
+[lang.en]
+display_name = "English"   # 语言下拉菜单中显示的标签
+
 [lang.zh]
 title = "我的博客"
 description = "使用 mdweb 构建的演示站点，支持多语言。"
+display_name = "简体中文"
 
 [meta]                       # 任意元信息，模板中以 config.meta 访问
 description = "A demo site"
@@ -157,6 +161,35 @@ url = "https://github.com/conkayyan/mdweb-rs"
 name = "Rust"
 url = "https://www.rust-lang.org/zh/"
 ```
+
+### 多语言下拉菜单
+
+页眉会显示语言切换下拉菜单。每个语言的标签通过 `[lang.<code>].display_name`
+设置；若未设置，则显示原始语言代码（`zh`、`en` 等）。
+
+```toml
+[lang.zh]
+title = "我的博客"
+display_name = "简体中文"
+```
+
+### 界面文案（i18n）
+
+默认模板内置英文文案，并通过 `t.*` 上下文键查找标签。可在 `[i18n.<code>]`
+中按语言覆盖：
+
+```toml
+[i18n.zh]
+categories   = "分类"
+recent_posts = "最近文章"
+friend_links = "友情链接"
+no_posts     = "暂无文章。"
+```
+
+可用键：`home`、`categories`、`recent_posts`、`friend_links`、`no_posts`、
+`read_in`、`published`、`updated`、`author`、`prev`、`next`、`not_found`、
+`not_found_desc`。缺失的键会回退到英文，再回退到内置默认值，最后回退到
+键名字符串本身。
 
 ## Frontmatter
 
@@ -212,7 +245,9 @@ meta:                    # 任意映射，模板中以 article.meta 访问
 | `title` | 当前页面 / 站点标题 |
 | `description` / `keywords` | 当前语言的描述 / 关键词 |
 | `lang` | 当前语言代码 |
-| `languages` | 语言切换列表：`{ code, title, url }` |
+| `languages` | 语言切换列表：`{ code, display_name, url, active }` |
+| `t` | 界面文案映射（键：`home`、`categories`、`recent_posts` 等） |
+| `current_lang_display_name` | 当前语言的显示名（如按钮标签） |
 | `categories` | 分类树（嵌套的 `{ title, url, children }`） |
 | `home_url` | 当前语言首页的 URL |
 | `current_url` | 当前请求 URL |
@@ -230,3 +265,8 @@ meta:                    # 任意映射，模板中以 article.meta 访问
 
 默认语言通过无前缀路径提供（`/posts/hello-world/`）；其他语言带前缀
 （`/zh/posts/hello-world/`）。语言切换器使用 `languages[].url`。
+
+**v0.2.0 不兼容变更：** `languages[].title`（实际返回的是*站点标题*而非语言
+标签，容易产生误解）已被替换为 `languages[].display_name`。布尔上下文键
+`is_zh` 已移除，请改用 `t.*` 键。`lang_meta` 映射与 `lang_active` 标志亦已
+移除——当前语言代码请用 `lang`，语言按钮标签请用 `current_lang_display_name`。

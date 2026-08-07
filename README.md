@@ -139,9 +139,13 @@ title = "My Blog"
 description = "A demo site built with mdweb."
 keywords = "blog, rust"
 
+[lang.en]
+display_name = "English"   # label shown in the language dropdown
+
 [lang.zh]
 title = "我的博客"
 description = "使用 mdweb 构建的演示站点，支持多语言。"
+display_name = "简体中文"
 
 [meta]                       # arbitrary metadata exposed to templates as config.meta
 description = "A demo site"
@@ -159,6 +163,35 @@ url = "https://github.com/conkayyan/mdweb-rs"
 name = "Rust"
 url = "https://www.rust-lang.org/"
 ```
+
+### Multi-language dropdown
+
+The header shows a language switcher dropdown. Each language's label is set via
+`[lang.<code>].display_name`; if unset, the raw code (`zh`, `en`, …) is shown.
+
+```toml
+[lang.zh]
+title = "我的博客"
+display_name = "简体中文"
+```
+
+### UI strings (i18n)
+
+Default templates ship English strings and look up labels via the `t.*` context
+keys. Override them per language under `[i18n.<code>]`:
+
+```toml
+[i18n.zh]
+categories   = "分类"
+recent_posts = "最近文章"
+friend_links = "友情链接"
+no_posts     = "暂无文章。"
+```
+
+Available keys: `home`, `categories`, `recent_posts`, `friend_links`, `no_posts`,
+`read_in`, `published`, `updated`, `author`, `prev`, `next`, `not_found`,
+`not_found_desc`. Missing keys fall back to English, then to a built-in default,
+then to the key string itself.
 
 ## Frontmatter
 
@@ -214,7 +247,9 @@ Globally available:
 | `title` | current page/site title |
 | `description` / `keywords` | current language description/keywords |
 | `lang` | current language code |
-| `languages` | list of `{ code, title, url }` for the language switcher |
+| `languages` | list of `{ code, display_name, url, active }` for the language switcher |
+| `t` | UI string map (keys: `home`, `categories`, `recent_posts`, …) |
+| `current_lang_display_name` | display name for the current language (e.g. button label) |
 | `categories` | category tree (nested `{ title, url, children }`) |
 | `home_url` | URL of the home page for the current language |
 | `current_url` | current request URL |
@@ -233,3 +268,9 @@ Per-template:
 The default language is served at unprefixed paths (`/posts/hello-world/`); other
 languages get a prefix (`/zh/posts/hello-world/`). The language switcher uses
 `languages[].url`.
+
+**Breaking changes (v0.2.0):** `languages[].title` (which confusingly returned the
+*site title*, not a label) is replaced by `languages[].display_name`. The `is_zh`
+boolean context key is removed; use the `t.*` keys instead. The `lang_meta` map
+and `lang_active` flag are also removed — use `lang` for the current language
+code, `current_lang_display_name` for the language button label.

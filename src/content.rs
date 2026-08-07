@@ -302,6 +302,10 @@ impl Site {
                                     &o.lang,
                                 )),
                             ),
+                            (
+                                "display_name".to_string(),
+                                Value::str(&config.display_name_for(&o.lang)),
+                            ),
                         ]))
                     })
                     .collect();
@@ -865,5 +869,65 @@ fn build_node(
         descriptions,
         contents,
         children,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn write(dir: &PathBuf, rel: &str, body: &str) {
+        let p = dir.join(rel);
+        if let Some(parent) = p.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(p, body).unwrap();
+    }
+
+    #[test]
+    fn translation_entries_carry_display_name() {
+        let dir = std::env::temp_dir().join(format!(
+            "mdweb-content-tr-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        write(
+            &dir,
+            "site.toml",
+            r#"
+            languages = ["en", "zh"]
+
+            [lang.zh]
+            display_name = "简体中文"
+            "#,
+        );
+        write(
+            &dir,
+            "hello.md",
+            "---\ntitle: Hello\n---\nbody\n",
+        );
+        write(
+            &dir,
+            "hello.zh.md",
+            "---\ntitle: 你好\n---\nbody\n",
+        );
+
+        let site = Site::build(&dir, None).expect("build");
+        let hello_en = site
+            .articles
+            .iter()
+            .find(|a| a.lang == "en" && a.slug == "hello")
+            .expect("en article");
+        assert_eq!(hello_en.translations.len(), 1);
+        let tr = hello_en.translations[0].as_map().expect("translation map");
+        assert_eq!(tr.get("lang").and_then(|v| v.as_str()), Some("zh"));
+        assert_eq!(
+            tr.get("display_name").and_then(|v| v.as_str()),
+            Some("简体中文")
+        );
     }
 }

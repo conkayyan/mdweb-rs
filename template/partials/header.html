@@ -5,10 +5,10 @@
       <span class="brand-name">{{ title }}</span>
     </a>
     <nav class="primary-nav" aria-label="Primary">
-      <a class="nav-link{% if home_active %} is-active{% endif %}" href="{{ home_url }}">Home</a>
+      <a class="nav-link{% if home_active %} is-active{% endif %}" href="{{ home_url }}">{{ t.home }}</a>
       {% if categories %}
       <div class="nav-item">
-        <button type="button" class="nav-link has-caret{% if categories_active %} is-active{% endif %}" aria-haspopup="true">{% if is_zh %}分类{% else %}Categories{% endif %}</button>
+        <button type="button" class="nav-link has-caret{% if categories_active %} is-active{% endif %}" aria-haspopup="true">{{ t.categories }}</button>
         <ul class="dropdown">
           {% for c in categories %}
           <li class="dropdown-item{% if c.has_children %} has-sub{% endif %}">
@@ -30,9 +30,16 @@
       {% endfor %}
     </nav>
     <nav class="langs" aria-label="Languages">
-      {% for l in languages %}
-      <a class="lang-link{% if l.active %} is-active{% endif %}" href="{{ l.url }}" title="{{ l.title }}">{{ l.code }}</a>
-      {% endfor %}
+      <div class="nav-item">
+        <button type="button" class="nav-link has-caret is-active" aria-haspopup="true">{{ current_lang_display_name }}</button>
+        <ul class="dropdown">
+          {% for l in languages %}
+          <li class="dropdown-item">
+            <a href="{{ l.url }}" class="lang-link{% if l.active %} is-active{% endif %}" hreflang="{{ l.code }}">{{ l.display_name }}</a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
     </nav>
   </div>
 </header>

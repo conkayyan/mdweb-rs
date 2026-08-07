@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use crate::config::I18N_DEFAULTS;
 use crate::content::{Article, Category, Site};
 use crate::value::Value;
 
@@ -13,7 +14,7 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str) -> Value {
         let url = config.lang_prefix(l);
         languages.push(Value::Map(BTreeMap::from([
             ("code".to_string(), Value::str(l)),
-            ("title".to_string(), Value::str(&config.title_for(l))),
+            ("display_name".to_string(), Value::str(&config.display_name_for(l))),
             ("url".to_string(), Value::str(&url)),
             ("active".to_string(), Value::Bool(l == lang)),
         ])));
@@ -37,6 +38,10 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str) -> Value {
             ]))
         })
         .collect();
+    let mut t = BTreeMap::new();
+    for (key, _) in I18N_DEFAULTS {
+        t.insert((*key).to_string(), Value::str(&config.t(key, lang)));
+    }
     let year = current_year().to_string();
     Value::Map(BTreeMap::from([
         (
@@ -67,7 +72,10 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str) -> Value {
         ),
         ("keywords".to_string(), opt_str(&config.keywords_for(lang))),
         ("lang".to_string(), Value::str(lang)),
-        ("is_zh".to_string(), Value::Bool(lang == "zh")),
+        (
+            "current_lang_display_name".to_string(),
+            Value::str(&config.display_name_for(lang)),
+        ),
         ("languages".to_string(), Value::Arr(languages)),
         ("home_url".to_string(), Value::str(&home_url)),
         ("home_active".to_string(), Value::Bool(home_active)),
@@ -78,6 +86,7 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str) -> Value {
         ("recent".to_string(), recent),
         ("friend_links".to_string(), Value::Arr(friend_links)),
         ("current_year".to_string(), Value::str(&year)),
+        ("t".to_string(), Value::Map(t)),
     ]))
 }
 
@@ -256,4 +265,88 @@ fn days_to_year(days: i64) -> i64 {
         }
     }
     y
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::content::Site;
+    use std::path::PathBuf;
+
+    fn build_site_from_str(toml: &str) -> Site {
+        let dir = tempdir();
+        std::fs::write(dir.join("site.toml"), toml).unwrap();
+        Site::build(&dir, None).expect("build")
+    }
+
+    fn tempdir() -> PathBuf {
+        let p = std::env::temp_dir().join(format!(
+            "mdweb-render-test-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn base_ctx_exposes_t_and_current_lang_display_name() {
+        let site = build_site_from_str(
+            r#"
+            languages = ["en", "zh"]
+
+            [lang.zh]
+            display_name = "简体中文"
+
+            [i18n.zh]
+            categories = "分类"
+            "#,
+        );
+        let ctx = base_ctx(&site, "zh", "/zh/");
+        let map = ctx.as_map().expect("map");
+
+        assert!(map.contains_key("t"));
+        assert!(map.contains_key("current_lang_display_name"));
+        assert!(!map.contains_key("is_zh"));
+        assert!(!map.contains_key("lang_meta"));
+        assert!(!map.contains_key("lang_active"));
+
+        let t = map.get("t").and_then(|v| v.as_map()).expect("t map");
+        assert_eq!(t.get("categories").and_then(|v| v.as_str()), Some("分类"));
+
+        assert_eq!(
+            map.get("current_lang_display_name")
+                .and_then(|v| v.as_str()),
+            Some("简体中文")
+        );
+    }
+
+    #[test]
+    fn languages_have_display_name_not_title() {
+        let site = build_site_from_str(
+            r#"
+            languages = ["en", "zh"]
+
+            [lang.zh]
+            display_name = "简体中文"
+            "#,
+        );
+        let ctx = base_ctx(&site, "en", "/");
+        let map = ctx.as_map().expect("map");
+        let langs = map
+            .get("languages")
+            .and_then(|v| v.as_arr())
+            .expect("languages");
+        assert_eq!(langs.len(), 2);
+        for entry in langs {
+            let m = entry.as_map().expect("entry map");
+            assert!(m.contains_key("display_name"));
+            assert!(!m.contains_key("title"));
+            assert!(m.contains_key("code"));
+            assert!(m.contains_key("url"));
+            assert!(m.contains_key("active"));
+        }
+    }
 }

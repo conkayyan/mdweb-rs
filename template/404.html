@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Not Found · {{ title }}{% endblock title %}
+{% block title %}{{ t.not_found }} · {{ title }}{% endblock title %}
 {% block content %}
-<h1>404</h1>
-<p>The page you requested could not be found.</p>
+<h1>{{ t.not_found }}</h1>
+<p>{{ t.not_found_desc }}</p>
 <a href="{{ home_url }}">← Back home</a>
 {% endblock content %}

@@ -8,8 +8,35 @@ use crate::value::Value;
 #[derive(Debug, Clone, Default)]
 pub struct LangMeta {
     pub title: Option<String>,
+    pub display_name: Option<String>,
     pub description: Option<String>,
     pub keywords: Option<String>,
+}
+
+/// i18n keys and their English fallbacks. Single source of truth used both
+/// for the lookup in `Config::t` and for the loop that builds the `t.*` map
+/// exposed to templates.
+pub(crate) const I18N_DEFAULTS: &[(&str, &str)] = &[
+    ("home", "Home"),
+    ("categories", "Categories"),
+    ("recent_posts", "Recent Posts"),
+    ("friend_links", "Friend Links"),
+    ("no_posts", "No posts yet."),
+    ("read_in", "Read in:"),
+    ("published", "Published:"),
+    ("updated", "Updated:"),
+    ("author", "Author:"),
+    ("prev", "Previous"),
+    ("next", "Next"),
+    ("not_found", "Not Found"),
+    ("not_found_desc", "The page you're looking for doesn't exist."),
+];
+
+fn builtin_default(key: &str) -> Option<&'static str> {
+    I18N_DEFAULTS
+        .iter()
+        .find(|(k, _)| *k == key)
+        .map(|(_, v)| *v)
 }
 
 /// Site configuration from `site.toml`.
@@ -24,6 +51,7 @@ pub struct Config {
     pub params: Value,
     pub meta: Value,
     pub langs: BTreeMap<String, LangMeta>,
+    pub i18n: BTreeMap<String, BTreeMap<String, String>>,
     /// Friend links parsed from `[[friend_links]]` tables in site.toml.
     pub friend_links: Vec<FriendLink>,
     pub extra: Value,
@@ -48,6 +76,7 @@ impl Default for Config {
             params: Value::map(),
             meta: Value::map(),
             langs: BTreeMap::new(),
+            i18n: BTreeMap::new(),
             friend_links: Vec::new(),
             extra: Value::map(),
         }
@@ -134,6 +163,10 @@ impl Config {
                     code.clone(),
                     LangMeta {
                         title: mm.get("title").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                        display_name: mm
+                            .get("display_name")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
                         description: mm
                             .get("description")
                             .and_then(|v| v.as_str())
@@ -144,6 +177,18 @@ impl Config {
                             .map(|s| s.to_string()),
                     },
                 );
+            }
+        }
+        if let Some(i18n_map) = m.get("i18n").and_then(|v| v.as_map()) {
+            for (lang, body) in i18n_map {
+                let Some(bm) = body.as_map() else { continue };
+                let mut table = BTreeMap::new();
+                for (k, v) in bm {
+                    if let Some(s) = v.as_str() {
+                        table.insert(k.clone(), s.to_string());
+                    }
+                }
+                cfg.i18n.insert(lang.clone(), table);
             }
         }
         cfg
@@ -198,5 +243,106 @@ impl Config {
         } else {
             format!("/{lang}/")
         }
+    }
+
+    /// Display name for a language code. Falls back to the raw code when unset.
+    pub fn display_name_for(&self, lang: &str) -> String {
+        self.langs
+            .get(lang)
+            .and_then(|m| m.display_name.clone())
+            .unwrap_or_else(|| lang.to_string())
+    }
+
+    /// Resolve a UI string: current lang → English → built-in default → key itself.
+    pub fn t(&self, key: &str, lang: &str) -> String {
+        if let Some(s) = self.i18n.get(lang).and_then(|t| t.get(key)) {
+            return s.clone();
+        }
+        if lang != "en" {
+            if let Some(s) = self.i18n.get("en").and_then(|t| t.get(key)) {
+                return s.clone();
+            }
+        }
+        if let Some(default) = builtin_default(key) {
+            return default.to_string();
+        }
+        key.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(text: &str) -> Config {
+        let v = crate::parse::parse_toml(text).expect("parse");
+        Config::from_value(&v)
+    }
+
+    #[test]
+    fn display_name_from_lang_meta() {
+        let cfg = parse(
+            r#"
+            languages = ["en", "zh"]
+
+            [lang.en]
+            display_name = "English"
+
+            [lang.zh]
+            display_name = "简体中文"
+        "#,
+        );
+        assert_eq!(cfg.display_name_for("en"), "English");
+        assert_eq!(cfg.display_name_for("zh"), "简体中文");
+    }
+
+    #[test]
+    fn display_name_falls_back_to_code() {
+        let cfg = parse(r#"languages = ["en", "fr"]"#);
+        assert_eq!(cfg.display_name_for("en"), "en");
+        assert_eq!(cfg.display_name_for("fr"), "fr");
+    }
+
+    #[test]
+    fn t_resolves_current_lang() {
+        let cfg = parse(
+            r#"
+            languages = ["en", "zh"]
+
+            [i18n.en]
+            categories = "Categories"
+
+            [i18n.zh]
+            categories = "分类"
+        "#,
+        );
+        assert_eq!(cfg.t("categories", "zh"), "分类");
+        assert_eq!(cfg.t("categories", "en"), "Categories");
+    }
+
+    #[test]
+    fn t_falls_back_to_english() {
+        let cfg = parse(
+            r#"
+            languages = ["en", "fr"]
+
+            [i18n.en]
+            categories = "Categories"
+        "#,
+        );
+        assert_eq!(cfg.t("categories", "fr"), "Categories");
+    }
+
+    #[test]
+    fn t_uses_builtin_default_when_no_english() {
+        let cfg = parse(r#"languages = ["fr"]"#);
+        // "home" has a built-in default; falls through English (unset) to the default.
+        assert_eq!(cfg.t("home", "fr"), "Home");
+    }
+
+    #[test]
+    fn t_returns_key_for_unknown_when_no_default() {
+        let cfg = parse(r#"languages = ["en"]"#);
+        assert_eq!(cfg.t("totally_custom_key", "en"), "totally_custom_key");
     }
 }

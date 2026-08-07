@@ -3,7 +3,7 @@
   <details {% if c.descendant_active %}open{% endif %}>
     <summary class="cat-row{% if c.active %} is-active{% endif %}">
       <span class="cat-caret" aria-hidden="true"></span>
-      <a href="{{ c.url }}" class="cat-link{% if c.active %} is-active{% endif %}">{{ c.title }}</a>
+      <span class="cat-title">{{ c.title }}</span>
     </summary>
     <ul class="cat-children">
       {% for c in c.children %}

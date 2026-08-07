@@ -213,10 +213,12 @@ theme = "template"
 
 [lang.en]
 title = "My Blog"
+display_name = "English"
 description = "A demo site built with mdweb."
 
 [lang.zh]
 title = "我的博客"
+display_name = "简体中文"
 description = "使用 mdweb 构建的演示站点，支持多语言。"
 
 # Friend links — rendered in the sidebar (target="_blank").
@@ -366,17 +368,17 @@ tags: ["tips"]
 - Drop custom partials into `_layout/` to override the theme.
 "#;
 
-const LAYOUT_HEADER: &str = r##"<header class="site-header">
+pub(crate) const LAYOUT_HEADER: &str = r##"<header class="site-header">
   <div class="container header-inner">
     <a class="brand" href="{{ home_url }}">
       <span class="brand-mark" aria-hidden="true">M</span>
       <span class="brand-name">{{ title }}</span>
     </a>
     <nav class="primary-nav" aria-label="Primary">
-      <a class="nav-link{% if home_active %} is-active{% endif %}" href="{{ home_url }}">Home</a>
+      <a class="nav-link{% if home_active %} is-active{% endif %}" href="{{ home_url }}">{{ t.home }}</a>
       {% if categories %}
       <div class="nav-item">
-        <button type="button" class="nav-link has-caret{% if categories_active %} is-active{% endif %}" aria-haspopup="true">{% if is_zh %}分类{% else %}Categories{% endif %}</button>
+        <button type="button" class="nav-link has-caret{% if categories_active %} is-active{% endif %}" aria-haspopup="true">{{ t.categories }}</button>
         <ul class="dropdown">
           {% for c in categories %}
           <li class="dropdown-item{% if c.has_children %} has-sub{% endif %}">
@@ -398,21 +400,27 @@ const LAYOUT_HEADER: &str = r##"<header class="site-header">
       {% endfor %}
     </nav>
     <nav class="langs" aria-label="Languages">
-      {% for l in languages %}
-      <a class="lang-link{% if l.active %} is-active{% endif %}" href="{{ l.url }}" title="{{ l.title }}">{{ l.code }}</a>
-      {% endfor %}
+      <div class="nav-item">
+        <button type="button" class="nav-link has-caret is-active" aria-haspopup="true">{{ current_lang_display_name }}</button>
+        <ul class="dropdown">
+          {% for l in languages %}
+          <li class="dropdown-item">
+            <a href="{{ l.url }}" class="lang-link{% if l.active %} is-active{% endif %}" hreflang="{{ l.code }}">{{ l.display_name }}</a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
     </nav>
   </div>
-</header>
-"##;
+</header>"##;
 
 const LAYOUT_FOOTER: &str = r##"<footer class="site-footer">
   <p>Powered by <a href="https://github.com/conkayyan/mdweb-rs">mdweb</a> · © {{ current_year }} {{ title }}</p>
 </footer>
 "##;
 
-const LAYOUT_SIDE: &str = r##"<nav class="recent-nav">
-  <h3>{% if is_zh %}最近文章{% else %}Recent Posts{% endif %}</h3>
+pub(crate) const LAYOUT_SIDE: &str = r##"<nav class="recent-nav">
+  <h3>{{ t.recent_posts }}</h3>
   {% if recent %}
   <ul class="recent-list">
     {% for r in recent %}
@@ -423,12 +431,12 @@ const LAYOUT_SIDE: &str = r##"<nav class="recent-nav">
     {% endfor %}
   </ul>
   {% else %}
-  <p class="recent-empty">{% if is_zh %}暂无文章{% else %}No posts yet.{% endif %}</p>
+  <p class="recent-empty">{{ t.no_posts }}</p>
   {% endif %}
 </nav>
 
 <nav class="category-nav">
-  <h3>{% if is_zh %}分类{% else %}Categories{% endif %}</h3>
+  <h3>{{ t.categories }}</h3>
   <ul class="cat-tree">
     {% for c in categories %}
       {% include "partials/_cat_node.html" %}
@@ -438,14 +446,13 @@ const LAYOUT_SIDE: &str = r##"<nav class="recent-nav">
 
 {% if friend_links %}
 <nav class="friend-links-nav">
-  <h3>{% if is_zh %}友情链接{% else %}Friend Links{% endif %}</h3>
+  <h3>{{ t.friend_links }}</h3>
   <ul class="friend-links-list">
     {% for l in friend_links %}
     <li><a href="{{ l.url }}" target="_blank" rel="noopener" class="friend-link">{{ l.name }}</a></li>
     {% endfor %}
   </ul>
 </nav>
-{% endif %}
-"##;
+{% endif %}"##;
 
 const LAYOUT_INJECT: &str = "<!-- put your analytics / statistic JS snippet here -->\n";
