@@ -178,7 +178,7 @@ pub struct Site {
     pub default_lang: String,
     pub tree: Vec<Category>,
     pub articles: Vec<Article>,
-    pub home_content: Option<String>,
+    pub home_content: BTreeMap<String, String>,
     pub engine: Engine,
     /// Whether the embedded default static CSS is a valid fallback.
     pub engine_embedded: bool,
@@ -251,14 +251,19 @@ impl Site {
             }
         }
 
-        let home_content = indices
-            .get("")
-            .and_then(|v| {
-                v.iter().find(|i| {
-                    i.path("lang").and_then(|l| l.as_str()) == Some(default_lang.as_str())
-                })
-            })
-            .and_then(|v| v.path("html").map(|h| h.render()));
+        let mut home_content: BTreeMap<String, String> = BTreeMap::new();
+        if let Some(entries) = indices.get("") {
+            for entry in entries {
+                let lang = entry
+                    .path("lang")
+                    .and_then(|l| l.as_str())
+                    .unwrap_or(&default_lang)
+                    .to_string();
+                if let Some(html) = entry.path("html").map(|h| h.render()) {
+                    home_content.insert(lang, html);
+                }
+            }
+        }
 
         let mut all_paths: HashSet<Vec<String>> = HashSet::new();
         for k in indices.keys() {
@@ -425,11 +430,14 @@ impl Site {
         arts.sort_by_key(|a| {
             std::cmp::Reverse(a.path("sort_ts").and_then(|v| v.as_int()).unwrap_or(0))
         });
+        let content = self
+            .home_content
+            .get(lang)
+            .or_else(|| self.home_content.get(&self.default_lang))
+            .map(|s| Value::str(s))
+            .unwrap_or(Value::Null);
         Value::Map(BTreeMap::from([
-            (
-                "content".to_string(),
-                self.home_content.clone().map(Value::str).unwrap_or(Value::Null),
-            ),
+            ("content".to_string(), content),
             ("articles".to_string(), Value::Arr(arts)),
         ]))
     }
@@ -929,5 +937,45 @@ mod tests {
             tr.get("display_name").and_then(|v| v.as_str()),
             Some("简体中文")
         );
+    }
+
+    #[test]
+    fn home_content_resolves_per_language() {
+        let dir = std::env::temp_dir().join(format!(
+            "mdweb-content-home-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        write(&dir, "site.toml", r#"languages = ["en", "zh"]"#);
+        write(
+            &dir,
+            "_index.md",
+            "---\ntitle: Home\nlayout: index\n---\nEnglish body\n",
+        );
+        write(
+            &dir,
+            "_index.zh.md",
+            "---\ntitle: 首页\nlayout: index\n---\n中文内容\n",
+        );
+
+        let site = Site::build(&dir, None).expect("build");
+        assert_eq!(
+            site.home_content.get("en").map(String::as_str),
+            Some("<p>English body</p>\n")
+        );
+        assert_eq!(
+            site.home_content.get("zh").map(String::as_str),
+            Some("<p>中文内容</p>\n")
+        );
+
+        let en_val = site.home_value("en");
+        let en = en_val.as_map().expect("en map");
+        assert_eq!(en.get("content").and_then(|v| v.as_str()), Some("<p>English body</p>\n"));
+        let zh_val = site.home_value("zh");
+        let zh = zh_val.as_map().expect("zh map");
+        assert_eq!(zh.get("content").and_then(|v| v.as_str()), Some("<p>中文内容</p>\n"));
     }
 }

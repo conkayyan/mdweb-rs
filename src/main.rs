@@ -151,6 +151,7 @@ fn cmd_new(args: &[String]) -> i32 {
     let files: Vec<(&str, &str)> = vec![
         ("site.toml", SITE_TOML),
         ("_index.md", INDEX_MD),
+        ("_index.zh.md", INDEX_ZH_MD),
         ("about.md", ABOUT_MD),
         ("about.zh.md", ABOUT_ZH_MD),
         ("posts/_index.md", POSTS_INDEX_MD),
@@ -158,11 +159,15 @@ fn cmd_new(args: &[String]) -> i32 {
         ("posts/hello-world.md", HELLO_MD),
         ("posts/hello-world.zh.md", HELLO_ZH_MD),
         ("posts/web/_index.md", WEB_INDEX_MD),
+        ("posts/web/_index.zh.md", WEB_INDEX_ZH_MD),
         ("posts/web/frontend/_index.md", FRONTEND_INDEX_MD),
+        ("posts/web/frontend/_index.zh.md", FRONTEND_INDEX_ZH_MD),
         ("posts/web/frontend/react.md", REACT_MD),
+        ("posts/web/frontend/react.zh.md", REACT_ZH_MD),
         ("notes/_index.md", NOTES_INDEX_MD),
         ("notes/_index.zh.md", NOTES_INDEX_ZH_MD),
         ("notes/tips.md", TIPS_MD),
+        ("notes/tips.zh.md", TIPS_ZH_MD),
         ("_layout/header.html", LAYOUT_HEADER),
         ("_layout/footer.html", LAYOUT_FOOTER),
         ("_layout/side.html", LAYOUT_SIDE),
@@ -215,11 +220,28 @@ theme = "template"
 title = "My Blog"
 display_name = "English"
 description = "A demo site built with mdweb."
+keywords = "blog, rust"
 
 [lang.zh]
 title = "我的博客"
 display_name = "简体中文"
 description = "使用 mdweb 构建的演示站点，支持多语言。"
+keywords = "博客, rust"
+
+[i18n.zh]
+home          = "首页"
+categories    = "分类"
+recent_posts  = "最近文章"
+friend_links  = "友情链接"
+no_posts      = "暂无文章。"
+read_in       = "其他语言："
+published     = "发布于："
+updated       = "更新于："
+author        = "作者："
+prev          = "上一篇"
+next          = "下一篇"
+not_found     = "页面未找到"
+not_found_desc = "您访问的页面不存在。"
 
 # Friend links — rendered in the sidebar (target="_blank").
 [[friend_links]]
@@ -237,6 +259,14 @@ layout: "index"
 ---
 
 Welcome to a blog powered by **mdweb**, a static blog engine written in pure Rust.
+"#;
+
+const INDEX_ZH_MD: &str = r#"---
+title: "欢迎"
+layout: "index"
+---
+
+欢迎访问由 **mdweb** 驱动的博客——一个用纯 Rust 编写的静态博客引擎。
 "#;
 
 const ABOUT_MD: &str = r#"---
@@ -334,12 +364,28 @@ summary: "Anything browser-shaped."
 Sub-category example: nested under Posts.
 "#;
 
+const WEB_INDEX_ZH_MD: &str = r#"---
+title: "Web"
+summary: "一切与浏览器相关的内容。"
+---
+
+子分类示例：嵌套在「文章」之下。
+"#;
+
 const FRONTEND_INDEX_MD: &str = r#"---
 title: "Frontend"
 summary: "UI, components, build tools."
 ---
 
 Nested two levels deep — under Posts → Web → Frontend.
+"#;
+
+const FRONTEND_INDEX_ZH_MD: &str = r#"---
+title: "前端"
+summary: "界面、组件、构建工具。"
+---
+
+二级嵌套示例：文章 → Web → 前端。
 "#;
 
 const REACT_MD: &str = r#"---
@@ -349,6 +395,15 @@ tags: ["react", "web"]
 ---
 
 Three levels deep: Posts → Web → Frontend → this article.
+"#;
+
+const REACT_ZH_MD: &str = r#"---
+title: "一篇 React 笔记"
+date: "2026-08-07"
+tags: ["react", "web"]
+---
+
+三级嵌套示例：文章 → Web → 前端 → 本文。
 "#;
 
 const NOTES_INDEX_ZH_MD: &str = r#"---
@@ -366,6 +421,17 @@ tags: ["tips"]
 - Use double quotes around dates in frontmatter.
 - Name files like `foo.en.md` / `foo.zh.md` for translations.
 - Drop custom partials into `_layout/` to override the theme.
+"#;
+
+const TIPS_ZH_MD: &str = r#"---
+title: "几条小贴士"
+date: "2026-08-05"
+tags: ["tips"]
+---
+
+- 日期字段在 frontmatter 中请用双引号包裹。
+- 文件命名为 `foo.en.md` / `foo.zh.md` 即可作为不同语言版本。
+- 把自定义 partial 放到 `_layout/` 下即可覆盖默认主题。
 "#;
 
 pub(crate) const LAYOUT_HEADER: &str = r##"<header class="site-header">

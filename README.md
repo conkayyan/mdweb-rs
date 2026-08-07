@@ -136,16 +136,30 @@ theme = "template"           # "default" (built-in) or a directory name like "te
 
 [lang.en]                    # per-language overrides
 title = "My Blog"
+display_name = "English"     # label shown in the language dropdown
 description = "A demo site built with mdweb."
 keywords = "blog, rust"
 
-[lang.en]
-display_name = "English"   # label shown in the language dropdown
-
 [lang.zh]
 title = "我的博客"
-description = "使用 mdweb 构建的演示站点，支持多语言。"
 display_name = "简体中文"
+description = "使用 mdweb 构建的演示站点，支持多语言。"
+keywords = "博客, rust"
+
+[i18n.zh]                    # UI string overrides; missing keys fall back to English
+home           = "首页"
+categories     = "分类"
+recent_posts   = "最近文章"
+friend_links   = "友情链接"
+no_posts       = "暂无文章。"
+read_in        = "其他语言："
+published      = "发布于："
+updated        = "更新于："
+author         = "作者："
+prev           = "上一篇"
+next           = "下一篇"
+not_found      = "页面未找到"
+not_found_desc = "您访问的页面不存在。"
 
 [meta]                       # arbitrary metadata exposed to templates as config.meta
 description = "A demo site"
