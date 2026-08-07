@@ -576,6 +576,61 @@ fn directory_drives_template_selection() {
 }
 
 #[test]
+fn reading_minutes_estimates_cjk_and_words() {
+    // 600 CJK chars at 300 cpm → 2 min; 600 English words at 200 wpm → 3 min.
+    let dir = tempdir("reading");
+    write(&dir, "site.toml", r#"title = "X""#);
+    let cjk = "中".repeat(600);
+    let words = "lorem ".repeat(600);
+    write(
+        &dir,
+        "content/posts/long.md",
+        &format!("---\ntitle: L\n---\n\n{cjk}\n\n{words}\n"),
+    );
+    write(
+        &dir,
+        "content/posts/short.md",
+        "---\ntitle: S\n---\n\nhi\n",
+    );
+    write(
+        &dir,
+        "content/posts/empty.md",
+        "---\ntitle: E\n---\n\n",
+    );
+    let site = Site::build(&dir, None).expect("build");
+    let long = site.articles.iter().find(|a| a.slug == "long").expect("long");
+    let short = site.articles.iter().find(|a| a.slug == "short").expect("short");
+    let empty = site.articles.iter().find(|a| a.slug == "empty").expect("empty");
+    assert_eq!(long.reading_minutes(), 5, "600 CJK + 600 words → 5 min");
+    assert!(short.reading_minutes() >= 1, "short content still ≥ 1 min");
+    assert_eq!(empty.reading_minutes(), 0, "empty content reports 0");
+    // to_value surfaces the count.
+    let v = short.to_value();
+    assert!(v
+        .as_map()
+        .and_then(|m| m.get("reading_minutes"))
+        .and_then(|x| x.as_int())
+        .unwrap_or(0)
+        >= 1);
+    // Rendered output exposes the label for both post and page paths.
+    let page_dir = tempdir("readingpg");
+    write(&page_dir, "site.toml", r#"title = "X""#);
+    write(
+        &page_dir,
+        "content/about.md",
+        "---\ntitle: About\n---\n\nSome content here for the page.\n",
+    );
+    let site2 = Site::build(&page_dir, None).expect("build page");
+    let about = site2.articles.iter().find(|a| a.slug == "about").expect("about");
+    let html = mdweb::render::render_article(&site2, "en", about).expect("render page");
+    assert!(html.contains("reading-time"), "pages surface reading-time block");
+    assert!(
+        html.contains("min read"),
+        "rendered output uses the i18n reading_time label"
+    );
+}
+
+#[test]
 fn show_rss_and_sitemap_toggle_footer_links() {
     use mdweb::config::Config;
     let dir_on = tempdir("toggleon");

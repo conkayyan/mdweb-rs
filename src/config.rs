@@ -28,6 +28,7 @@ pub(crate) const I18N_DEFAULTS: &[(&str, &str)] = &[
     ("published", "Published:"),
     ("updated", "Updated:"),
     ("author", "Author:"),
+    ("reading_time", "min read"),
     ("prev", "Previous"),
     ("next", "Next"),
     ("not_found", "Not Found"),

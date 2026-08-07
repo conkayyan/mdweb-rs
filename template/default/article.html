@@ -7,6 +7,7 @@
     {% if article.date %}<span>{{ t.published }} <time datetime="{{ article.date_iso }}">{{ article.date }}</time></span>{% endif %}
     {% if article.updated %}<span>{{ t.updated }} <time datetime="{{ article.updated_iso }}">{{ article.updated }}</time></span>{% endif %}
     {% if article.author %}<span>{{ t.author }} {{ article.author }}</span>{% endif %}
+    {% if article.reading_minutes %}<span class="reading-time">{{ article.reading_minutes }} {{ t.reading_time }}</span>{% endif %}
   </div>
   {% if article.tags %}<div class="tags">{% for t in article.tags %}<span class="tag">{{ t }}</span>{% endfor %}</div>{% endif %}
   <div class="post-content">{{ article.content | safe }}</div>

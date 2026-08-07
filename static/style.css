@@ -561,6 +561,7 @@ button.nav-link {
 .post-title { margin: 0 0 10px; }
 .post-meta { color: var(--c-muted, #888); font-size: .88rem; margin-bottom: 12px; }
 .post-meta span { margin-right: 16px; }
+.reading-time { color: var(--c-muted, #888); font-size: .88rem; margin: 0 0 12px; }
 .post-content h2 { margin-top: 1.6em; }
 .post-content blockquote {
   border-left: 3px solid var(--c-accent);

@@ -53,6 +53,40 @@ pub struct Article {
 }
 
 impl Article {
+    /// Estimated reading time in minutes. Counts CJK characters at ~300
+    /// chars/min and whitespace-separated tokens in the rest at ~200 wpm;
+    /// rounds up. Returns `0` for empty content so callers can omit the
+    /// display with a simple truthy check.
+    pub fn reading_minutes(&self) -> i64 {
+        let mut cjk: usize = 0;
+        let mut other = String::new();
+        let mut in_tag = false;
+        for c in self.content.chars() {
+            match c {
+                '<' => in_tag = true,
+                '>' => in_tag = false,
+                _ if !in_tag => {
+                    let cp = c as u32;
+                    if (0x4E00..=0x9FFF).contains(&cp)        // CJK Unified Ideographs
+                        || (0x3040..=0x309F).contains(&cp)    // Hiragana
+                        || (0x30A0..=0x30FF).contains(&cp)    // Katakana
+                    {
+                        cjk += 1;
+                    } else {
+                        other.push(c);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let words = other.split_whitespace().count();
+        if cjk == 0 && words == 0 {
+            return 0;
+        }
+        let minutes = (cjk as f64 / 300.0) + (words as f64 / 200.0);
+        minutes.ceil() as i64
+    }
+
     /// Serialise to a template value.
     pub fn to_value(&self) -> Value {
         let mut m = BTreeMap::new();
@@ -65,6 +99,7 @@ impl Article {
         m.insert("updated".into(), opt_str(self.updated.as_deref()));
         m.insert("updated_iso".into(), opt_str(self.updated_iso.as_deref()));
         m.insert("author".into(), Value::str(&self.author));
+        m.insert("reading_minutes".into(), Value::int(self.reading_minutes()));
         m.insert(
             "tags".into(),
             Value::Arr(self.tags.iter().cloned().map(Value::str).collect()),
