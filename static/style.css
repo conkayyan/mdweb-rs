@@ -12,6 +12,20 @@
 
 html, body { margin: 0; padding: 0; }
 
+/* Default link styling: themed accent colour, no underline until hover. */
+a {
+  color: var(--c-accent);
+  text-decoration: none;
+  transition: color 120ms ease, text-decoration-color 120ms ease;
+}
+/* Underline-on-hover only inside body content; nav controls keep their
+ * existing background-based affordance without a sudden underline. */
+.main a:hover,
+.main a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: var(--c-fg, var(--c-fg2, #333));
