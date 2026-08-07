@@ -547,6 +547,7 @@ summary: "A one-line description of the page."
 # Arbitrary metadata exposed to templates as page.meta (optional).
 meta:
   description: "A longer description for SEO."
+  keywords: "page, sample, mdweb"
 
 # Extra fields are available in templates as page.<name>.
 custom_field: "any value"
@@ -587,6 +588,7 @@ draft: false
 # Arbitrary metadata exposed to templates as post.meta (optional).
 meta:
   description: "A longer description for SEO."
+  keywords: "post, sample, mdweb"
 
 # Extra fields are available in templates as post.<name>.
 custom_field: "any value"
