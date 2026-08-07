@@ -1,19 +1,35 @@
-<nav class="category-nav">
-  <h3>{% if is_zh %}分类{% else %}Categories{% endif %}</h3>
-  {% if categories %}
-  <ul>
-    {% for c in categories %}
+<nav class="recent-nav">
+  <h3>{% if is_zh %}最近文章{% else %}Recent Posts{% endif %}</h3>
+  {% if recent %}
+  <ul class="recent-list">
+    {% for r in recent %}
     <li>
-      <a href="{{ c.url }}"{% if c.active %} class="is-active"{% endif %}>{{ c.title }}</a>
-      {% if c.children %}
-      <ul>
-        {% for ch in c.children %}<li><a href="{{ ch.url }}"{% if ch.active %} class="is-active"{% endif %}>{{ ch.title }}</a></li>{% endfor %}
-      </ul>
-      {% endif %}
+      <a href="{{ r.url }}" class="recent-link">{{ r.title }}</a>
+      {% if r.date %}<span class="recent-date">{{ r.date }}</span>{% endif %}
     </li>
     {% endfor %}
   </ul>
   {% else %}
-  <p>{% if is_zh %}暂无分类{% else %}No categories yet.{% endif %}</p>
+  <p class="recent-empty">{% if is_zh %}暂无文章{% else %}No posts yet.{% endif %}</p>
   {% endif %}
 </nav>
+
+<nav class="category-nav">
+  <h3>{% if is_zh %}分类{% else %}Categories{% endif %}</h3>
+  <ul class="cat-tree">
+    {% for c in categories %}
+      {% include "partials/_cat_node.html" %}
+    {% endfor %}
+  </ul>
+</nav>
+
+{% if friend_links %}
+<nav class="friend-links-nav">
+  <h3>{% if is_zh %}友情链接{% else %}Friend Links{% endif %}</h3>
+  <ul class="friend-links-list">
+    {% for l in friend_links %}
+    <li><a href="{{ l.url }}" target="_blank" rel="noopener" class="friend-link">{{ l.name }}</a></li>
+    {% endfor %}
+  </ul>
+</nav>
+{% endif %}

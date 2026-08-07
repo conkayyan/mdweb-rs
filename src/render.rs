@@ -23,6 +23,20 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str) -> Value {
         config_langs.push(Value::str(l));
     }
     let categories = site.category_tree_value(&site.tree, lang, current_url);
+    let categories_active = tree_has_active(&categories);
+    let pages = pages_value(&site.articles, lang, current_url);
+    let recent = recent_value(&site.articles, lang, 5);
+    let friend_links: Vec<Value> = site
+        .config
+        .friend_links
+        .iter()
+        .map(|l| {
+            Value::Map(BTreeMap::from([
+                ("name".to_string(), Value::str(&l.name)),
+                ("url".to_string(), Value::str(&l.url)),
+            ]))
+        })
+        .collect();
     let year = current_year().to_string();
     Value::Map(BTreeMap::from([
         (
@@ -59,8 +73,67 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str) -> Value {
         ("home_active".to_string(), Value::Bool(home_active)),
         ("current_url".to_string(), Value::str(current_url)),
         ("categories".to_string(), categories),
+        ("categories_active".to_string(), Value::Bool(categories_active)),
+        ("pages".to_string(), pages),
+        ("recent".to_string(), recent),
+        ("friend_links".to_string(), Value::Arr(friend_links)),
         ("current_year".to_string(), Value::str(&year)),
     ]))
+}
+
+/// True if any node in a category tree (as built by `Site::category_tree_value`)
+/// has `active == true`. Used to decide whether a sidebar tree branch should
+/// auto-expand.
+pub(crate) fn tree_has_active(v: &Value) -> bool {
+    if let Value::Arr(items) = v {
+        for item in items {
+            if let Value::Map(m) = item {
+                if matches!(m.get("active"), Some(Value::Bool(true))) {
+                    return true;
+                }
+                if let Some(children) = m.get("children") {
+                    if tree_has_active(children) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Single-page navigation entries: articles with layout == "page".
+fn pages_value(articles: &[Article], lang: &str, current_url: &str) -> Value {
+    let mut out = Vec::new();
+    for a in articles {
+        if a.lang == lang && a.layout == "page" {
+            out.push(Value::Map(BTreeMap::from([
+                ("title".to_string(), Value::str(&a.title)),
+                ("url".to_string(), Value::str(&a.url)),
+                ("active".to_string(), Value::Bool(a.url == current_url)),
+            ])));
+        }
+    }
+    Value::Arr(out)
+}
+
+/// Most recent non-page articles (sorted by `sort_ts` desc).
+fn recent_value(articles: &[Article], lang: &str, limit: usize) -> Value {
+    let mut filtered: Vec<&Article> = articles
+        .iter()
+        .filter(|a| a.lang == lang && a.layout != "page")
+        .collect();
+    filtered.sort_by_key(|a| std::cmp::Reverse(a.sort_ts));
+    let mut out = Vec::new();
+    for a in filtered.into_iter().take(limit) {
+        let date = a.date.as_deref().unwrap_or("");
+        out.push(Value::Map(BTreeMap::from([
+            ("title".to_string(), Value::str(&a.title)),
+            ("url".to_string(), Value::str(&a.url)),
+            ("date".to_string(), opt_str(date)),
+        ])));
+    }
+    Value::Arr(out)
 }
 
 fn opt_str(s: &str) -> Value {

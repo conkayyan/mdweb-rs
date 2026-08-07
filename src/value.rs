@@ -31,6 +31,31 @@ impl Value {
         Value::Map(BTreeMap::new())
     }
 
+    pub fn as_arr_mut(&mut self) -> Option<&mut Vec<Value>> {
+        match self {
+            Value::Arr(a) => Some(a),
+            _ => None,
+        }
+    }
+
+    pub fn path_mut(&mut self, expr: &str) -> Option<&mut Value> {
+        let parts: Vec<&str> = expr.split('.').collect();
+        let mut cur = self;
+        for (i, part) in parts.iter().enumerate() {
+            if part.is_empty() && i + 1 < parts.len() {
+                continue;
+            }
+            match cur {
+                Value::Map(m) => match m.get_mut(*part) {
+                    Some(v) => cur = v,
+                    None => return None,
+                },
+                _ => return None,
+            }
+        }
+        Some(cur)
+    }
+
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Value::Str(s) => Some(s),

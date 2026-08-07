@@ -24,7 +24,16 @@ pub struct Config {
     pub params: Value,
     pub meta: Value,
     pub langs: BTreeMap<String, LangMeta>,
+    /// Friend links parsed from `[[friend_links]]` tables in site.toml.
+    pub friend_links: Vec<FriendLink>,
     pub extra: Value,
+}
+
+/// One entry under `[[friend_links]]`.
+#[derive(Debug, Clone)]
+pub struct FriendLink {
+    pub name: String,
+    pub url: String,
 }
 
 impl Default for Config {
@@ -39,6 +48,7 @@ impl Default for Config {
             params: Value::map(),
             meta: Value::map(),
             langs: BTreeMap::new(),
+            friend_links: Vec::new(),
             extra: Value::map(),
         }
     }
@@ -93,6 +103,25 @@ impl Config {
         }
         cfg.params = m.get("params").cloned().unwrap_or_else(Value::map);
         cfg.meta = m.get("meta").cloned().unwrap_or_else(Value::map);
+        if let Some(Value::Arr(items)) = m.get("friend_links") {
+            for item in items {
+                if let Value::Map(entry) = item {
+                    let name = entry
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let url = entry
+                        .get("url")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if !name.is_empty() && !url.is_empty() {
+                        cfg.friend_links.push(FriendLink { name, url });
+                    }
+                }
+            }
+        }
         cfg.extra = if let Some(Value::Map(extra)) = m.get("extra") {
             Value::Map(extra.clone())
         } else {

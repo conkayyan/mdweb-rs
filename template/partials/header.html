@@ -6,8 +6,27 @@
     </a>
     <nav class="primary-nav" aria-label="Primary">
       <a class="nav-link{% if home_active %} is-active{% endif %}" href="{{ home_url }}">Home</a>
-      {% for c in categories %}
-      <a class="nav-link{% if c.active %} is-active{% endif %}" href="{{ c.url }}">{{ c.title }}</a>
+      {% if categories %}
+      <div class="nav-item">
+        <button type="button" class="nav-link has-caret{% if categories_active %} is-active{% endif %}" aria-haspopup="true">{% if is_zh %}分类{% else %}Categories{% endif %}</button>
+        <ul class="dropdown">
+          {% for c in categories %}
+          <li class="dropdown-item{% if c.has_children %} has-sub{% endif %}">
+            <a href="{{ c.url }}" class="cat-link{% if c.active %} is-active{% endif %}">{{ c.title }}{% if c.has_children %} <span class="sub-caret" aria-hidden="true">›</span>{% endif %}</a>
+            {% if c.has_children %}
+            <ul class="dropdown-sub">
+              {% for ch in c.children %}
+              <li><a href="{{ ch.url }}" class="cat-link{% if ch.active %} is-active{% endif %}">{{ ch.title }}</a></li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      {% for p in pages %}
+      <a class="nav-link{% if p.active %} is-active{% endif %}" href="{{ p.url }}">{{ p.title }}</a>
       {% endfor %}
     </nav>
     <nav class="langs" aria-label="Languages">

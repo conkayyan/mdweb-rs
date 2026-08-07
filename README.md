@@ -148,6 +148,16 @@ description = "A demo site"
 
 [params]                     # arbitrary parameters exposed to templates as config.params
 github = "https://github.com/conkayyan/mdweb-rs"
+
+# Friend links rendered in the sidebar (target="_blank"). Each [[friend_links]]
+# entry becomes { name, url } in the friend_links ctx array.
+[[friend_links]]
+name = "mdweb"
+url = "https://github.com/conkayyan/mdweb-rs"
+
+[[friend_links]]
+name = "Rust"
+url = "https://www.rust-lang.org/"
 ```
 
 ## Frontmatter

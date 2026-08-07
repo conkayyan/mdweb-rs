@@ -1,6 +1,7 @@
 //! A small dependency-free template engine with `{{ var }}` output,
-//! `{% if %}`, `{% for %}`, `{% block %}`/`{% extends %}` inheritance, and a
-//! single `| safe` filter. Context values are the crate's `Value` type.
+//! `{% if %}`, `{% for %}`, `{% block %}`/`{% extends %}` inheritance,
+//! `{% include "name" %}` (recursive), and a single `| safe` filter.
+//! Context values are the crate's `Value` type.
 
 use std::collections::BTreeMap;
 
@@ -13,6 +14,7 @@ pub enum Node {
     If { cond: String, then: Vec<Node>, els: Vec<Node> },
     For { var: String, iter: String, body: Vec<Node> },
     Block { name: String, body: Vec<Node> },
+    Include { name: String },
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +31,7 @@ enum Lex {
     For { var: String, iter: String },
     Block(String),
     Extends(String),
+    Include(String),
     Else,
     EndIf,
     EndFor,
@@ -44,6 +47,10 @@ enum Frame {
 pub struct Engine {
     templates: BTreeMap<String, Template>,
 }
+
+/// Maximum recursion depth for `{% include %}` to prevent stack overflow
+/// from cyclic or self-referential partials.
+const MAX_INCLUDE_DEPTH: usize = 32;
 
 impl Engine {
     pub fn new() -> Engine {
@@ -105,8 +112,17 @@ impl Engine {
         out
     }
 
-    /// Render a named template with the given context.
+/// Render a named template with the given context.
     pub fn render(&self, name: &str, ctx: &Value) -> Result<String, String> {
+        self.render_with_depth(name, ctx, 0)
+    }
+
+    fn render_with_depth(&self, name: &str, ctx: &Value, depth: usize) -> Result<String, String> {
+        if depth > MAX_INCLUDE_DEPTH {
+            return Err(format!(
+                "include depth exceeded ({MAX_INCLUDE_DEPTH}): probable cycle starting at \"{name}\""
+            ));
+        }
         if !self.templates.contains_key(name) {
             return Err(format!("template not found: {name}"));
         }
@@ -125,69 +141,75 @@ impl Engine {
         }
         let t = self.templates.get(&root).unwrap();
         let mut out = String::new();
-        render_nodes(&t.nodes, ctx, &blocks, &mut out)?;
+        self.render_nodes(&t.nodes, ctx, &blocks, depth, &mut out)?;
         Ok(out)
     }
-}
 
-fn render_nodes(
-    nodes: &[Node],
-    ctx: &Value,
-    blocks: &BTreeMap<String, Vec<Node>>,
-    out: &mut String,
-) -> Result<(), String> {
-    for n in nodes {
-        match n {
-            Node::Text(t) => out.push_str(t),
-            Node::Out { expr, safe } => {
-                let val = ctx.path(expr).cloned().unwrap_or(Value::Null);
-                // prevent deep value drop
-                let render = val.render();
-                if *safe {
-                    out.push_str(&render);
-                } else {
-                    out.push_str(&escape_html(&render));
-                }
-            }
-            Node::If { cond, then, els } => {
-                let val = ctx.path(cond).cloned().unwrap_or(Value::Null);
-                if val.truthy() {
-                    render_nodes(then, ctx, blocks, out)?;
-                } else {
-                    render_nodes(els, ctx, blocks, out)?;
-                }
-            }
-            Node::For { var, iter, body } => {
-                let val = ctx.path(iter).cloned().unwrap_or(Value::Null);
-                let arr = match val {
-                    Value::Arr(a) => a,
-                    _ => continue,
-                };
-                for (i, item) in arr.iter().enumerate() {
-                    if let Value::Map(base) = ctx {
-                        let mut child = base.clone();
-                        child.insert(var.clone(), item.clone());
-                        child.insert(
-                            format!("{var}_index"),
-                            Value::int(i as i64),
-                        );
-                        let child_ctx = Value::Map(child);
-                        render_nodes(body, &child_ctx, blocks, out)?;
+    fn render_nodes(
+        &self,
+        nodes: &[Node],
+        ctx: &Value,
+        blocks: &BTreeMap<String, Vec<Node>>,
+        depth: usize,
+        out: &mut String,
+    ) -> Result<(), String> {
+        for n in nodes {
+            match n {
+                Node::Text(t) => out.push_str(t),
+                Node::Out { expr, safe } => {
+                    let val = ctx.path(expr).cloned().unwrap_or(Value::Null);
+                    // prevent deep value drop
+                    let render = val.render();
+                    if *safe {
+                        out.push_str(&render);
                     } else {
-                        render_nodes(body, &Value::Null, blocks, out)?;
+                        out.push_str(&escape_html(&render));
                     }
                 }
-            }
-            Node::Block { name, body } => {
-                if let Some(override_body) = blocks.get(name) {
-                    render_nodes(override_body, ctx, blocks, out)?;
-                } else {
-                    render_nodes(body, ctx, blocks, out)?;
+                Node::If { cond, then, els } => {
+                    let val = ctx.path(cond).cloned().unwrap_or(Value::Null);
+                    if val.truthy() {
+                        self.render_nodes(then, ctx, blocks, depth, out)?;
+                    } else {
+                        self.render_nodes(els, ctx, blocks, depth, out)?;
+                    }
+                }
+                Node::For { var, iter, body } => {
+                    let val = ctx.path(iter).cloned().unwrap_or(Value::Null);
+                    let arr = match val {
+                        Value::Arr(a) => a,
+                        _ => continue,
+                    };
+                    for (i, item) in arr.iter().enumerate() {
+                        if let Value::Map(base) = ctx {
+                            let mut child = base.clone();
+                            child.insert(var.clone(), item.clone());
+                            child.insert(
+                                format!("{var}_index"),
+                                Value::int(i as i64),
+                            );
+                            let child_ctx = Value::Map(child);
+                            self.render_nodes(body, &child_ctx, blocks, depth, out)?;
+                        } else {
+                            self.render_nodes(body, &Value::Null, blocks, depth, out)?;
+                        }
+                    }
+                }
+                Node::Block { name, body } => {
+                    if let Some(override_body) = blocks.get(name) {
+                        self.render_nodes(override_body, ctx, blocks, depth, out)?;
+                    } else {
+                        self.render_nodes(body, ctx, blocks, depth, out)?;
+                    }
+                }
+                Node::Include { name } => {
+                    let partial = self.render_with_depth(name, ctx, depth + 1)?;
+                    out.push_str(&partial);
                 }
             }
         }
+        Ok(())
     }
-    Ok(())
 }
 
 fn escape_html(s: &str) -> String {
@@ -274,6 +296,8 @@ fn parse_expr_token(marker: &str, content: &str) -> Lex {
             Lex::Block(unquote(name.trim()))
         } else if let Some(base) = content.strip_prefix("extends") {
             Lex::Extends(unquote(base.trim()))
+        } else if let Some(name) = content.strip_prefix("include") {
+            Lex::Include(unquote(name.trim()))
         } else if let Some(body) = content.strip_prefix("for") {
             parse_for(body)
         } else {
@@ -317,6 +341,7 @@ fn build(
             }
             Ok(())
         }
+        Lex::Include(name) => push_list(nodes, Node::Include { name }, stack),
         Lex::If(cond) => {
             stack.push(Frame::If {
                 cond,

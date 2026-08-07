@@ -1,0 +1,17 @@
+<li class="cat-item">
+  {% if c.has_children %}
+  <details {% if c.descendant_active %}open{% endif %}>
+    <summary class="cat-row{% if c.active %} is-active{% endif %}">
+      <span class="cat-caret" aria-hidden="true"></span>
+      <a href="{{ c.url }}" class="cat-link{% if c.active %} is-active{% endif %}">{{ c.title }}</a>
+    </summary>
+    <ul class="cat-children">
+      {% for c in c.children %}
+        {% include "partials/_cat_node.html" %}
+      {% endfor %}
+    </ul>
+  </details>
+  {% else %}
+  <a href="{{ c.url }}" class="cat-link{% if c.active %} is-active{% endif %}">{{ c.title }}</a>
+  {% endif %}
+</li>

@@ -195,10 +195,41 @@ impl<'a> Cursor<'a> {
 pub fn parse_toml(text: &str) -> Result<Value, String> {
     let mut root = Value::map();
     let mut section: Vec<String> = Vec::new();
+    let mut array_section: Option<Vec<String>> = None;
 
     for raw_line in text.lines() {
         let line = strip_comment(raw_line).trim().to_string();
         if line.is_empty() {
+            continue;
+        }
+        if line.starts_with("[[") {
+            // Array of tables: each [[name]] appends a new map into the
+            // array at `name`. Subsequent key = value lines fill that map.
+            if !line.ends_with("]]") {
+                return Err(format!("bad array header: {line}"));
+            }
+            let inner = &line[2..line.len() - 2];
+            let parts: Vec<String> = inner
+                .split('.')
+                .map(|s| s.trim().trim_matches('"').to_string())
+                .collect();
+            let arr_path = parts.join(".");
+            // Ensure the parent path holds an array, and append a new entry.
+            match root.path_mut(&arr_path) {
+                Some(v) => {
+                    if v.as_arr_mut().is_none() {
+                        *v = Value::Arr(Vec::new());
+                    }
+                }
+                None => {
+                    root.insert_path(&arr_path, Value::Arr(Vec::new()));
+                }
+            }
+            if let Some(Value::Arr(items)) = root.path_mut(&arr_path) {
+                items.push(Value::map());
+            }
+            section = parts.clone();
+            array_section = Some(parts);
             continue;
         }
         if line.starts_with('[') {
@@ -210,6 +241,7 @@ pub fn parse_toml(text: &str) -> Result<Value, String> {
                 .split('.')
                 .map(|s| s.trim().trim_matches('"').to_string())
                 .collect();
+            array_section = None;
             continue;
         }
         let Some(eq) = line.find('=') else {
@@ -217,9 +249,22 @@ pub fn parse_toml(text: &str) -> Result<Value, String> {
         };
         let key = line[..eq].trim().trim_matches('"').to_string();
         let value = parse_scalar(line[eq + 1..].trim());
-        let mut path = section.clone();
-        path.push(key);
-        root.insert_path(&path.join("."), value);
+        if let Some(parts) = &array_section {
+            // Append into the current array entry.
+            let arr_path = parts.join(".");
+            if let Some(Value::Arr(items)) = root.path_mut(&arr_path) {
+                if items.is_empty() {
+                    items.push(Value::map());
+                }
+                if let Some(Value::Map(m)) = items.last_mut() {
+                    m.insert(key, value);
+                }
+            }
+        } else {
+            let mut path = section.clone();
+            path.push(key);
+            root.insert_path(&path.join("."), value);
+        }
     }
     Ok(root)
 }

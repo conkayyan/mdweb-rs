@@ -152,10 +152,14 @@ fn cmd_new(args: &[String]) -> i32 {
         ("site.toml", SITE_TOML),
         ("_index.md", INDEX_MD),
         ("about.md", ABOUT_MD),
+        ("about.zh.md", ABOUT_ZH_MD),
         ("posts/_index.md", POSTS_INDEX_MD),
         ("posts/_index.zh.md", POSTS_INDEX_ZH_MD),
         ("posts/hello-world.md", HELLO_MD),
         ("posts/hello-world.zh.md", HELLO_ZH_MD),
+        ("posts/web/_index.md", WEB_INDEX_MD),
+        ("posts/web/frontend/_index.md", FRONTEND_INDEX_MD),
+        ("posts/web/frontend/react.md", REACT_MD),
         ("notes/_index.md", NOTES_INDEX_MD),
         ("notes/_index.zh.md", NOTES_INDEX_ZH_MD),
         ("notes/tips.md", TIPS_MD),
@@ -185,6 +189,7 @@ fn cmd_new(args: &[String]) -> i32 {
         ("template/partials/footer.html", theme_files::PARTIAL_FOOTER),
         ("template/partials/side.html", theme_files::PARTIAL_SIDE),
         ("template/partials/inject.html", theme_files::PARTIAL_INJECT),
+        ("template/partials/_cat_node.html", theme_files::PARTIAL_CAT_NODE),
     ];
     for (rel, content) in tpl_files {
         let p = dir.join(rel);
@@ -213,6 +218,15 @@ description = "A demo site built with mdweb."
 [lang.zh]
 title = "我的博客"
 description = "使用 mdweb 构建的演示站点，支持多语言。"
+
+# Friend links — rendered in the sidebar (target="_blank").
+[[friend_links]]
+name = "mdweb"
+url = "https://github.com/conkayyan/mdweb-rs"
+
+[[friend_links]]
+name = "Rust"
+url = "https://www.rust-lang.org/"
 "#;
 
 const INDEX_MD: &str = r#"---
@@ -225,6 +239,7 @@ Welcome to a blog powered by **mdweb**, a static blog engine written in pure Rus
 
 const ABOUT_MD: &str = r#"---
 title: "About"
+layout: "page"
 ---
 
 This demo shows how mdweb renders a doc directory into a blog.
@@ -232,6 +247,18 @@ This demo shows how mdweb renders a doc directory into a blog.
 - Markdown files become pages.
 - Directories become categories.
 - File names like `hello.zh.md` become languages.
+"#;
+
+const ABOUT_ZH_MD: &str = r#"---
+title: "关于"
+layout: "page"
+---
+
+本演示展示了 mdweb 如何把一个文档目录渲染成博客。
+
+- Markdown 文件变成页面。
+- 目录变成分类。
+- 像 `hello.zh.md` 这样的文件名代表不同语言。
 "#;
 
 const POSTS_INDEX_MD: &str = r#"---
@@ -253,8 +280,8 @@ summary: "所有文章都在这里。"
 
 const HELLO_MD: &str = r#"---
 title: "Hello World"
-date: "2024-01-15"
-updated: "2024-06-01"
+date: "2026-08-01"
+updated: "2026-08-04"
 author: "Jane Doe"
 tags: ["mdweb", "rust"]
 meta:
@@ -274,8 +301,8 @@ fn main() {
 
 const HELLO_ZH_MD: &str = r#"---
 title: "你好，世界"
-date: "2024-01-15"
-updated: "2024-06-01"
+date: "2026-08-01"
+updated: "2026-08-04"
 author: "Jane Doe"
 tags: ["mdweb", "rust"]
 meta:
@@ -297,6 +324,31 @@ summary: "Quick notes and snippets."
 ---
 "#;
 
+const WEB_INDEX_MD: &str = r#"---
+title: "Web"
+summary: "Anything browser-shaped."
+---
+
+Sub-category example: nested under Posts.
+"#;
+
+const FRONTEND_INDEX_MD: &str = r#"---
+title: "Frontend"
+summary: "UI, components, build tools."
+---
+
+Nested two levels deep — under Posts → Web → Frontend.
+"#;
+
+const REACT_MD: &str = r#"---
+title: "A React Note"
+date: "2026-08-07"
+tags: ["react", "web"]
+---
+
+Three levels deep: Posts → Web → Frontend → this article.
+"#;
+
 const NOTES_INDEX_ZH_MD: &str = r#"---
 title: "笔记"
 summary: "随手记录的小笔记。"
@@ -305,7 +357,7 @@ summary: "随手记录的小笔记。"
 
 const TIPS_MD: &str = r#"---
 title: "A Few Tips"
-date: "2024-03-02"
+date: "2026-08-05"
 tags: ["tips"]
 ---
 
@@ -322,8 +374,27 @@ const LAYOUT_HEADER: &str = r##"<header class="site-header">
     </a>
     <nav class="primary-nav" aria-label="Primary">
       <a class="nav-link{% if home_active %} is-active{% endif %}" href="{{ home_url }}">Home</a>
-      {% for c in categories %}
-      <a class="nav-link{% if c.active %} is-active{% endif %}" href="{{ c.url }}">{{ c.title }}</a>
+      {% if categories %}
+      <div class="nav-item">
+        <button type="button" class="nav-link has-caret{% if categories_active %} is-active{% endif %}" aria-haspopup="true">{% if is_zh %}分类{% else %}Categories{% endif %}</button>
+        <ul class="dropdown">
+          {% for c in categories %}
+          <li class="dropdown-item{% if c.has_children %} has-sub{% endif %}">
+            <a href="{{ c.url }}" class="cat-link{% if c.active %} is-active{% endif %}">{{ c.title }}{% if c.has_children %} <span class="sub-caret" aria-hidden="true">›</span>{% endif %}</a>
+            {% if c.has_children %}
+            <ul class="dropdown-sub">
+              {% for ch in c.children %}
+              <li><a href="{{ ch.url }}" class="cat-link{% if ch.active %} is-active{% endif %}">{{ ch.title }}</a></li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      {% for p in pages %}
+      <a class="nav-link{% if p.active %} is-active{% endif %}" href="{{ p.url }}">{{ p.title }}</a>
       {% endfor %}
     </nav>
     <nav class="langs" aria-label="Languages">
@@ -340,25 +411,41 @@ const LAYOUT_FOOTER: &str = r##"<footer class="site-footer">
 </footer>
 "##;
 
-const LAYOUT_SIDE: &str = r##"<nav class="category-nav">
-  <h3>{% if is_zh %}分类{% else %}Categories{% endif %}</h3>
-  {% if categories %}
-  <ul>
-  {% for c in categories %}
+const LAYOUT_SIDE: &str = r##"<nav class="recent-nav">
+  <h3>{% if is_zh %}最近文章{% else %}Recent Posts{% endif %}</h3>
+  {% if recent %}
+  <ul class="recent-list">
+    {% for r in recent %}
     <li>
-      <a href="{{ c.url }}"{% if c.active %} class="is-active"{% endif %}>{{ c.title }}</a>
-      {% if c.children %}
-      <ul>
-      {% for ch in c.children %}<li><a href="{{ ch.url }}"{% if ch.active %} class="is-active"{% endif %}>{{ ch.title }}</a></li>{% endfor %}
-      </ul>
-      {% endif %}
+      <a href="{{ r.url }}" class="recent-link">{{ r.title }}</a>
+      {% if r.date %}<span class="recent-date">{{ r.date }}</span>{% endif %}
     </li>
-  {% endfor %}
+    {% endfor %}
   </ul>
   {% else %}
-  <p>{% if is_zh %}暂无分类{% else %}No categories yet.{% endif %}</p>
+  <p class="recent-empty">{% if is_zh %}暂无文章{% else %}No posts yet.{% endif %}</p>
   {% endif %}
 </nav>
+
+<nav class="category-nav">
+  <h3>{% if is_zh %}分类{% else %}Categories{% endif %}</h3>
+  <ul class="cat-tree">
+    {% for c in categories %}
+      {% include "partials/_cat_node.html" %}
+    {% endfor %}
+  </ul>
+</nav>
+
+{% if friend_links %}
+<nav class="friend-links-nav">
+  <h3>{% if is_zh %}友情链接{% else %}Friend Links{% endif %}</h3>
+  <ul class="friend-links-list">
+    {% for l in friend_links %}
+    <li><a href="{{ l.url }}" target="_blank" rel="noopener" class="friend-link">{{ l.name }}</a></li>
+    {% endfor %}
+  </ul>
+</nav>
+{% endif %}
 "##;
 
 const LAYOUT_INJECT: &str = "<!-- put your analytics / statistic JS snippet here -->\n";

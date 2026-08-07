@@ -146,6 +146,16 @@ description = "A demo site"
 
 [params]                     # 任意参数，模板中以 config.params 访问
 github = "https://github.com/conkayyan/mdweb-rs"
+
+# 友情链接（渲染在 sidebar，target="_blank"）。每条 [[friend_links]]
+# 在 friend_links 数组里对应一个 { name, url }。
+[[friend_links]]
+name = "mdweb"
+url = "https://github.com/conkayyan/mdweb-rs"
+
+[[friend_links]]
+name = "Rust"
+url = "https://www.rust-lang.org/zh/"
 ```
 
 ## Frontmatter

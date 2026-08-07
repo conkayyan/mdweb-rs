@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use crate::config::Config;
 use crate::markdown;
 use crate::parse::parse_frontmatter;
+use crate::render::tree_has_active;
 use crate::template::Engine;
 use crate::value::Value;
 
@@ -19,6 +20,7 @@ pub mod theme_files {
     pub const PARTIAL_FOOTER: &str = include_str!("../template/partials/footer.html");
     pub const PARTIAL_SIDE: &str = include_str!("../template/partials/side.html");
     pub const PARTIAL_INJECT: &str = include_str!("../template/partials/inject.html");
+    pub const PARTIAL_CAT_NODE: &str = include_str!("../template/partials/_cat_node.html");
     pub const STYLE: &str = include_str!("../static_default/style.css");
 }
 
@@ -465,18 +467,24 @@ impl Site {
     pub fn category_tree_value(&self, cats: &[Category], lang: &str, current_url: &str) -> Value {
         let mut out = Vec::new();
         for c in cats {
-            let mut m = BTreeMap::new();
+            let children_val = self.category_tree_value(&c.children, lang, current_url);
             let url = c.urls.get(lang).cloned().unwrap_or_else(|| "#".to_string());
-            m.insert(
-                "title".to_string(),
-                Value::str(c.titles.get(lang).cloned().unwrap_or_else(|| c.slug.clone())),
-            );
-            m.insert("url".to_string(), Value::str(&url));
-            m.insert("active".to_string(), Value::Bool(url == current_url));
-            m.insert(
-                "children".to_string(),
-                self.category_tree_value(&c.children, lang, current_url),
-            );
+            let active = url == current_url;
+            let descendant_active = active || tree_has_active(&children_val);
+            let m = BTreeMap::from([
+                (
+                    "title".to_string(),
+                    Value::str(c.titles.get(lang).cloned().unwrap_or_else(|| c.slug.clone())),
+                ),
+                ("url".to_string(), Value::str(&url)),
+                ("active".to_string(), Value::Bool(active)),
+                (
+                    "descendant_active".to_string(),
+                    Value::Bool(descendant_active),
+                ),
+                ("has_children".to_string(), Value::Bool(!c.children.is_empty())),
+                ("children".to_string(), children_val),
+            ]);
             out.push(Value::Map(m));
         }
         Value::Arr(out)
@@ -500,28 +508,34 @@ fn load_engine(
     override_dir: Option<PathBuf>,
 ) -> Result<(Engine, bool), String> {
     let mut engine = Engine::new();
-    let mut embedded = false;
-
     let theme_dir = override_dir;
-    if let Some(dir) = theme_dir {
+    // Returns (whether the engine ended up with embedded defaults only).
+    let embedded = if let Some(dir) = theme_dir {
+        // --template override: load embedded first so any partials the user
+        // doesn't ship still resolve; user templates override on top.
+        load_embedded(&mut engine)?;
         load_dir_templates(&mut engine, &dir)?;
-        embedded = false;
+        false
     } else if config.theme != "default" && !config.theme.is_empty() {
         let cands = [doc_root.join(&config.theme), PathBuf::from(&config.theme)];
         if let Some(d) = cands.iter().find(|c| c.is_dir()) {
+            // Load embedded first as a fallback (e.g. _cat_node.html), then
+            // the user's theme on top so the user's templates win.
+            load_embedded(&mut engine)?;
             load_dir_templates(&mut engine, d)?;
+            false
         } else {
             eprintln!(
                 "warning: template \"{}\" not found; using the built-in default",
                 config.theme
             );
             load_embedded(&mut engine)?;
-            embedded = true;
+            true
         }
     } else {
         load_embedded(&mut engine)?;
-        embedded = true;
-    }
+        true
+    };
 
     for (slot, src) in [
         ("header", layout.header.as_deref()),
@@ -548,6 +562,7 @@ fn load_embedded(engine: &mut Engine) -> Result<(), String> {
         ("partials/footer.html", theme_files::PARTIAL_FOOTER.to_string()),
         ("partials/side.html", theme_files::PARTIAL_SIDE.to_string()),
         ("partials/inject.html", theme_files::PARTIAL_INJECT.to_string()),
+        ("partials/_cat_node.html", theme_files::PARTIAL_CAT_NODE.to_string()),
     ])?;
     Ok(())
 }
