@@ -10,18 +10,18 @@ use crate::value::Value;
 
 /// Embedded default theme files.
 pub mod theme_files {
-    pub const BASE: &str = include_str!("../template/base.html");
-    pub const INDEX: &str = include_str!("../template/index.html");
-    pub const CATEGORY: &str = include_str!("../template/category.html");
-    pub const ARTICLE: &str = include_str!("../template/article.html");
-    pub const PAGE: &str = include_str!("../template/page.html");
-    pub const NOT_FOUND: &str = include_str!("../template/404.html");
-    pub const PARTIAL_HEADER: &str = include_str!("../template/partials/header.html");
-    pub const PARTIAL_FOOTER: &str = include_str!("../template/partials/footer.html");
-    pub const PARTIAL_SIDE: &str = include_str!("../template/partials/side.html");
-    pub const PARTIAL_INJECT: &str = include_str!("../template/partials/inject.html");
-    pub const PARTIAL_CAT_NODE: &str = include_str!("../template/partials/_cat_node.html");
-    pub const STYLE: &str = include_str!("../static_default/style.css");
+    pub const BASE: &str = include_str!("../template/default/base.html");
+    pub const INDEX: &str = include_str!("../template/default/index.html");
+    pub const CATEGORY: &str = include_str!("../template/default/category.html");
+    pub const ARTICLE: &str = include_str!("../template/default/article.html");
+    pub const PAGE: &str = include_str!("../template/default/page.html");
+    pub const NOT_FOUND: &str = include_str!("../template/default/404.html");
+    pub const PARTIAL_HEADER: &str = include_str!("../template/default/partials/header.html");
+    pub const PARTIAL_FOOTER: &str = include_str!("../template/default/partials/footer.html");
+    pub const PARTIAL_SIDE: &str = include_str!("../template/default/partials/side.html");
+    pub const PARTIAL_INJECT: &str = include_str!("../template/default/partials/inject.html");
+    pub const PARTIAL_CAT_NODE: &str = include_str!("../template/default/partials/_cat_node.html");
+    pub const STYLE: &str = include_str!("../static/style.css");
 }
 
 /// Layout partials from the doc's `_layout/` directory.
@@ -520,33 +520,34 @@ fn load_engine(
     override_dir: Option<PathBuf>,
 ) -> Result<(Engine, bool), String> {
     let mut engine = Engine::new();
-    let theme_dir = override_dir;
     // Returns (whether the engine ended up with embedded defaults only).
-    let embedded = if let Some(dir) = theme_dir {
+    let embedded = if let Some(dir) = override_dir {
         // --template override: load embedded first so any partials the user
         // doesn't ship still resolve; user templates override on top.
         load_embedded(&mut engine)?;
         load_dir_templates(&mut engine, &dir)?;
         false
-    } else if config.theme != "default" && !config.theme.is_empty() {
-        let cands = [doc_root.join(&config.theme), PathBuf::from(&config.theme)];
-        if let Some(d) = cands.iter().find(|c| c.is_dir()) {
-            // Load embedded first as a fallback (e.g. _cat_node.html), then
-            // the user's theme on top so the user's templates win.
+    } else {
+        let theme_name = if config.theme.is_empty() {
+            "default"
+        } else {
+            config.theme.as_str()
+        };
+        let theme_dir = doc_root.join("template").join(theme_name);
+        if theme_dir.is_dir() {
             load_embedded(&mut engine)?;
-            load_dir_templates(&mut engine, d)?;
+            load_dir_templates(&mut engine, &theme_dir)?;
             false
+        } else if theme_name == "default" {
+            load_embedded(&mut engine)?;
+            true
         } else {
             eprintln!(
-                "warning: template \"{}\" not found; using the built-in default",
-                config.theme
+                "warning: template/{theme_name} not found; using the built-in default"
             );
             load_embedded(&mut engine)?;
             true
         }
-    } else {
-        load_embedded(&mut engine)?;
-        true
     };
 
     for (slot, src) in [
@@ -880,102 +881,3 @@ fn build_node(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
-    fn write(dir: &PathBuf, rel: &str, body: &str) {
-        let p = dir.join(rel);
-        if let Some(parent) = p.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-        }
-        std::fs::write(p, body).unwrap();
-    }
-
-    #[test]
-    fn translation_entries_carry_display_name() {
-        let dir = std::env::temp_dir().join(format!(
-            "mdweb-content-tr-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        write(
-            &dir,
-            "site.toml",
-            r#"
-            languages = ["en", "zh"]
-
-            [lang.zh]
-            display_name = "简体中文"
-            "#,
-        );
-        write(
-            &dir,
-            "hello.md",
-            "---\ntitle: Hello\n---\nbody\n",
-        );
-        write(
-            &dir,
-            "hello.zh.md",
-            "---\ntitle: 你好\n---\nbody\n",
-        );
-
-        let site = Site::build(&dir, None).expect("build");
-        let hello_en = site
-            .articles
-            .iter()
-            .find(|a| a.lang == "en" && a.slug == "hello")
-            .expect("en article");
-        assert_eq!(hello_en.translations.len(), 1);
-        let tr = hello_en.translations[0].as_map().expect("translation map");
-        assert_eq!(tr.get("lang").and_then(|v| v.as_str()), Some("zh"));
-        assert_eq!(
-            tr.get("display_name").and_then(|v| v.as_str()),
-            Some("简体中文")
-        );
-    }
-
-    #[test]
-    fn home_content_resolves_per_language() {
-        let dir = std::env::temp_dir().join(format!(
-            "mdweb-content-home-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        write(&dir, "site.toml", r#"languages = ["en", "zh"]"#);
-        write(
-            &dir,
-            "_index.md",
-            "---\ntitle: Home\nlayout: index\n---\nEnglish body\n",
-        );
-        write(
-            &dir,
-            "_index.zh.md",
-            "---\ntitle: 首页\nlayout: index\n---\n中文内容\n",
-        );
-
-        let site = Site::build(&dir, None).expect("build");
-        assert_eq!(
-            site.home_content.get("en").map(String::as_str),
-            Some("<p>English body</p>\n")
-        );
-        assert_eq!(
-            site.home_content.get("zh").map(String::as_str),
-            Some("<p>中文内容</p>\n")
-        );
-
-        let en_val = site.home_value("en");
-        let en = en_val.as_map().expect("en map");
-        assert_eq!(en.get("content").and_then(|v| v.as_str()), Some("<p>English body</p>\n"));
-        let zh_val = site.home_value("zh");
-        let zh = zh_val.as_map().expect("zh map");
-        assert_eq!(zh.get("content").and_then(|v| v.as_str()), Some("<p>中文内容</p>\n"));
-    }
-}

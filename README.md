@@ -132,7 +132,7 @@ base_url = "http://localhost:8080"
 author = "Jane Doe"
 language = "en"              # default language (unprefixed URLs)
 languages = ["en", "zh"]     # enabled languages; other languages are ignored
-theme = "template"           # "default" (built-in) or a directory name like "template"
+theme = "default"           # name of a directory under template/; leave empty for built-in default
 
 [lang.en]                    # per-language overrides
 title = "My Blog"
@@ -230,13 +230,15 @@ A TOML-style `+++` block is also accepted.
 
 ## Themes
 
-Themes are directories of templates. A site-local `template/` directory overrides the
-built-in default theme. `mdweb new` copies the default theme so you can edit it freely.
+A theme is a directory of templates under `template/<name>/`. Set `theme = "<name>"`
+in `site.toml` (or leave it unset / empty to use the built-in `default`).
+`mdweb new` writes `template/default/` so you can edit the active theme in place
+or duplicate it under a new name to switch.
 
 Resolution order for a slot/partial name:
 
 1. `_layout/<name>.html` from the doc directory (highest priority)
-2. `<theme>/partials/<name>.html`
+2. `template/<theme>/partials/<name>.html`
 3. the built-in default partial
 
 ### Template syntax

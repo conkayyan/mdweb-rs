@@ -130,7 +130,7 @@ base_url = "http://localhost:8080"
 author = "Jane Doe"
 language = "en"              # 默认语言（无前缀 URL）
 languages = ["en", "zh"]     # 启用的语言列表；未列出的语言将被忽略
-theme = "template"           # "default"（内置）或目录名，如 "template"
+theme = "default"           # template/ 下的子目录名；留空等价于内置默认
 
 [lang.en]                    # 各语言的覆盖项
 title = "My Blog"
@@ -226,7 +226,17 @@ meta:                    # 任意映射，模板中以 article.meta 访问
 
 同时支持 TOML 风格的 `+++` 块。
 
-## 主题（Themes）
+## 主题
+
+主题是 `template/<name>/` 下的模板目录。在 `site.toml` 中通过 `theme = "<name>"`
+切换（留空等价于使用内置 `default`）。`mdweb new` 会写出 `template/default/`，
+你可以直接修改，或复制成 `template/<新名>/` 来切换。
+
+模板解析顺序：
+
+1. 文档目录里的 `_layout/<name>.html`（最高优先级）
+2. `template/<theme>/partials/<name>.html`
+3. 内置默认 partial（Themes）
 
 主题即一组模板目录。站点本地 `template/` 目录会覆盖内置默认主题。`mdweb new`
 会复制一份默认主题，方便你随意修改。

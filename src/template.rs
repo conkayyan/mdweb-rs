@@ -417,18 +417,17 @@ fn push_list(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{LAYOUT_HEADER, LAYOUT_SIDE};
     #[test]
     fn default_template_files_parse() {
         let files = [
-            ("base.html", include_str!("../template/base.html")),
-            ("index.html", include_str!("../template/index.html")),
-            ("category.html", include_str!("../template/category.html")),
-            ("article.html", include_str!("../template/article.html")),
-            ("page.html", include_str!("../template/page.html")),
-            ("404.html", include_str!("../template/404.html")),
-            ("partials/header.html", include_str!("../template/partials/header.html")),
-            ("partials/side.html", include_str!("../template/partials/side.html")),
+            ("base.html", include_str!("../template/default/base.html")),
+            ("index.html", include_str!("../template/default/index.html")),
+            ("category.html", include_str!("../template/default/category.html")),
+            ("article.html", include_str!("../template/default/article.html")),
+            ("page.html", include_str!("../template/default/page.html")),
+            ("404.html", include_str!("../template/default/404.html")),
+            ("partials/header.html", include_str!("../template/default/partials/header.html")),
+            ("partials/side.html", include_str!("../template/default/partials/side.html")),
         ];
         for (name, src) in files {
             let mut e = Engine::new();
@@ -436,30 +435,12 @@ mod tests {
                 panic!("{name} failed: {err}");
             }
         }
-        let header = include_str!("../template/partials/header.html");
+        let header = include_str!("../template/default/partials/header.html");
         assert!(
             header.contains("current_lang_display_name"),
             "header.html should reference current_lang_display_name"
         );
-        let side = include_str!("../template/partials/side.html");
+        let side = include_str!("../template/default/partials/side.html");
         assert!(!side.contains("is_zh"), "side.html should no longer reference is_zh");
-    }
-
-    /// `LAYOUT_HEADER` and `LAYOUT_SIDE` in `src/main.rs` are written verbatim
-    /// by `mdweb new`; they must stay byte-identical to the source-of-truth
-    /// partials. Drift here would silently corrupt every `mdweb new`-generated
-    /// site after a theme update.
-    #[test]
-    fn layout_constants_match_partials() {
-        assert_eq!(
-            LAYOUT_HEADER,
-            include_str!("../template/partials/header.html"),
-            "LAYOUT_HEADER drift: rebuild by mirroring template/partials/header.html"
-        );
-        assert_eq!(
-            LAYOUT_SIDE,
-            include_str!("../template/partials/side.html"),
-            "LAYOUT_SIDE drift: rebuild by mirroring template/partials/side.html"
-        );
     }
 }

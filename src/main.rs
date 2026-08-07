@@ -1,18 +1,9 @@
-mod config;
-mod content;
-mod markdown;
-mod parse;
-mod render;
-mod server;
-mod template;
-mod value;
-
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use content::theme_files;
-use content::Site;
+use mdweb::content::theme_files;
+use mdweb::content::Site;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -57,13 +48,13 @@ USAGE:
 COMMANDS:
     new <PATH>   Create a demo site (docs + template) at PATH.
     run          Serve a doc directory as a realtime web blog. PATH defaults
-                 to the current directory. Uses the system default template
-                 unless --template DIR or site.toml [theme].
+                 to the current directory. Loads theme = <name> from
+                 template/<name>/ unless --template DIR is given.
 
 OPTIONS:
     --host <H>      Bind host (default 127.0.0.1)
     --port <P>      Port (default 8080)
-    --template <D>  Use a template directory instead of the default theme.
+    --template <D>  Use a template directory instead of the theme from site.toml.
     -h, --help      Show this help.
     -V, --version   Show version.
 "
@@ -120,7 +111,7 @@ fn cmd_run(args: &[String]) -> i32 {
         return 1;
     }
     match Site::build(&doc, tpl) {
-        Ok(site) => match server::serve(site, &host, port) {
+        Ok(site) => match mdweb::server::serve(site, &host, port) {
             Ok(_) => 0,
             Err(e) => {
                 eprintln!("error: {e}");
@@ -168,10 +159,10 @@ fn cmd_new(args: &[String]) -> i32 {
         ("notes/_index.zh.md", NOTES_INDEX_ZH_MD),
         ("notes/tips.md", TIPS_MD),
         ("notes/tips.zh.md", TIPS_ZH_MD),
-        ("_layout/header.html", LAYOUT_HEADER),
-        ("_layout/footer.html", LAYOUT_FOOTER),
-        ("_layout/side.html", LAYOUT_SIDE),
-        ("_layout/inject.html", LAYOUT_INJECT),
+        ("_layout/header.html", theme_files::PARTIAL_HEADER),
+        ("_layout/footer.html", theme_files::PARTIAL_FOOTER),
+        ("_layout/side.html", theme_files::PARTIAL_SIDE),
+        ("_layout/inject.html", theme_files::PARTIAL_INJECT),
         ("_static/style.css", theme_files::STYLE),
     ];
     for (rel, content) in files {
@@ -182,19 +173,19 @@ fn cmd_new(args: &[String]) -> i32 {
         }
     }
 
-    // copy the default template so the user can customise it
+    // copy the default theme into template/default/ so the user can customise it
     let tpl_files: Vec<(&str, &str)> = vec![
-        ("template/base.html", theme_files::BASE),
-        ("template/index.html", theme_files::INDEX),
-        ("template/category.html", theme_files::CATEGORY),
-        ("template/article.html", theme_files::ARTICLE),
-        ("template/page.html", theme_files::PAGE),
-        ("template/404.html", theme_files::NOT_FOUND),
-        ("template/partials/header.html", theme_files::PARTIAL_HEADER),
-        ("template/partials/footer.html", theme_files::PARTIAL_FOOTER),
-        ("template/partials/side.html", theme_files::PARTIAL_SIDE),
-        ("template/partials/inject.html", theme_files::PARTIAL_INJECT),
-        ("template/partials/_cat_node.html", theme_files::PARTIAL_CAT_NODE),
+        ("template/default/base.html", theme_files::BASE),
+        ("template/default/index.html", theme_files::INDEX),
+        ("template/default/category.html", theme_files::CATEGORY),
+        ("template/default/article.html", theme_files::ARTICLE),
+        ("template/default/page.html", theme_files::PAGE),
+        ("template/default/404.html", theme_files::NOT_FOUND),
+        ("template/default/partials/header.html", theme_files::PARTIAL_HEADER),
+        ("template/default/partials/footer.html", theme_files::PARTIAL_FOOTER),
+        ("template/default/partials/side.html", theme_files::PARTIAL_SIDE),
+        ("template/default/partials/inject.html", theme_files::PARTIAL_INJECT),
+        ("template/default/partials/_cat_node.html", theme_files::PARTIAL_CAT_NODE),
     ];
     for (rel, content) in tpl_files {
         let p = dir.join(rel);
@@ -214,7 +205,7 @@ base_url = "http://localhost:8080"
 author = "Jane Doe"
 language = "en"
 languages = ["en", "zh"]
-theme = "template"
+theme = "default"
 
 [lang.en]
 title = "My Blog"
@@ -434,91 +425,3 @@ tags: ["tips"]
 - 把自定义 partial 放到 `_layout/` 下即可覆盖默认主题。
 "#;
 
-pub(crate) const LAYOUT_HEADER: &str = r##"<header class="site-header">
-  <div class="container header-inner">
-    <a class="brand" href="{{ home_url }}">
-      <span class="brand-mark" aria-hidden="true">M</span>
-      <span class="brand-name">{{ title }}</span>
-    </a>
-    <nav class="primary-nav" aria-label="Primary">
-      <a class="nav-link{% if home_active %} is-active{% endif %}" href="{{ home_url }}">{{ t.home }}</a>
-      {% if categories %}
-      <div class="nav-item">
-        <button type="button" class="nav-link has-caret{% if categories_active %} is-active{% endif %}" aria-haspopup="true">{{ t.categories }}</button>
-        <ul class="dropdown">
-          {% for c in categories %}
-          <li class="dropdown-item{% if c.has_children %} has-sub{% endif %}">
-            <a href="{{ c.url }}" class="cat-link{% if c.active %} is-active{% endif %}">{{ c.title }}{% if c.has_children %} <span class="sub-caret" aria-hidden="true">›</span>{% endif %}</a>
-            {% if c.has_children %}
-            <ul class="dropdown-sub">
-              {% for ch in c.children %}
-              <li><a href="{{ ch.url }}" class="cat-link{% if ch.active %} is-active{% endif %}">{{ ch.title }}</a></li>
-              {% endfor %}
-            </ul>
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-      {% endif %}
-      {% for p in pages %}
-      <a class="nav-link{% if p.active %} is-active{% endif %}" href="{{ p.url }}">{{ p.title }}</a>
-      {% endfor %}
-    </nav>
-    <nav class="langs" aria-label="Languages">
-      <div class="nav-item">
-        <button type="button" class="nav-link has-caret is-active" aria-haspopup="true">{{ current_lang_display_name }}</button>
-        <ul class="dropdown">
-          {% for l in languages %}
-          <li class="dropdown-item">
-            <a href="{{ l.url }}" class="lang-link{% if l.active %} is-active{% endif %}" hreflang="{{ l.code }}">{{ l.display_name }}</a>
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-    </nav>
-  </div>
-</header>"##;
-
-const LAYOUT_FOOTER: &str = r##"<footer class="site-footer">
-  <p>Powered by <a href="https://github.com/conkayyan/mdweb-rs">mdweb</a> · © {{ current_year }} {{ title }}</p>
-</footer>
-"##;
-
-pub(crate) const LAYOUT_SIDE: &str = r##"<nav class="recent-nav">
-  <h3>{{ t.recent_posts }}</h3>
-  {% if recent %}
-  <ul class="recent-list">
-    {% for r in recent %}
-    <li>
-      <a href="{{ r.url }}" class="recent-link">{{ r.title }}</a>
-      {% if r.date %}<span class="recent-date">{{ r.date }}</span>{% endif %}
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="recent-empty">{{ t.no_posts }}</p>
-  {% endif %}
-</nav>
-
-<nav class="category-nav">
-  <h3>{{ t.categories }}</h3>
-  <ul class="cat-tree">
-    {% for c in categories %}
-      {% include "partials/_cat_node.html" %}
-    {% endfor %}
-  </ul>
-</nav>
-
-{% if friend_links %}
-<nav class="friend-links-nav">
-  <h3>{{ t.friend_links }}</h3>
-  <ul class="friend-links-list">
-    {% for l in friend_links %}
-    <li><a href="{{ l.url }}" target="_blank" rel="noopener" class="friend-link">{{ l.name }}</a></li>
-    {% endfor %}
-  </ul>
-</nav>
-{% endif %}"##;
-
-const LAYOUT_INJECT: &str = "<!-- put your analytics / statistic JS snippet here -->\n";
