@@ -69,9 +69,8 @@ fn handle(mut stream: TcpStream, site: &Arc<Site>) -> std::io::Result<()> {
     let path = percent_decode(parts[1].split('?').next().unwrap_or("/"));
 
     match route(site, &path) {
-        Ok(body) => {
-            let ctype = content_type(&path);
-            respond(&mut stream, 200, "OK", ctype, &body)?;
+        Ok(resp) => {
+            respond(&mut stream, 200, "OK", resp.content_type, &resp.body)?;
         }
         Err(_) => {
             let html = render::render_not_found(site, &site.default_lang)
@@ -88,8 +87,16 @@ fn handle(mut stream: TcpStream, site: &Arc<Site>) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Route a request path and return the raw response body.
-fn route(site: &Arc<Site>, path: &str) -> Result<Vec<u8>, String> {
+/// A routed response: body bytes plus the Content-Type header to send.
+struct Response {
+    body: Vec<u8>,
+    content_type: &'static str,
+}
+
+const HTML: &str = "text/html; charset=utf-8";
+
+/// Route a request path and return the response (body + content-type).
+fn route(site: &Arc<Site>, path: &str) -> Result<Response, String> {
     let clean = path.trim_matches('/');
     let segs: Vec<&str> = clean.split('/').filter(|s| !s.is_empty()).collect();
 
@@ -98,7 +105,10 @@ fn route(site: &Arc<Site>, path: &str) -> Result<Vec<u8>, String> {
         if segs.len() > 1 {
             let rest = segs[1..].join("/");
             if let Some(body) = serve_static(site, &rest) {
-                return Ok(body);
+                return Ok(Response {
+                    body,
+                    content_type: content_type(&rest),
+                });
             }
         }
         return Err("not found".into());
@@ -117,22 +127,34 @@ fn route(site: &Arc<Site>, path: &str) -> Result<Vec<u8>, String> {
     };
 
     if rest.is_empty() {
-        return render::render_home(site, &lang).map(|h| h.into_bytes());
+        return render::render_home(site, &lang).map(|h| Response {
+            body: h.into_bytes(),
+            content_type: HTML,
+        });
     }
 
     if let Some(cat) = find_category(site, &rest.join("/")) {
-        return render::render_category(site, &lang, cat).map(|h| h.into_bytes());
+        return render::render_category(site, &lang, cat).map(|h| Response {
+            body: h.into_bytes(),
+            content_type: HTML,
+        });
     }
 
     if let Some(a) = find_article(site, &lang, &rest) {
-        return render::render_article(site, &lang, a).map(|h| h.into_bytes());
+        return render::render_article(site, &lang, a).map(|h| Response {
+            body: h.into_bytes(),
+            content_type: HTML,
+        });
     }
 
     // Raw files under the doc tree (images, markdown source, ...).
     let rel = rest.join("/");
     if let Some(p) = site.resolve_file(&rel) {
         if let Ok(data) = std::fs::read(&p) {
-            return Ok(data);
+            return Ok(Response {
+                body: data,
+                content_type: content_type(&rel),
+            });
         }
     }
     Err("not found".into())
