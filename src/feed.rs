@@ -169,12 +169,17 @@ pub fn search_results<'a>(site: &'a Site, query: &str, lang: &str) -> Vec<Search
 }
 
 /// RSS 2.0 XML for a single language. Sorted newest first. Includes up to
-/// `limit` items (pass `usize::MAX` for everything).
+/// `limit` items (pass `usize::MAX` for everything). Only blog posts (under
+/// `posts/`) appear in feeds — pages have no place in the chronological feed.
 pub fn rss_xml(site: &Site, lang: &str, limit: usize) -> Result<String, String> {
     let mut arts: Vec<&Article> = site
         .articles
         .iter()
-        .filter(|a| a.lang == lang && a.layout != "page" && !a.draft)
+        .filter(|a| {
+            a.lang == lang
+                && a.path.first().map(|s| s.as_str()) == Some("posts")
+                && !a.draft
+        })
         .collect();
     arts.sort_by_key(|a| std::cmp::Reverse(a.sort_ts));
     arts.truncate(limit);

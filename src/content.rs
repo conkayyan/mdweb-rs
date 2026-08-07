@@ -22,6 +22,8 @@ pub mod theme_files {
     pub const PARTIAL_SIDE: &str = include_str!("../template/default/layout/side.html");
     pub const PARTIAL_INJECT: &str = include_str!("../template/default/layout/inject.html");
     pub const PARTIAL_CAT_NODE: &str = include_str!("../template/default/layout/_cat_node.html");
+    pub const PARTIAL_NAV_NODE: &str = include_str!("../template/default/layout/_nav_node.html");
+    pub const PAGE_SECTION: &str = include_str!("../template/default/page_section.html");
     pub const STYLE: &str = include_str!("../static/style.css");
 }
 
@@ -41,7 +43,6 @@ pub struct Article {
     pub tags: Vec<String>,
     pub summary: String,
     pub content: String,
-    pub layout: String,
     pub meta: Value,
     pub extra: Value,
     pub translations: Vec<Value>,
@@ -58,6 +59,7 @@ impl Article {
         m.insert("slug".into(), Value::str(&self.slug));
         m.insert("url".into(), Value::str(&self.url));
         m.insert("title".into(), Value::str(&self.title));
+        m.insert("lang".into(), Value::str(&self.lang));
         m.insert("date".into(), opt_str(self.date.as_deref()));
         m.insert("date_iso".into(), opt_str(self.date_iso.as_deref()));
         m.insert("updated".into(), opt_str(self.updated.as_deref()));
@@ -149,6 +151,9 @@ pub struct Site {
     pub tree: Vec<Category>,
     pub articles: Vec<Article>,
     pub home_content: BTreeMap<String, String>,
+    /// Per-directory `_index.md` frontmatter (key = joined dir path).
+    /// Used by the page-tree builder to label directory nodes.
+    pub indices: BTreeMap<String, Vec<Value>>,
     pub engine: Engine,
     /// Whether the embedded default static CSS is a valid fallback.
     pub engine_embedded: bool,
@@ -250,7 +255,15 @@ impl Site {
                 all_paths.insert(pre);
             }
         }
-        let tree = build_tree(&all_paths, &indices, &config, &default_lang);
+        // Categories are only the directories under `posts/`. Other top-level
+        // sections (`pages/`, `notes/`, …) exit the category tree entirely;
+        // they have their own navigation surface.
+        let posts_paths: HashSet<Vec<String>> = all_paths
+            .iter()
+            .filter(|p| p.first().map(|s| s.as_str()) == Some("posts"))
+            .cloned()
+            .collect();
+        let tree = build_tree(&posts_paths, &indices, &config, &default_lang);
 
         let mut groups: BTreeMap<String, Vec<&RawArticle>> = BTreeMap::new();
         for ra in &raws {
@@ -300,16 +313,9 @@ impl Site {
                     .field("summary")
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| make_summary(&ra.html));
-                let layout = ra
-                    .field("layout")
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| {
-                        if ra.path.is_empty() {
-                            "page".to_string()
-                        } else {
-                            "article".to_string()
-                        }
-                    });
+                // The `layout:` frontmatter field was removed: every article's
+                // role is now derived from its directory. Anything under
+                // `posts/` is an article; everything else is a page.
                 let title = ra
                     .field("title")
                     .map(|s| s.to_string())
@@ -339,7 +345,6 @@ impl Site {
                     tags,
                     summary,
                     content: ra.html.clone(),
-                    layout,
                     meta: ra.fm.get("meta").cloned().unwrap_or_else(Value::map),
                     extra: Value::Map(
                         ra.fm
@@ -353,7 +358,6 @@ impl Site {
                                         | "author"
                                         | "tags"
                                         | "draft"
-                                        | "layout"
                                         | "summary"
                                         | "meta"
                                 )
@@ -386,6 +390,7 @@ impl Site {
             tree,
             articles,
             home_content,
+            indices,
             engine,
             engine_embedded,
         })
@@ -399,7 +404,13 @@ impl Site {
         let mut arts: Vec<Value> = self
             .articles
             .iter()
-            .filter(|a| a.lang == lang && !a.draft)
+            // Only blog posts surface on the home feed: pages (anything not
+            // under `posts/`) belong in the pages tree, not the home stream.
+            .filter(|a| {
+                a.lang == lang
+                    && !a.draft
+                    && a.path.first().map(|s| s.as_str()) == Some("posts")
+            })
             .map(|a| a.to_value())
             .collect();
         arts.sort_by_key(|a| {
@@ -477,6 +488,169 @@ impl Site {
         Value::Arr(out)
     }
 
+    /// Build the navigation tree for non-post (page) content. Everything that
+    /// isn't under `posts/` (and isn't the home `_index.md`) becomes a leaf or
+    /// directory node, organised by its on-disk path. Intermediate directories
+    /// are labelled from their `_index.md` frontmatter (`title`) when present
+    /// and remain clickable: each directory renders a landing page that lists
+    /// its direct children.
+    pub fn pages_tree_value(&self, lang: &str, current_url: &str) -> Value {
+        // 1. Filter pages for the current language: everything that isn't under
+        //    `posts/` is a page.
+        let pages: Vec<&Article> = self
+            .articles
+            .iter()
+            .filter(|a| {
+                a.lang == lang
+                    && a.path.first().map(|s| s.as_str()) != Some("posts")
+            })
+            .collect();
+
+        // 2. Collect every directory prefix that any page lives under.
+        let mut all_dirs: std::collections::BTreeSet<Vec<String>> =
+            std::collections::BTreeSet::new();
+        for p in &pages {
+            for pre in prefixes(&p.path) {
+                all_dirs.insert(pre);
+            }
+        }
+
+        // 3. Top-level entries are the longest path-segments that have length 1.
+        let tops: Vec<Vec<String>> = all_dirs
+            .iter()
+            .filter(|p| p.len() == 1)
+            .cloned()
+            .collect();
+
+        let mut out = Vec::new();
+        for top in &tops {
+            out.push(build_pages_node(
+                top,
+                &all_dirs,
+                &pages,
+                &self.indices,
+                &self.config,
+                &self.default_lang,
+                lang,
+                current_url,
+            ));
+        }
+        Value::Arr(out)
+    }
+
+    /// Payload for a directory landing page (e.g. `/pages/docs/`). Looks up
+    /// `_index.md` metadata in the requested language (falling back to the
+    /// default language) and lists direct children: subdirectory links first,
+    /// then sibling pages.
+    pub fn page_section_value(&self, dir_path: &[String], lang: &str) -> Option<Value> {
+        let key = dir_path.join("/");
+        let entry = self.indices.get(&key)?;
+        let entry = entry
+            .iter()
+            .find(|v| v.path("lang").and_then(|l| l.as_str()) == Some(lang))
+            .or_else(|| {
+                self.indices
+                    .get(&key)
+                    .and_then(|v| v.first())
+            })?;
+        let fm = entry
+            .path("fields")
+            .and_then(|f| f.as_map().cloned())
+            .unwrap_or_default();
+        let title = fm
+            .get("title")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                dir_path
+                    .last()
+                    .cloned()
+                    .unwrap_or_else(|| "Section".to_string())
+            });
+        let summary = fm
+            .get("summary")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        let html = entry
+            .path("html")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Children = subdirectories first (by name), then leaf pages (by title).
+        let mut children: Vec<Value> = Vec::new();
+        let key_for_match = dir_path.join("/");
+        let subdirs: std::collections::BTreeSet<Vec<String>> = self
+            .indices
+            .keys()
+            .filter_map(|k| {
+                let parts = split_dir(k);
+                if parts.len() == dir_path.len() + 1
+                    && parts[..dir_path.len()] == dir_path[..]
+                {
+                    Some(parts)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        for sub in &subdirs {
+            let sub_key = sub.join("/");
+            let sub_title = self
+                .indices
+                .get(&sub_key)
+                .and_then(|items| {
+                    items
+                        .iter()
+                        .find(|v| v.path("lang").and_then(|l| l.as_str()) == Some(lang))
+                        .or_else(|| items.first())
+                })
+                .and_then(|it| it.path("fields"))
+                .and_then(|f| f.as_map())
+                .and_then(|m| m.get("title"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    sub.last().cloned().unwrap_or_else(|| "Section".to_string())
+                });
+            let url = url_for(&self.config, &self.default_lang, sub, None, lang);
+            children.push(Value::Map(BTreeMap::from([
+                ("title".to_string(), Value::str(&sub_title)),
+                ("url".to_string(), Value::str(&url)),
+                ("is_section".to_string(), Value::Bool(true)),
+            ])));
+        }
+        // Also surface pages that live directly in this directory.
+        let mut leafs: Vec<&Article> = self
+            .articles
+            .iter()
+            .filter(|a| {
+                a.lang == lang
+                    && a.path == dir_path
+                    && a.path.first().map(|s| s.as_str()) != Some("posts")
+            })
+            .collect();
+        leafs.sort_by(|a, b| a.title.cmp(&b.title));
+        for a in leafs {
+            children.push(Value::Map(BTreeMap::from([
+                ("title".to_string(), Value::str(&a.title)),
+                ("url".to_string(), Value::str(&a.url)),
+                ("is_section".to_string(), Value::Bool(false)),
+            ])));
+        }
+        let _ = key_for_match; // silence unused warning if any
+
+        let url = url_for(&self.config, &self.default_lang, dir_path, None, lang);
+        Some(Value::Map(BTreeMap::from([
+            ("title".to_string(), Value::str(&title)),
+            ("url".to_string(), Value::str(&url)),
+            ("summary".to_string(), opt_str(Some(&summary))),
+            ("content".to_string(), opt_str(Some(&html))),
+            ("children".to_string(), Value::Arr(children)),
+        ])))
+    }
+
     /// Raw file under the doc root at a URL-relative path.
     pub fn resolve_file(&self, rel: &str) -> Option<PathBuf> {
         let p = self.doc_root.join(rel);
@@ -537,6 +711,8 @@ fn load_embedded(engine: &mut Engine) -> Result<(), String> {
         ("layout/side.html", theme_files::PARTIAL_SIDE.to_string()),
         ("layout/inject.html", theme_files::PARTIAL_INJECT.to_string()),
         ("layout/_cat_node.html", theme_files::PARTIAL_CAT_NODE.to_string()),
+        ("layout/_nav_node.html", theme_files::PARTIAL_NAV_NODE.to_string()),
+        ("page_section.html", theme_files::PAGE_SECTION.to_string()),
     ])?;
     Ok(())
 }
@@ -605,10 +781,13 @@ fn walk_doc(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) {
 /// Walk inside the `content/` container. Strips the leading `content/` from
 /// every emitted path so discovery is otherwise identical to `walk_doc`.
 ///
-/// At the top level of `content/`, only `_index.md` and `_<lang>.md` variants
-/// are kept — these define the home page (e.g. `content/_index.md` → `/`).
-/// Other top-level files are ignored; put new content under a sub-directory
-/// (`content/posts/`, `content/pages/`, …).
+/// At the top level of `content/` we accept:
+///
+/// - `_index.md` / `_index.<lang>.md` — the home page variants
+/// - any other `*.md` file — these become top-level pages (e.g.
+///   `content/about.md` → `/about/`). Directory sections like `posts/`,
+///   `pages/`, `notes/` are still the recommended way to organise content,
+///   but root-level pages are useful for one-off pages like About.
 fn walk_content(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) {
     let Ok(rd) = std::fs::read_dir(dir) else {
         return;
@@ -622,19 +801,11 @@ fn walk_content(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) {
         if p.is_dir() {
             walk_content(&p, base, out);
         } else if let Ok(rel) = p.strip_prefix(base) {
-            let rel_str = rel.to_string_lossy().replace('\\', "/");
-            // At the top level of content/, only accept _index.md and
-            // _index.<lang>.md — these are the home page variants.
-            let top_level = rel_str.strip_prefix("content/").unwrap_or(&rel_str);
-            if !top_level.contains('/') {
-                let stem = name.strip_suffix(".md").unwrap_or(&name);
-                if stem != "_index" && !stem.starts_with("_index.") {
-                    continue;
-                }
-            }
-            let stripped = rel_str
+            let stripped = rel
+                .to_string_lossy()
+                .replace('\\', "/")
                 .strip_prefix("content/")
-                .unwrap_or(&rel_str)
+                .unwrap_or(&rel.to_string_lossy())
                 .to_string();
             out.push((stripped, p));
         }
@@ -659,6 +830,100 @@ fn split_dir(dir: &str) -> Vec<String> {
 
 fn prefixes(p: &[String]) -> Vec<Vec<String>> {
     (1..=p.len()).map(|i| p[..i].to_vec()).collect()
+}
+
+/// Recursive helper that builds a single node of the pages navigation tree.
+fn build_pages_node(
+    path: &[String],
+    all_dirs: &std::collections::BTreeSet<Vec<String>>,
+    pages: &[&Article],
+    indices: &BTreeMap<String, Vec<Value>>,
+    config: &Config,
+    default_lang: &str,
+    lang: &str,
+    current_url: &str,
+) -> Value {
+    // Title: prefer `_index.md` frontmatter for this dir in the requested
+    // language, falling back to the directory slug.
+    let key = path.join("/");
+    let title = indices
+        .get(&key)
+        .and_then(|items| {
+            items
+                .iter()
+                .find(|v| v.path("lang").and_then(|l| l.as_str()) == Some(lang))
+                .or_else(|| items.first())
+        })
+        .and_then(|it| it.path("fields"))
+        .and_then(|f| f.as_map())
+        .and_then(|m| m.get("title"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| path.last().cloned().unwrap_or_default());
+
+    let url = url_for(config, default_lang, path, None, lang);
+
+    // Children: subdirectories (sorted by name) + leaf articles at this dir.
+    let mut children_vals: Vec<Value> = Vec::new();
+    let sub_dirs: Vec<Vec<String>> = all_dirs
+        .iter()
+        .filter(|k| k.len() == path.len() + 1 && k[..path.len()] == path[..])
+        .cloned()
+        .collect();
+    for sub in &sub_dirs {
+        children_vals.push(build_pages_node(
+            sub,
+            all_dirs,
+            pages,
+            indices,
+            config,
+            default_lang,
+            lang,
+            current_url,
+        ));
+    }
+    let mut leaves: Vec<&&Article> = pages
+        .iter()
+        .filter(|p| p.path == path)
+        .collect();
+    leaves.sort_by(|a, b| a.title.cmp(&b.title));
+    for art in leaves {
+        children_vals.push(Value::Map(BTreeMap::from([
+            ("title".to_string(), Value::str(&art.title)),
+            ("url".to_string(), Value::str(&art.url)),
+            ("active".to_string(), Value::Bool(art.url == current_url)),
+            ("descendant_active".to_string(), Value::Bool(art.url == current_url)),
+            ("has_children".to_string(), Value::Bool(false)),
+            ("children".to_string(), Value::Arr(vec![])),
+            ("is_section".to_string(), Value::Bool(false)),
+        ])));
+    }
+
+    let active = url == current_url;
+    let descendant_active = active || {
+        let mut found = false;
+        for child in &children_vals {
+            if let Value::Map(m) = child {
+                if matches!(m.get("active"), Some(Value::Bool(true)))
+                    || matches!(m.get("descendant_active"), Some(Value::Bool(true)))
+                {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        found
+    };
+
+    Value::Map(BTreeMap::from([
+        ("title".to_string(), Value::str(&title)),
+        ("url".to_string(), Value::str(&url)),
+        ("active".to_string(), Value::Bool(active)),
+        ("descendant_active".to_string(), Value::Bool(descendant_active)),
+        ("has_children".to_string(), Value::Bool(!children_vals.is_empty())),
+        ("children".to_string(), Value::Arr(children_vals)),
+        ("is_section".to_string(), Value::Bool(true)),
+    ]))
 }
 
 fn starts_with(hay: &[String], needle: &[String]) -> bool {

@@ -191,6 +191,16 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
         });
     }
 
+    // Directory landing pages: only consider non-`posts` paths. Category
+    // lookups already handled `posts/*`; here we resolve `_index.md`-bearing
+    // directories under e.g. `pages/`, `notes/`, …
+    if let Some(dir) = find_section(site, &rest) {
+        return render::render_section(site, &lang, &dir).map(|h| Response {
+            body: h.into_bytes(),
+            content_type: HTML,
+        });
+    }
+
     if let Some(a) = find_article(site, &lang, &rest) {
         return render::render_article(site, &lang, a).map(|h| Response {
             body: h.into_bytes(),
@@ -251,6 +261,24 @@ fn find_article<'a>(
             && a.path.len() == path_parts.len()
             && a.path.iter().zip(path_parts.iter()).all(|(x, y)| x == y)
     })
+}
+
+/// Match a request path against any `_index.md` directory in the doc tree,
+/// excluding `posts/*` (those are categories). Returns the matched directory
+/// path segments when found.
+fn find_section(site: &Site, rest: &[&str]) -> Option<Vec<String>> {
+    if rest.is_empty() {
+        return None;
+    }
+    let dir: Vec<String> = rest.iter().map(|s| s.to_string()).collect();
+    let key = dir.join("/");
+    if site.indices.contains_key(&key)
+        && dir.first().map(|s| s.as_str()) != Some("posts")
+    {
+        Some(dir)
+    } else {
+        None
+    }
 }
 
 fn percent_decode(s: &str) -> String {

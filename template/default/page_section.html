@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ section.title }} · {{ title }}{% endblock title %}
+{% block content %}
+<section class="page-section">
+  <h1 class="section-title">{{ section.title }}</h1>
+  {% if section.summary %}
+  <p class="section-description">{{ section.summary }}</p>
+  {% endif %}
+  {% if section.content %}
+  <div class="section-content">
+    {{ section.content | safe }}
+  </div>
+  {% endif %}
+  {% if section.children %}
+  <h2 class="section-children-title">{{ t.subpages | default(value="Pages in this section") }}</h2>
+  <ul class="page-children">
+    {% for node in section.children %}
+    <li class="page-child{% if node.is_section %} is-section{% endif %}">
+      <a href="{{ node.url }}">{{ node.title }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endblock content %}

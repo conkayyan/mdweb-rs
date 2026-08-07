@@ -11,21 +11,22 @@
         <button type="button" class="nav-link has-caret{% if categories_active %} is-active{% endif %}" aria-haspopup="true">{{ t.categories }}</button>
         <ul class="dropdown">
           {% for c in categories %}
-          <li class="dropdown-item{% if c.has_children %} has-sub{% endif %}">
-            <a href="{{ c.url }}" class="cat-link{% if c.active %} is-active{% endif %}">{{ c.title }}{% if c.has_children %} <span class="sub-caret" aria-hidden="true">›</span>{% endif %}</a>
-            {% if c.has_children %}
-            <ul class="dropdown-sub">
-              {% for ch in c.children %}
-              <li><a href="{{ ch.url }}" class="cat-link{% if ch.active %} is-active{% endif %}">{{ ch.title }}</a></li>
-              {% endfor %}
-            </ul>
-            {% endif %}
-          </li>
+          {% include "layout/_nav_node.html" %}
           {% endfor %}
         </ul>
       </div>
       {% endif %}
-      {% for p in pages %}
+      {% if pages_tree %}
+      <div class="nav-item">
+        <button type="button" class="nav-link has-caret" aria-haspopup="true">{{ t.pages }}</button>
+        <ul class="dropdown">
+          {% for c in pages_tree %}
+          {% include "layout/_nav_node.html" %}
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      {% for p in root_pages %}
       <a class="nav-link{% if p.active %} is-active{% endif %}" href="{{ p.url }}">{{ p.title }}</a>
       {% endfor %}
     </nav>

@@ -1,0 +1,10 @@
+<li class="dropdown-item{% if c.has_children %} has-sub{% endif %}">
+  <a href="{{ c.url }}" class="cat-link{% if c.active %} is-active{% endif %}">{{ c.title }}{% if c.has_children %} <span class="sub-caret" aria-hidden="true">›</span>{% endif %}</a>
+  {% if c.has_children %}
+  <ul class="dropdown-sub">
+    {% for c in c.children %}
+      {% include "layout/_nav_node.html" %}
+    {% endfor %}
+  </ul>
+  {% endif %}
+</li>

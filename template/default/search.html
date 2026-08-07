@@ -14,7 +14,7 @@
   {% if search.query_trimmed %}
   <p class="search-summary">
     <span class="search-count">{{ search.count }}</span>
-    match{% if search.count != 1 %}es{% endif %}
+    {{ search.count_word }}
     for <q>{{ search.query_trimmed }}</q>
   </p>
 
@@ -31,7 +31,10 @@
           {% for tag in a.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
         </div>
         {% endif %}
+        {% if a.current_lang %}
+        {% else %}
         <span class="search-result-lang" lang="{{ a.lang }}">{{ a.lang }}</span>
+        {% endif %}
       </a>
     </li>
     {% endfor %}

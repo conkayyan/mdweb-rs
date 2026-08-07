@@ -152,10 +152,23 @@ fn cmd_create(args: &[String]) -> i32 {
         ("site.toml", SITE_TOML),
         ("content/_index.md", INDEX_MD),
         ("content/_index.zh.md", INDEX_ZH_MD),
+        // About lives at the site root: `content/about.md` → `/about/`. It
+        // gets its own flat nav link in the header, separate from the Pages
+        // dropdown.
+        ("content/about.md", ABOUT_MD),
+        ("content/about.zh.md", ABOUT_ZH_MD),
         ("content/pages/_index.md", PAGES_INDEX_MD),
         ("content/pages/_index.zh.md", PAGES_INDEX_ZH_MD),
-        ("content/pages/about.md", ABOUT_MD),
-        ("content/pages/about.zh.md", ABOUT_ZH_MD),
+        ("content/pages/docs/_index.md", DOCS_INDEX_MD),
+        ("content/pages/docs/_index.zh.md", DOCS_INDEX_ZH_MD),
+        ("content/pages/docs/guide/_index.md", GUIDE_INDEX_MD),
+        ("content/pages/docs/guide/_index.zh.md", GUIDE_INDEX_ZH_MD),
+        ("content/pages/docs/guide/intro.md", INTRO_MD),
+        ("content/pages/docs/guide/intro.zh.md", INTRO_ZH_MD),
+        ("content/pages/docs/guide/advanced/_index.md", ADVANCED_INDEX_MD),
+        ("content/pages/docs/guide/advanced/_index.zh.md", ADVANCED_INDEX_ZH_MD),
+        ("content/pages/docs/guide/advanced/configuration.md", CONFIGURATION_MD),
+        ("content/pages/docs/guide/advanced/configuration.zh.md", CONFIGURATION_ZH_MD),
         ("content/posts/_index.md", POSTS_INDEX_MD),
         ("content/posts/_index.zh.md", POSTS_INDEX_ZH_MD),
         ("content/posts/hello-world.md", HELLO_MD),
@@ -189,6 +202,7 @@ fn cmd_create(args: &[String]) -> i32 {
         ("template/default/category.html", theme_files::CATEGORY),
         ("template/default/article.html", theme_files::ARTICLE),
         ("template/default/page.html", theme_files::PAGE),
+        ("template/default/page_section.html", theme_files::PAGE_SECTION),
         ("template/default/search.html", theme_files::SEARCH),
         ("template/default/404.html", theme_files::NOT_FOUND),
         ("template/default/layout/header.html", theme_files::PARTIAL_HEADER),
@@ -196,6 +210,7 @@ fn cmd_create(args: &[String]) -> i32 {
         ("template/default/layout/side.html", theme_files::PARTIAL_SIDE),
         ("template/default/layout/inject.html", theme_files::PARTIAL_INJECT),
         ("template/default/layout/_cat_node.html", theme_files::PARTIAL_CAT_NODE),
+        ("template/default/layout/_nav_node.html", theme_files::PARTIAL_NAV_NODE),
     ];
     for (rel, content) in tpl_files {
         let p = dir.join(rel);
@@ -301,6 +316,8 @@ keywords = "博客, rust"
 [i18n.zh]
 home          = "首页"
 categories    = "分类"
+pages         = "页面"
+subpages      = "本节页面"
 recent_posts  = "最近文章"
 friend_links  = "友情链接"
 no_posts      = "暂无文章。"
@@ -329,7 +346,6 @@ url = "https://www.rust-lang.org/"
 
 const INDEX_MD: &str = r#"---
 title: "Welcome"
-layout: "index"
 ---
 
 Welcome to a blog powered by **mdweb**, a static blog engine written in pure Rust.
@@ -337,7 +353,6 @@ Welcome to a blog powered by **mdweb**, a static blog engine written in pure Rus
 
 const INDEX_ZH_MD: &str = r#"---
 title: "欢迎"
-layout: "index"
 ---
 
 欢迎访问由 **mdweb** 驱动的博客——一个用纯 Rust 编写的静态博客引擎。
@@ -345,26 +360,34 @@ layout: "index"
 
 const ABOUT_MD: &str = r#"---
 title: "About"
-layout: "page"
+summary: "What this demo site is about."
 ---
 
 This demo shows how mdweb renders a doc directory into a blog.
 
-- Markdown files become pages.
-- Directories become categories.
-- File names like `hello.zh.md` become languages.
+- Markdown files under `posts/` become articles.
+- Folders under `posts/` become categories.
+- Markdown files anywhere else (e.g. `pages/`) become standalone pages,
+  with nested folders for hierarchy.
+- A Markdown file directly under `content/` (like this one) becomes a
+  top-level page with a flat URL (`/about/`) and a flat nav link.
+- File names like `hello.zh.md` become language variants.
 "#;
 
 const ABOUT_ZH_MD: &str = r#"---
 title: "关于"
-layout: "page"
+summary: "本演示站点的简介。"
 ---
 
 本演示展示了 mdweb 如何把一个文档目录渲染成博客。
 
-- Markdown 文件变成页面。
-- 目录变成分类。
-- 像 `hello.zh.md` 这样的文件名代表不同语言。
+- `posts/` 下的 Markdown 文件是文章。
+- `posts/` 的子文件夹是分类。
+- 其它位置（如 `pages/`）的 Markdown 文件是独立页面，
+  支持嵌套目录形成层级。
+- 直接放在 `content/` 下的 Markdown 文件（如本页）是顶层页面，
+  URL 平铺（`/about/`），导航上作为独立链接出现。
+- 像 `hello.zh.md` 这样的文件名代表不同语言版本。
 "#;
 
 const POSTS_INDEX_MD: &str = r#"---
@@ -527,15 +550,108 @@ tags: ["tips"]
   （header / footer / side / inject）。
 "#;
 
+// ---------- Multi-level nested pages example (EN + ZH) ----------
+// pages/docs/_index.md and pages/docs/guide/_index.md are landing pages
+// (their _index.md frontmatter provides the section title and intro).
+// The leaf .md files are regular pages. The nav dropdown renders them
+// recursively: Pages → Docs → Guide → {Intro, Advanced → Configuration}.
+
+const DOCS_INDEX_MD: &str = r#"---
+title: "Docs"
+summary: "Guides, tutorials, and references."
+---
+
+Welcome to the docs. Pages are organised hierarchically — pick a section
+below, or browse the full tree from the nav.
+"#;
+
+const DOCS_INDEX_ZH_MD: &str = r#"---
+title: "文档"
+summary: "指南、教程与参考。"
+---
+
+欢迎来到文档中心。页面以层级方式组织——可在下方选择章节，
+也可以通过顶部导航浏览完整结构。
+"#;
+
+const GUIDE_INDEX_MD: &str = r#"---
+title: "Guide"
+summary: "Step-by-step walkthroughs."
+---
+
+Start here if you're new to mdweb.
+"#;
+
+const GUIDE_INDEX_ZH_MD: &str = r#"---
+title: "指南"
+summary: "循序渐进的教程。"
+---
+
+如果你是 mdweb 新手，请从这里开始。
+"#;
+
+const INTRO_MD: &str = r#"---
+title: "Introduction"
+summary: "What mdweb is and how it fits your workflow."
+---
+
+mdweb turns a folder of Markdown into a static site. The layout is purely
+directory-driven: `posts/` for blog articles, anything else for pages,
+nested folders for hierarchy.
+"#;
+
+const INTRO_ZH_MD: &str = r#"---
+title: "简介"
+summary: "mdweb 是什么，适合怎样的工作流。"
+---
+
+mdweb 把一个 Markdown 文件夹变成静态站点。结构由目录决定：
+`posts/` 放博客文章，其它位置放页面，嵌套目录构成层级。
+"#;
+
+const ADVANCED_INDEX_MD: &str = r#"---
+title: "Advanced"
+summary: "Configuration and edge cases."
+---
+
+Deeper topics once you're past the basics.
+"#;
+
+const ADVANCED_INDEX_ZH_MD: &str = r#"---
+title: "进阶"
+summary: "配置与边界情况。"
+---
+
+掌握基础之后的深入话题。
+"#;
+
+const CONFIGURATION_MD: &str = r#"---
+title: "Configuration"
+summary: "site.toml and per-language overrides."
+---
+
+Edit `site.toml` to set the title, base URL, and theme. Per-language
+strings live under `[lang.<code>]` and `[i18n.<code>]`.
+"#;
+
+const CONFIGURATION_ZH_MD: &str = r#"---
+title: "配置"
+summary: "site.toml 与各语言覆盖。"
+---
+
+编辑 `site.toml` 来设置标题、基础 URL 与主题。各语言字符串放在
+`[lang.<code>]` 与 `[i18n.<code>]` 之下。
+"#;
+
 /// Reference sample for a single page. Used by `mdweb new page` and written
 /// to `samples/page.md` by `mdweb create`. Frontmatter comments are valid
 /// YAML and are skipped by the parser.
+///
+/// Note: there is no `layout:` field. An article becomes a page by living
+/// outside `posts/`; the directory itself decides the rendering template.
 const SAMPLE_PAGE_MD: &str = r#"---
 # Page title (required).
 title: "Sample Page"
-
-# Layout: "page" renders with page.html from the active theme.
-layout: "page"
 
 # One-line summary (optional). Shown in category listings and used as
 # the default value for <meta name="description"> when meta.description

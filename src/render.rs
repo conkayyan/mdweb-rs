@@ -27,6 +27,11 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
     let categories = site.category_tree_value(&site.tree, lang, current_url);
     let categories_active = tree_has_active(&categories);
     let pages = pages_value(&site.articles, lang, current_url);
+    let pages_tree = site.pages_tree_value(lang, current_url);
+    // Top-level pages: articles whose path is empty (e.g. `content/about.md`
+    // → `/about/`). These show up as flat nav links, separate from the
+    // hierarchical Pages dropdown, since they live at the site root.
+    let root_pages = root_pages_value(&site.articles, lang, current_url);
     let recent = recent_value(&site.articles, lang, 5);
     let friend_links: Vec<Value> = site
         .config
@@ -86,6 +91,8 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
         ("categories".to_string(), categories),
         ("categories_active".to_string(), Value::Bool(categories_active)),
         ("pages".to_string(), pages),
+        ("pages_tree".to_string(), pages_tree),
+        ("root_pages".to_string(), root_pages),
         ("recent".to_string(), recent),
         ("friend_links".to_string(), Value::Arr(friend_links)),
         ("rss_url".to_string(), Value::str(&rss_url)),
@@ -117,11 +124,13 @@ pub(crate) fn tree_has_active(v: &Value) -> bool {
     false
 }
 
-/// Single-page navigation entries: articles with layout == "page".
+/// Single-page navigation entries: articles whose path doesn't live under
+/// `posts/`. The `pages_tree` value supersedes this for the new header nav,
+/// but we keep it for backward compatibility with custom themes.
 fn pages_value(articles: &[Article], lang: &str, current_url: &str) -> Value {
     let mut out = Vec::new();
     for a in articles {
-        if a.lang == lang && a.layout == "page" {
+        if a.lang == lang && a.path.first().map(|s| s.as_str()) != Some("posts") {
             out.push(Value::Map(BTreeMap::from([
                 ("title".to_string(), Value::str(&a.title)),
                 ("url".to_string(), Value::str(&a.url)),
@@ -132,11 +141,33 @@ fn pages_value(articles: &[Article], lang: &str, current_url: &str) -> Value {
     Value::Arr(out)
 }
 
-/// Most recent non-page articles (sorted by `sort_ts` desc).
+/// Top-level pages — articles whose path is empty (e.g. `content/about.md`
+/// lives directly under `content/`, so its URL is `/about/`). These get a
+/// dedicated nav slot as flat links, since they don't belong under any
+/// section's hierarchy.
+fn root_pages_value(articles: &[Article], lang: &str, current_url: &str) -> Value {
+    let mut out = Vec::new();
+    for a in articles {
+        if a.lang == lang && a.path.is_empty() {
+            out.push(Value::Map(BTreeMap::from([
+                ("title".to_string(), Value::str(&a.title)),
+                ("url".to_string(), Value::str(&a.url)),
+                ("active".to_string(), Value::Bool(a.url == current_url)),
+            ])));
+        }
+    }
+    Value::Arr(out)
+}
+
+/// Most recent blog posts (sorted by `sort_ts` desc). Only articles under
+/// `posts/` qualify — pages and other top-level sections are excluded.
 fn recent_value(articles: &[Article], lang: &str, limit: usize) -> Value {
     let mut filtered: Vec<&Article> = articles
         .iter()
-        .filter(|a| a.lang == lang && a.layout != "page")
+        .filter(|a| {
+            a.lang == lang
+                && a.path.first().map(|s| s.as_str()) == Some("posts")
+        })
         .collect();
     filtered.sort_by_key(|a| std::cmp::Reverse(a.sort_ts));
     let mut out = Vec::new();
@@ -218,10 +249,11 @@ pub fn render_home(site: &Site, lang: &str) -> Result<String, String> {
 }
 
 pub fn render_article(site: &Site, lang: &str, article: &Article) -> Result<String, String> {
-    let template = if article.layout == "page" {
-        "page.html"
-    } else {
+    // Directory-driven: posts/* → article template, anything else → page.
+    let template = if article.path.first().map(|s| s.as_str()) == Some("posts") {
         "article.html"
+    } else {
+        "page.html"
     };
     let ctx = with_layout(
         site,
@@ -239,6 +271,22 @@ pub fn render_category(site: &Site, lang: &str, cat: &Category) -> Result<String
     let payload = Site::category_value(site, cat, lang);
     let ctx = with_layout(site, lang, &url, "category.html", "category", payload)?;
     render_with_context(site, "category.html", &ctx)
+}
+
+/// Render a directory landing page (e.g. `/pages/docs/`) using
+/// `page_section.html`. Falls back to 404 if the path has no `_index.md`.
+pub fn render_section(site: &Site, lang: &str, dir_path: &[String]) -> Result<String, String> {
+    let payload = match site.page_section_value(dir_path, lang) {
+        Some(v) => v,
+        None => return Err("not found".into()),
+    };
+    let url = payload
+        .as_map()
+        .and_then(|m| m.get("url").and_then(|v| v.as_str()))
+        .unwrap_or("")
+        .to_string();
+    let ctx = with_layout(site, lang, &url, "page_section.html", "section", payload)?;
+    render_with_context(site, "page_section.html", &ctx)
 }
 
 pub fn render_not_found(site: &Site, lang: &str) -> Result<String, String> {
@@ -269,6 +317,12 @@ pub fn render_search(site: &Site, lang: &str, query: &str) -> Result<String, Str
         ("query".to_string(), Value::str(query)),
         ("query_trimmed".to_string(), Value::str(query.trim())),
         ("count".to_string(), Value::int(articles.len() as i64)),
+        // The template engine has no expression comparisons, so resolve the
+        // pluralisation here. Templates just print `search.count_word`.
+        (
+            "count_word".to_string(),
+            Value::str(if articles.len() == 1 { "match" } else { "matches" }),
+        ),
         ("articles".to_string(), Value::Arr(articles)),
     ]));
     // Use lang_prefix so the URL is stable per language and matches the

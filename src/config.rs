@@ -19,6 +19,8 @@ pub struct LangMeta {
 pub(crate) const I18N_DEFAULTS: &[(&str, &str)] = &[
     ("home", "Home"),
     ("categories", "Categories"),
+    ("pages", "Pages"),
+    ("subpages", "Pages in this section"),
     ("recent_posts", "Recent Posts"),
     ("friend_links", "Friend Links"),
     ("no_posts", "No posts yet."),
