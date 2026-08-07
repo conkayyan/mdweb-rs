@@ -2,6 +2,6 @@
 name = "mdweb"
 version = "0.1.0"
 edition = "2021"
-description = "A Hugo-like blog engine written in pure Rust (no third-party crates): render markdown docs into a live multi-language web blog."
+description = "Render a directory of Markdown into a live multi-language blog, in pure Rust, with no external dependencies."
 
 [dependencies]

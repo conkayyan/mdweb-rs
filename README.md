@@ -1,8 +1,8 @@
 # mdweb
 
-**mdweb** is a Hugo-like blogging engine written in pure Rust. It renders a directory
+**mdweb** is a static blog engine written in pure Rust. It renders a directory
 of Markdown documents into a live, multi-language web blog — no build step, no database,
-no JavaScript framework, and **zero third-party crates** (stdlib only).
+no JavaScript framework, and **zero external dependencies** (stdlib only).
 
 It is a complete standalone program: `mdweb new` scaffolds a demo site, `mdweb run`
 serves it as a realtime blog. You just edit Markdown and refresh your browser.
@@ -63,7 +63,7 @@ mdweb run my-blog --port 8080
 ## Command line
 
 ```
-mdweb <VERSION> - a Hugo-like blog engine in pure Rust.
+mdweb <VERSION> - a static blog engine written in pure Rust.
 
 USAGE:
     mdweb run   [PATH] [--host HOST] [--port PORT] [--template DIR]

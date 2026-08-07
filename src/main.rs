@@ -48,7 +48,7 @@ fn run(args: &[String]) -> i32 {
 
 fn print_help() {
     println!(
-        "mdweb {VERSION} - a Hugo-like blog engine in pure Rust.
+        "mdweb {VERSION} - a static blog engine written in pure Rust.
 
 USAGE:
     mdweb run   [PATH] [--host HOST] [--port PORT] [--template DIR]
@@ -220,7 +220,7 @@ title: "Welcome"
 layout: "index"
 ---
 
-Welcome to a blog powered by **mdweb**, a Hugo-like engine written in pure Rust.
+Welcome to a blog powered by **mdweb**, a static blog engine written in pure Rust.
 "#;
 
 const ABOUT_MD: &str = r#"---
