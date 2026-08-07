@@ -20,16 +20,7 @@
   {% if category.children %}
   <h3>{{ t.subcategories | default(value="Subcategories") }}</h3>
   <ul class="subcats">
-    {% for ch in category.children %}
-    <li>
-      <a href="{{ ch.url }}">{{ ch.title }}</a>
-      {% if ch.translations %}
-      <span class="subcat-langs">
-        {% for tr in ch.translations %}<a class="lang-badge" href="{{ tr.url }}" hreflang="{{ tr.lang }}" title="{{ tr.title }}">{{ tr.display_name }}</a>{% endfor %}
-      </span>
-      {% endif %}
-    </li>
-    {% endfor %}
+    {% for ch in category.children %}<li><a href="{{ ch.url }}">{{ ch.title }}</a></li>{% endfor %}
   </ul>
   {% endif %}
 </section>

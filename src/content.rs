@@ -155,9 +155,9 @@ pub struct Category {
 
 impl Category {
     /// Serialise a category for navigation listings (sidebar tree, subcategory
-    /// list, etc.). Surfaces translations so templates can render language
-    /// badges for every available variant.
-    fn nav_value(&self, lang: &str, config: &Config, default_lang: &str) -> Value {
+    /// list, etc.). The `title` is resolved in the caller's language; URLs in
+    /// other languages are reachable from each subcategory's own landing page.
+    fn nav_value(&self, lang: &str, config: &Config, _default_lang: &str) -> Value {
         let title = self
             .titles
             .get(lang)
@@ -168,54 +168,10 @@ impl Category {
             .get(lang)
             .cloned()
             .unwrap_or_else(|| "#".to_string());
-        let mut translations: Vec<Value> = Vec::new();
-        for (other_lang, other_url) in &self.urls {
-            if other_lang == lang || other_url.is_empty() || other_url == "#" {
-                continue;
-            }
-            translations.push(Value::Map(BTreeMap::from([
-                ("lang".to_string(), Value::str(other_lang)),
-                (
-                    "title".to_string(),
-                    Value::str(
-                        self.titles
-                            .get(other_lang)
-                            .cloned()
-                            .unwrap_or_else(|| self.slug.clone()),
-                    ),
-                ),
-                ("url".to_string(), Value::str(other_url)),
-                (
-                    "display_name".to_string(),
-                    Value::str(&config.display_name_for(other_lang)),
-                ),
-            ])));
-        }
-        translations.sort_by(|a, b| {
-            let al = a
-                .as_map()
-                .and_then(|m| m.get("lang"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let bl = b
-                .as_map()
-                .and_then(|m| m.get("lang"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            al.cmp(bl)
-        });
+        let _ = config; // kept for future extension without churn
         Value::Map(BTreeMap::from([
             ("title".to_string(), Value::str(&title)),
             ("url".to_string(), Value::str(&url)),
-            ("translations".to_string(), Value::Arr(translations)),
-            (
-                "lang".to_string(),
-                Value::str(if self.titles.contains_key(lang) {
-                    lang
-                } else {
-                    default_lang
-                }),
-            ),
         ]))
     }
 }
