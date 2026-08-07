@@ -167,12 +167,7 @@ my-blog/
         ├── article.html
         ├── page.html
         ├── 404.html
-        ├── partials/      # theme defaults
-        │   ├── header.html
-        │   ├── footer.html
-        │   ├── side.html
-        │   └── inject.html
-        ├── layout/        # site-level slot overrides (shadow theme partials)
+        ├── layout/        # slot fragments (header / footer / side / inject)
         │   ├── header.html
         │   ├── footer.html
         │   ├── side.html
@@ -190,8 +185,8 @@ Notes:
   are accepted at the top of `content/`. Other top-level files are ignored.
 - `_index.md` in a sub-directory becomes that category's index page.
 - A directory's `_index.md` title/summary/description configure the category.
-- Files in `template/<theme>/layout/` (header/footer/side/inject) shadow the
-  theme's `partials/` with the same name.
+- Slot fragments live in `template/<theme>/layout/` (header / footer / side /
+  inject). Edit them in place to customize the theme.
 - Files in `template/<theme>/static/` are served at `/static/<path>`.
 
 ## Static assets
@@ -349,11 +344,10 @@ in `site.toml` (or leave it unset / empty to use the built-in `default`).
 `mdweb new` writes `template/default/` so you can edit the active theme in place
 or duplicate it under a new name to switch.
 
-Resolution order for a slot/partial name:
+Resolution order for a slot fragment:
 
 1. `template/<theme>/layout/<name>.html` from the doc directory (highest priority)
-2. `template/<theme>/partials/<name>.html`
-3. the built-in default partial
+2. the built-in default partial
 
 ### Template syntax
 

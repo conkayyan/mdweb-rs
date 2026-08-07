@@ -162,13 +162,10 @@ fn opt_str(s: &str) -> Value {
 /// Render a layout slot with doc-partial precedence over theme-partial.
 fn render_slot(site: &Site, ctx: &Value, slot: &str) -> Value {
     let engine = &site.engine;
-    let name = if engine.has(&format!("slot::{slot}")) {
-        format!("slot::{slot}")
-    } else if engine.has(&format!("partials/{slot}.html")) {
-        format!("partials/{slot}.html")
-    } else {
+    let name = format!("layout/{slot}.html");
+    if !engine.has(&name) {
         return Value::Null;
-    };
+    }
     match engine.render(&name, ctx) {
         Ok(html) => Value::str(html),
         Err(e) => {

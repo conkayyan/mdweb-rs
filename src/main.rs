@@ -172,10 +172,6 @@ fn cmd_create(args: &[String]) -> i32 {
         ("content/notes/tips.zh.md", TIPS_ZH_MD),
         ("samples/page.md", SAMPLE_PAGE_MD),
         ("samples/post.md", SAMPLE_POST_MD),
-        ("template/default/layout/header.html", theme_files::PARTIAL_HEADER),
-        ("template/default/layout/footer.html", theme_files::PARTIAL_FOOTER),
-        ("template/default/layout/side.html", theme_files::PARTIAL_SIDE),
-        ("template/default/layout/inject.html", theme_files::PARTIAL_INJECT),
         ("template/default/static/style.css", theme_files::STYLE),
     ];
     for (rel, content) in files {
@@ -195,11 +191,11 @@ fn cmd_create(args: &[String]) -> i32 {
         ("template/default/page.html", theme_files::PAGE),
         ("template/default/search.html", theme_files::SEARCH),
         ("template/default/404.html", theme_files::NOT_FOUND),
-        ("template/default/partials/header.html", theme_files::PARTIAL_HEADER),
-        ("template/default/partials/footer.html", theme_files::PARTIAL_FOOTER),
-        ("template/default/partials/side.html", theme_files::PARTIAL_SIDE),
-        ("template/default/partials/inject.html", theme_files::PARTIAL_INJECT),
-        ("template/default/partials/_cat_node.html", theme_files::PARTIAL_CAT_NODE),
+        ("template/default/layout/header.html", theme_files::PARTIAL_HEADER),
+        ("template/default/layout/footer.html", theme_files::PARTIAL_FOOTER),
+        ("template/default/layout/side.html", theme_files::PARTIAL_SIDE),
+        ("template/default/layout/inject.html", theme_files::PARTIAL_INJECT),
+        ("template/default/layout/_cat_node.html", theme_files::PARTIAL_CAT_NODE),
     ];
     for (rel, content) in tpl_files {
         let p = dir.join(rel);
@@ -515,7 +511,8 @@ tags: ["tips"]
 
 - Use double quotes around dates in frontmatter.
 - Name files like `foo.en.md` / `foo.zh.md` for translations.
-- Drop custom partials into `template/default/layout/` to override the theme.
+- Edit `template/default/layout/<slot>.html` to customize the slot
+  fragments (header / footer / side / inject).
 "#;
 
 const TIPS_ZH_MD: &str = r#"---
@@ -526,7 +523,8 @@ tags: ["tips"]
 
 - 日期字段在 frontmatter 中请用双引号包裹。
 - 文件命名为 `foo.en.md` / `foo.zh.md` 即可作为不同语言版本。
-- 把自定义 partial 放到 `template/<theme>/layout/` 下即可覆盖默认主题。
+- 编辑 `template/default/layout/<slot>.html` 即可定制插槽片段
+  （header / footer / side / inject）。
 "#;
 
 /// Reference sample for a single page. Used by `mdweb new page` and written

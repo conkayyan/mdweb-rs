@@ -163,12 +163,7 @@ my-blog/
         ├── article.html
         ├── page.html
         ├── 404.html
-        ├── partials/      # 主题默认片段
-        │   ├── header.html
-        │   ├── footer.html
-        │   ├── side.html
-        │   └── inject.html
-        ├── layout/        # 站点级插槽覆盖（遮蔽主题 partials）
+        ├── layout/        # 插槽片段（header / footer / side / inject）
         │   ├── header.html
         │   ├── footer.html
         │   ├── side.html
@@ -186,7 +181,8 @@ my-blog/
   `_index.<lang>.md`，其他顶层文件会被忽略。
 - 目录下的 `_index.md` 即该分类的索引页。
 - 目录 `_index.md` 的 title/summary/description 用于配置分类信息。
-- `template/<theme>/layout/` 下的文件会覆盖主题 `partials/` 中同名文件。
+- 插槽片段在 `template/<theme>/layout/`（header / footer / side / inject），
+  直接编辑即可定制主题。
 - `template/<theme>/static/` 中的文件通过 `/static/<path>` 对外提供。
 
 ## 静态资源
@@ -343,17 +339,15 @@ meta:                    # 任意映射，模板中以 article.meta 访问
 模板解析顺序：
 
 1. 文档目录里的 `template/<theme>/layout/<name>.html`（最高优先级）
-2. `template/<theme>/partials/<name>.html`
-3. 内置默认 partial（Themes）
+2. 内置默认 partial（Themes）
 
-主题即一组模板目录。站点本地 `template/` 目录会覆盖内置默认主题。`mdweb new`
+主题即一组模板目录。站点本地 `template/` 目录会覆盖内置默认主题。`mdweb create`
 会复制一份默认主题，方便你随意修改。
 
 插槽 / partial 的解析优先级：
 
 1. doc 目录下的 `template/<theme>/layout/<name>.html`（优先级最高）
-2. `<theme>/partials/<name>.html`
-3. 内置默认 partial
+2. 内置默认 partial
 
 ### 模板语法
 

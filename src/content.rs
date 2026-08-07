@@ -17,45 +17,12 @@ pub mod theme_files {
     pub const PAGE: &str = include_str!("../template/default/page.html");
     pub const SEARCH: &str = include_str!("../template/default/search.html");
     pub const NOT_FOUND: &str = include_str!("../template/default/404.html");
-    pub const PARTIAL_HEADER: &str = include_str!("../template/default/partials/header.html");
-    pub const PARTIAL_FOOTER: &str = include_str!("../template/default/partials/footer.html");
-    pub const PARTIAL_SIDE: &str = include_str!("../template/default/partials/side.html");
-    pub const PARTIAL_INJECT: &str = include_str!("../template/default/partials/inject.html");
-    pub const PARTIAL_CAT_NODE: &str = include_str!("../template/default/partials/_cat_node.html");
+    pub const PARTIAL_HEADER: &str = include_str!("../template/default/layout/header.html");
+    pub const PARTIAL_FOOTER: &str = include_str!("../template/default/layout/footer.html");
+    pub const PARTIAL_SIDE: &str = include_str!("../template/default/layout/side.html");
+    pub const PARTIAL_INJECT: &str = include_str!("../template/default/layout/inject.html");
+    pub const PARTIAL_CAT_NODE: &str = include_str!("../template/default/layout/_cat_node.html");
     pub const STYLE: &str = include_str!("../static/style.css");
-}
-
-/// Layout partials from the doc's `template/<theme>/layout/` directory.
-#[derive(Debug, Clone, Default)]
-pub struct Layout {
-    pub header: Option<String>,
-    pub footer: Option<String>,
-    pub side: Option<String>,
-    pub inject: Option<String>,
-}
-
-impl Layout {
-    pub fn load(doc_root: &Path, theme: &str) -> Layout {
-        let mut l = Layout::default();
-        let layout_dir = doc_root.join("template").join(theme).join("layout");
-        let p = layout_dir.join("header.html");
-        if let Ok(s) = std::fs::read_to_string(&p) {
-            l.header = Some(s);
-        }
-        let p = layout_dir.join("footer.html");
-        if let Ok(s) = std::fs::read_to_string(&p) {
-            l.footer = Some(s);
-        }
-        let p = layout_dir.join("side.html");
-        if let Ok(s) = std::fs::read_to_string(&p) {
-            l.side = Some(s);
-        }
-        let p = layout_dir.join("inject.html");
-        if let Ok(s) = std::fs::read_to_string(&p) {
-            l.inject = Some(s);
-        }
-        l
-    }
 }
 
 /// A rendered article/page in one language.
@@ -207,9 +174,8 @@ impl Site {
         } else {
             config.theme.clone()
         };
-        let layout = Layout::load(&doc_root, &theme_name);
         let (engine, engine_embedded) =
-            load_engine(&config, &doc_root, &layout, &theme_name, template_override)?;
+            load_engine(&config, &doc_root, &theme_name, template_override)?;
 
         let mut list: Vec<(String, PathBuf)> = Vec::new();
         walk_doc(&doc_root, &doc_root, &mut list);
@@ -525,7 +491,6 @@ impl Site {
 fn load_engine(
     _config: &Config,
     doc_root: &Path,
-    layout: &Layout,
     theme_name: &str,
     override_dir: Option<PathBuf>,
 ) -> Result<(Engine, bool), String> {
@@ -555,16 +520,6 @@ fn load_engine(
         }
     };
 
-    for (slot, src) in [
-        ("header", layout.header.as_deref()),
-        ("footer", layout.footer.as_deref()),
-        ("side", layout.side.as_deref()),
-        ("inject", layout.inject.as_deref()),
-    ] {
-        if let Some(s) = src {
-            engine.add(&format!("slot::{slot}"), s)?;
-        }
-    }
     Ok((engine, embedded))
 }
 
@@ -577,11 +532,11 @@ fn load_embedded(engine: &mut Engine) -> Result<(), String> {
         ("page.html", theme_files::PAGE.to_string()),
         ("search.html", theme_files::SEARCH.to_string()),
         ("404.html", theme_files::NOT_FOUND.to_string()),
-        ("partials/header.html", theme_files::PARTIAL_HEADER.to_string()),
-        ("partials/footer.html", theme_files::PARTIAL_FOOTER.to_string()),
-        ("partials/side.html", theme_files::PARTIAL_SIDE.to_string()),
-        ("partials/inject.html", theme_files::PARTIAL_INJECT.to_string()),
-        ("partials/_cat_node.html", theme_files::PARTIAL_CAT_NODE.to_string()),
+        ("layout/header.html", theme_files::PARTIAL_HEADER.to_string()),
+        ("layout/footer.html", theme_files::PARTIAL_FOOTER.to_string()),
+        ("layout/side.html", theme_files::PARTIAL_SIDE.to_string()),
+        ("layout/inject.html", theme_files::PARTIAL_INJECT.to_string()),
+        ("layout/_cat_node.html", theme_files::PARTIAL_CAT_NODE.to_string()),
     ])?;
     Ok(())
 }

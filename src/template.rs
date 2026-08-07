@@ -426,8 +426,8 @@ mod tests {
             ("article.html", include_str!("../template/default/article.html")),
             ("page.html", include_str!("../template/default/page.html")),
             ("404.html", include_str!("../template/default/404.html")),
-            ("partials/header.html", include_str!("../template/default/partials/header.html")),
-            ("partials/side.html", include_str!("../template/default/partials/side.html")),
+            ("layout/header.html", include_str!("../template/default/layout/header.html")),
+            ("layout/side.html", include_str!("../template/default/layout/side.html")),
         ];
         for (name, src) in files {
             let mut e = Engine::new();
@@ -435,12 +435,12 @@ mod tests {
                 panic!("{name} failed: {err}");
             }
         }
-        let header = include_str!("../template/default/partials/header.html");
+        let header = include_str!("../template/default/layout/header.html");
         assert!(
             header.contains("current_lang_display_name"),
             "header.html should reference current_lang_display_name"
         );
-        let side = include_str!("../template/default/partials/side.html");
+        let side = include_str!("../template/default/layout/side.html");
         assert!(!side.contains("is_zh"), "side.html should no longer reference is_zh");
     }
 }
