@@ -1,0 +1,8 @@
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="{{ home_url }}">{{ title }}</a>
+    <nav class="langs">
+      {% for l in languages %}<a href="{{ l.url }}">{{ l.code }}</a>{% endfor %}
+    </nav>
+  </div>
+</header>

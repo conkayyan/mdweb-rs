@@ -1,0 +1,19 @@
+<nav class="category-nav">
+  <h3>Categories</h3>
+  {% if categories %}
+  <ul>
+    {% for c in categories %}
+    <li>
+      <a href="{{ c.url }}">{{ c.title }}</a>
+      {% if c.children %}
+      <ul>
+        {% for ch in c.children %}<li><a href="{{ ch.url }}">{{ ch.title }}</a></li>{% endfor %}
+      </ul>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No categories yet.</p>
+  {% endif %}
+</nav>

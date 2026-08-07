@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ article.title }} · {{ title }}{% endblock title %}
+{% block content %}
+<article class="post">
+  <h1 class="post-title">{{ article.title }}</h1>
+  <div class="post-meta">
+    {% if article.date %}<span>Published: <time datetime="{{ article.date_iso }}">{{ article.date }}</time></span>{% endif %}
+    {% if article.updated %}<span>Updated: <time datetime="{{ article.updated_iso }}">{{ article.updated }}</time></span>{% endif %}
+    {% if article.author %}<span>Author: {{ article.author }}</span>{% endif %}
+  </div>
+  {% if article.tags %}<div class="tags">{% for t in article.tags %}<span class="tag">{{ t }}</span>{% endfor %}</div>{% endif %}
+  <div class="post-content">{{ article.content | safe }}</div>
+  {% if article.translations %}
+  <div class="translations">
+    <span>Read in:</span>
+    {% for t in article.translations %}<a href="{{ t.url }}">{{ t.lang }}</a>{% endfor %}
+  </div>
+  {% endif %}
+  <nav class="post-nav">
+    {% if article.prev %}<a class="prev" href="{{ article.prev.url }}">← {{ article.prev.title }}</a>{% endif %}
+    {% if article.next %}<a class="next" href="{{ article.next.url }}">{{ article.next.title }} →</a>{% endif %}
+  </nav>
+</article>
+{% endblock content %}

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ title }}{% endblock title %}</title>
+  {% if description %}<meta name="description" content="{{ description }}">{% endif %}
+  {% if keywords %}<meta name="keywords" content="{{ keywords }}">{% endif %}
+  <link rel="stylesheet" href="/static/style.css">
+  {% block extra_head %}{% endblock extra_head %}
+  {{ inject | safe }}
+</head>
+<body>
+  {{ header | safe }}
+  <div class="layout">
+    <aside class="sidebar">
+      {{ side | safe }}
+    </aside>
+    <main class="main">
+      {% block content %}{% endblock content %}
+    </main>
+  </div>
+  {{ footer | safe }}
+</body>
+</html>
