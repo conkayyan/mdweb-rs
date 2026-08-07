@@ -147,7 +147,7 @@ description = "使用 mdweb 构建的演示站点，支持多语言。"
 description = "A demo site"
 
 [params]                     # arbitrary parameters exposed to templates as config.params
-github = "https://github.com/conkay/mdweb"
+github = "https://github.com/conkayyan/mdweb-rs"
 ```
 
 ## Frontmatter

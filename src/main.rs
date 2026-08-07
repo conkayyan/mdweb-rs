@@ -336,7 +336,7 @@ const LAYOUT_HEADER: &str = r##"<header class="site-header">
 "##;
 
 const LAYOUT_FOOTER: &str = r##"<footer class="site-footer">
-  <p>Powered by <a href="https://github.com/conkay/mdweb">mdweb</a> · © {{ current_year }} {{ title }}</p>
+  <p>Powered by <a href="https://github.com/conkayyan/mdweb-rs">mdweb</a> · © {{ current_year }} {{ title }}</p>
 </footer>
 "##;
 
