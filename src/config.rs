@@ -10,7 +10,6 @@ pub struct LangMeta {
     pub title: Option<String>,
     pub description: Option<String>,
     pub keywords: Option<String>,
-    pub extra: Value,
 }
 
 /// Site configuration from `site.toml`.
@@ -114,7 +113,6 @@ impl Config {
                             .get("keywords")
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string()),
-                        extra: Value::Map(mm),
                     },
                 );
             }

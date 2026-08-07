@@ -27,16 +27,8 @@ impl Value {
         Value::Int(i)
     }
 
-    pub fn arr(v: Vec<Value>) -> Value {
-        Value::Arr(v)
-    }
-
     pub fn map() -> Value {
         Value::Map(BTreeMap::new())
-    }
-
-    pub fn empty_map(m: BTreeMap<String, Value>) -> Value {
-        Value::Map(m)
     }
 
     pub fn as_str(&self) -> Option<&str> {
@@ -72,10 +64,6 @@ impl Value {
             Value::Map(m) => Some(m),
             _ => None,
         }
-    }
-
-    pub fn is_null(&self) -> bool {
-        matches!(self, Value::Null)
     }
 
     /// Truthiness used by `{% if %}`.

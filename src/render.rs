@@ -88,7 +88,7 @@ fn with_layout(
     site: &Site,
     lang: &str,
     current_url: &str,
-    template_name: &str,
+    _template_name: &str,
     payload_key: &str,
     payload: Value,
 ) -> Result<Value, String> {

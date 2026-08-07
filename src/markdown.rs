@@ -259,7 +259,7 @@ fn inline(s: &str) -> String {
                     None => {
                         best = Some((idx, *tok, *kind));
                     }
-                    Some((bi, bt, _)) => {
+                    Some((bi, _kind, _)) => {
                         if idx < *bi || (idx == *bi && *tok == "**") {
                             best = Some((idx, *tok, *kind));
                         }

@@ -17,7 +17,6 @@ pub enum Node {
 
 #[derive(Debug, Clone)]
 pub struct Template {
-    pub name: String,
     pub nodes: Vec<Node>,
     pub extends: Option<String>,
 }
@@ -55,17 +54,13 @@ impl Engine {
 
     /// Register a template by name, parsing its source.
     pub fn add(&mut self, name: &str, source: &str) -> Result<(), String> {
-                let mut nodes = Vec::new();
+        let mut nodes = Vec::new();
         let mut extends = None;
         let mut stack = Vec::new();
         for lex in lex(source)? {
             build(lex, &mut nodes, &mut extends, &mut stack)?;
         }
-        let tpl = Template {
-            name: name.to_string(),
-            nodes,
-            extends,
-        };
+        let tpl = Template { nodes, extends };
         self.templates.insert(name.to_string(), tpl);
         Ok(())
     }
@@ -212,7 +207,7 @@ fn lex(source: &str) -> Result<Vec<Lex>, String> {
             if let Some(idx) = rest.find(marker) {
                 match first {
                     None => first = Some((idx, marker)),
-                    Some((bi, bm)) => {
+                    Some((bi, _)) => {
                         if idx < bi {
                             first = Some((idx, marker));
                         }
@@ -265,9 +260,9 @@ fn parse_expr_token(marker: &str, content: &str) -> Lex {
         Lex::Expr { expr, safe }
     } else {
         // directive
-        if let Some(name) = content.strip_prefix("endblock") {
+        if content.starts_with("endblock") {
             Lex::EndBlock
-        } else if let Some(name) = content.strip_prefix("endif") {
+        } else if content.starts_with("endif") {
             Lex::EndIf
         } else if let Some(_) = content.strip_prefix("endfor") {
             Lex::EndFor

@@ -174,11 +174,9 @@ pub struct Site {
     pub doc_root: PathBuf,
     pub languages: Vec<String>,
     pub default_lang: String,
-    pub layout: Layout,
     pub tree: Vec<Category>,
     pub articles: Vec<Article>,
     pub home_content: Option<String>,
-    pub static_files: Vec<(String, PathBuf)>,
     pub engine: Engine,
     /// Whether the embedded default static CSS is a valid fallback.
     pub engine_embedded: bool,
@@ -207,7 +205,6 @@ impl Site {
         walk_doc(&doc_root, &doc_root, &mut list);
 
         let mut indices: BTreeMap<String, Vec<Value>> = BTreeMap::new();
-        let mut statics: Vec<(String, PathBuf)> = Vec::new();
         let mut raws: Vec<RawArticle> = Vec::new();
 
         for (rel_str, abs) in list {
@@ -249,8 +246,6 @@ impl Site {
                         mtime,
                     });
                 }
-            } else if !rel_str.starts_with('_') {
-                statics.push((rel_str.clone(), abs));
             }
         }
 
@@ -402,11 +397,9 @@ impl Site {
             doc_root,
             languages,
             default_lang,
-            layout,
             tree,
             articles,
             home_content,
-            static_files: statics,
             engine,
             engine_embedded,
         })
