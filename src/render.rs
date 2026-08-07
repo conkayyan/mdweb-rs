@@ -6,19 +6,23 @@ use crate::value::Value;
 /// Build the shared context for a language.
 fn base_ctx(site: &Site, lang: &str, current_url: &str) -> Value {
     let config = &site.config;
+    let home_url = config.lang_prefix(lang);
+    let home_active = current_url == home_url;
     let mut languages: Vec<Value> = Vec::new();
     for l in &site.languages {
+        let url = config.lang_prefix(l);
         languages.push(Value::Map(BTreeMap::from([
             ("code".to_string(), Value::str(l)),
             ("title".to_string(), Value::str(&config.title_for(l))),
-            ("url".to_string(), Value::str(&config.lang_prefix(l))),
+            ("url".to_string(), Value::str(&url)),
+            ("active".to_string(), Value::Bool(l == lang)),
         ])));
     }
     let mut config_langs: Vec<Value> = Vec::new();
     for l in &config.languages {
         config_langs.push(Value::str(l));
     }
-    let categories = site.category_tree_value(&site.tree, lang);
+    let categories = site.category_tree_value(&site.tree, lang, current_url);
     let year = current_year().to_string();
     Value::Map(BTreeMap::from([
         (
@@ -49,8 +53,10 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str) -> Value {
         ),
         ("keywords".to_string(), opt_str(&config.keywords_for(lang))),
         ("lang".to_string(), Value::str(lang)),
+        ("is_zh".to_string(), Value::Bool(lang == "zh")),
         ("languages".to_string(), Value::Arr(languages)),
-        ("home_url".to_string(), Value::str(&config.lang_prefix(lang))),
+        ("home_url".to_string(), Value::str(&home_url)),
+        ("home_active".to_string(), Value::Bool(home_active)),
         ("current_url".to_string(), Value::str(current_url)),
         ("categories".to_string(), categories),
         ("current_year".to_string(), Value::str(&year)),

@@ -462,19 +462,21 @@ impl Site {
         ]))
     }
 
-    pub fn category_tree_value(&self, cats: &[Category], lang: &str) -> Value {
+    pub fn category_tree_value(&self, cats: &[Category], lang: &str, current_url: &str) -> Value {
         let mut out = Vec::new();
         for c in cats {
             let mut m = BTreeMap::new();
+            let url = c.urls.get(lang).cloned().unwrap_or_else(|| "#".to_string());
             m.insert(
                 "title".to_string(),
                 Value::str(c.titles.get(lang).cloned().unwrap_or_else(|| c.slug.clone())),
             );
+            m.insert("url".to_string(), Value::str(&url));
+            m.insert("active".to_string(), Value::Bool(url == current_url));
             m.insert(
-                "url".to_string(),
-                Value::str(c.urls.get(lang).cloned().unwrap_or_else(|| "#".to_string())),
+                "children".to_string(),
+                self.category_tree_value(&c.children, lang, current_url),
             );
-            m.insert("children".to_string(), self.category_tree_value(&c.children, lang));
             out.push(Value::Map(m));
         }
         Value::Arr(out)

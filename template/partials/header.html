@@ -1,8 +1,19 @@
 <header class="site-header">
-  <div class="container">
-    <a class="brand" href="{{ home_url }}">{{ title }}</a>
-    <nav class="langs">
-      {% for l in languages %}<a href="{{ l.url }}">{{ l.code }}</a>{% endfor %}
+  <div class="container header-inner">
+    <a class="brand" href="{{ home_url }}">
+      <span class="brand-mark" aria-hidden="true">M</span>
+      <span class="brand-name">{{ title }}</span>
+    </a>
+    <nav class="primary-nav" aria-label="Primary">
+      <a class="nav-link{% if home_active %} is-active{% endif %}" href="{{ home_url }}">Home</a>
+      {% for c in categories %}
+      <a class="nav-link{% if c.active %} is-active{% endif %}" href="{{ c.url }}">{{ c.title }}</a>
+      {% endfor %}
+    </nav>
+    <nav class="langs" aria-label="Languages">
+      {% for l in languages %}
+      <a class="lang-link{% if l.active %} is-active{% endif %}" href="{{ l.url }}" title="{{ l.title }}">{{ l.code }}</a>
+      {% endfor %}
     </nav>
   </div>
 </header>

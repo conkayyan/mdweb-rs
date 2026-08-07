@@ -153,9 +153,11 @@ fn cmd_new(args: &[String]) -> i32 {
         ("_index.md", INDEX_MD),
         ("about.md", ABOUT_MD),
         ("posts/_index.md", POSTS_INDEX_MD),
+        ("posts/_index.zh.md", POSTS_INDEX_ZH_MD),
         ("posts/hello-world.md", HELLO_MD),
         ("posts/hello-world.zh.md", HELLO_ZH_MD),
         ("notes/_index.md", NOTES_INDEX_MD),
+        ("notes/_index.zh.md", NOTES_INDEX_ZH_MD),
         ("notes/tips.md", TIPS_MD),
         ("_layout/header.html", LAYOUT_HEADER),
         ("_layout/footer.html", LAYOUT_FOOTER),
@@ -240,6 +242,14 @@ summary: "All articles go here."
 Articles are grouped by date and category.
 "#;
 
+const POSTS_INDEX_ZH_MD: &str = r#"---
+title: "文章"
+summary: "所有文章都在这里。"
+---
+
+文章按日期和分类归档。
+"#;
+
 
 const HELLO_MD: &str = r#"---
 title: "Hello World"
@@ -287,6 +297,12 @@ summary: "Quick notes and snippets."
 ---
 "#;
 
+const NOTES_INDEX_ZH_MD: &str = r#"---
+title: "笔记"
+summary: "随手记录的小笔记。"
+---
+"#;
+
 const TIPS_MD: &str = r#"---
 title: "A Few Tips"
 date: "2024-03-02"
@@ -299,10 +315,23 @@ tags: ["tips"]
 "#;
 
 const LAYOUT_HEADER: &str = r##"<header class="site-header">
-  <a class="brand" href="{{ home_url }}">{{ title }}</a>
-  <nav class="langs">
-    {% for l in languages %}<a href="{{ l.url }}">{{ l.code }}</a>{% endfor %}
-  </nav>
+  <div class="container header-inner">
+    <a class="brand" href="{{ home_url }}">
+      <span class="brand-mark" aria-hidden="true">M</span>
+      <span class="brand-name">{{ title }}</span>
+    </a>
+    <nav class="primary-nav" aria-label="Primary">
+      <a class="nav-link{% if home_active %} is-active{% endif %}" href="{{ home_url }}">Home</a>
+      {% for c in categories %}
+      <a class="nav-link{% if c.active %} is-active{% endif %}" href="{{ c.url }}">{{ c.title }}</a>
+      {% endfor %}
+    </nav>
+    <nav class="langs" aria-label="Languages">
+      {% for l in languages %}
+      <a class="lang-link{% if l.active %} is-active{% endif %}" href="{{ l.url }}" title="{{ l.title }}">{{ l.code }}</a>
+      {% endfor %}
+    </nav>
+  </div>
 </header>
 "##;
 
@@ -312,22 +341,22 @@ const LAYOUT_FOOTER: &str = r##"<footer class="site-footer">
 "##;
 
 const LAYOUT_SIDE: &str = r##"<nav class="category-nav">
-  <h3>Categories</h3>
+  <h3>{% if is_zh %}分类{% else %}Categories{% endif %}</h3>
   {% if categories %}
   <ul>
   {% for c in categories %}
     <li>
-      <a href="{{ c.url }}">{{ c.title }}</a>
+      <a href="{{ c.url }}"{% if c.active %} class="is-active"{% endif %}>{{ c.title }}</a>
       {% if c.children %}
       <ul>
-      {% for ch in c.children %}<li><a href="{{ ch.url }}">{{ ch.title }}</a></li>{% endfor %}
+      {% for ch in c.children %}<li><a href="{{ ch.url }}"{% if ch.active %} class="is-active"{% endif %}>{{ ch.title }}</a></li>{% endfor %}
       </ul>
       {% endif %}
     </li>
   {% endfor %}
   </ul>
   {% else %}
-  <p>No categories yet.</p>
+  <p>{% if is_zh %}暂无分类{% else %}No categories yet.{% endif %}</p>
   {% endif %}
 </nav>
 "##;
