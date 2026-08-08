@@ -41,9 +41,7 @@ pub fn parse_frontmatter(source: &str) -> (BTreeMap<String, Value>, String) {
     if !found {
         return (BTreeMap::new(), source.to_string());
     }
-    let mut block = lines.join("\n");
-    // Re-add blank lines that lines() collapses
-    block = block; // keep simple
+    let block = lines.join("\n");
 
     let fields = if delim == "+++" {
         parse_toml(&block).ok().and_then(|v| v.as_map().cloned()).unwrap_or_default()

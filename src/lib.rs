@@ -5,5 +5,6 @@ pub mod markdown;
 pub mod parse;
 pub mod render;
 pub mod server;
+pub mod site;
 pub mod template;
 pub mod value;

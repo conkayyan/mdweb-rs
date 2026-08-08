@@ -10,23 +10,25 @@ use crate::value::Value;
 
 /// Embedded default theme files.
 pub mod theme_files {
-    pub const BASE: &str = include_str!("../template/default/base.html");
-    pub const INDEX: &str = include_str!("../template/default/index.html");
-    pub const CATEGORY: &str = include_str!("../template/default/category.html");
-    pub const ARTICLE: &str = include_str!("../template/default/article.html");
-    pub const PAGE: &str = include_str!("../template/default/page.html");
-    pub const SEARCH: &str = include_str!("../template/default/search.html");
-    pub const TAG: &str = include_str!("../template/default/tag.html");
-    pub const TAGS: &str = include_str!("../template/default/tags.html");
-    pub const NOT_FOUND: &str = include_str!("../template/default/404.html");
-    pub const PARTIAL_HEADER: &str = include_str!("../template/default/layout/header.html");
-    pub const PARTIAL_FOOTER: &str = include_str!("../template/default/layout/footer.html");
-    pub const PARTIAL_SIDE: &str = include_str!("../template/default/layout/side.html");
-    pub const PARTIAL_INJECT: &str = include_str!("../template/default/layout/inject.html");
-    pub const PARTIAL_CAT_NODE: &str = include_str!("../template/default/layout/_cat_node.html");
-    pub const PARTIAL_NAV_NODE: &str = include_str!("../template/default/layout/_nav_node.html");
-    pub const PAGE_SECTION: &str = include_str!("../template/default/page_section.html");
-    pub const STYLE: &str = include_str!("../static/style.css");
+    pub const BASE: &str = include_str!("../site/template/default/base.html");
+    pub const INDEX: &str = include_str!("../site/template/default/index.html");
+    pub const CATEGORY: &str = include_str!("../site/template/default/category.html");
+    pub const ARTICLE: &str = include_str!("../site/template/default/article.html");
+    pub const PAGE: &str = include_str!("../site/template/default/page.html");
+    pub const SEARCH: &str = include_str!("../site/template/default/search.html");
+    pub const TAG: &str = include_str!("../site/template/default/tag.html");
+    pub const TAGS: &str = include_str!("../site/template/default/tags.html");
+    pub const NOT_FOUND: &str = include_str!("../site/template/default/404.html");
+    pub const PARTIAL_HEADER: &str = include_str!("../site/template/default/layout/header.html");
+    pub const PARTIAL_FOOTER: &str = include_str!("../site/template/default/layout/footer.html");
+    pub const PARTIAL_SIDE: &str = include_str!("../site/template/default/layout/side.html");
+    pub const PARTIAL_INJECT: &str = include_str!("../site/template/default/layout/inject.html");
+    pub const PARTIAL_CAT_NODE: &str =
+        include_str!("../site/template/default/layout/_cat_node.html");
+    pub const PARTIAL_NAV_NODE: &str =
+        include_str!("../site/template/default/layout/_nav_node.html");
+    pub const PAGE_SECTION: &str = include_str!("../site/template/default/page_section.html");
+    pub const STYLE: &str = include_str!("../site/template/default/static/style.css");
 }
 
 /// URL-encode a string so it can live in a single URL path segment. Only the
