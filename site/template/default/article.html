@@ -20,8 +20,8 @@
   <div class="post-content">{{ article.content | safe }}</div>
   {% if article.prev or article.next %}
   <nav class="post-nav">
-    {% if article.prev %}<a class="prev" href="{{ article.prev.url }}">← {{ t.prev }}: {{ article.prev.title }}</a>{% endif %}
-    {% if article.next %}<a class="next" href="{{ article.next.url }}">{{ article.next.title }} ({{ t.next }}) →</a>{% endif %}
+    {% if article.prev %}<a class="prev" href="{{ article.prev.url }}">&lt; {{ t.prev }}: {{ article.prev.title }}</a>{% endif %}
+    {% if article.next %}<a class="next" href="{{ article.next.url }}">{{ article.next.title }} ({{ t.next }}) &gt;</a>{% endif %}
   </nav>
   {% endif %}
 </article>

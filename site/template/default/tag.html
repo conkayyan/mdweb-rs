@@ -26,9 +26,9 @@
   {% endif %}
   {% if tag.pagination.show_pagination %}
   <nav class="pagination" aria-label="Pagination">
-    {% if tag.pagination.has_prev %}<a class="pagination-prev" href="?page={{ tag.pagination.prev_page }}" rel="prev">{{ t.prev_page | default(value="< Previous") }}</a>{% endif %}
+    {% if tag.pagination.has_prev %}<a class="pagination-prev" href="?page={{ tag.pagination.prev_page }}" rel="prev" aria-label="{{ t.prev_page }}">&lt;</a>{% endif %}
     <span class="pagination-status">{{ tag.pagination.page }} / {{ tag.pagination.total_pages }}</span>
-    {% if tag.pagination.has_next %}<a class="pagination-next" href="?page={{ tag.pagination.next_page }}" rel="next">{{ t.next_page | default(value="Next >") }}</a>{% endif %}
+    {% if tag.pagination.has_next %}<a class="pagination-next" href="?page={{ tag.pagination.next_page }}" rel="next" aria-label="{{ t.next_page }}">&gt;</a>{% endif %}
   </nav>
   {% endif %}
 </section>

@@ -40,6 +40,7 @@ pub(crate) const I18N_DEFAULTS: &[(&str, &str)] = &[
     ("next_page", "Next >"),
     ("not_found", "Not Found"),
     ("not_found_desc", "The page you're looking for doesn't exist."),
+    ("back_home", "Back home"),
     ("search", "Search"),
     ("search_placeholder", "Search…"),
     ("search_no_results", "No matching posts."),
