@@ -657,6 +657,74 @@ impl Site {
         Value::Arr(out)
     }
 
+    /// Build a breadcrumb trail for the given path. The result is a list of
+    /// `{title, url, is_current}` maps starting from the site root. The
+    /// final element is the current item (`is_current = true`, no `url`).
+    /// Each ancestor's title is resolved from the category tree (for
+    /// `posts/*` paths) or from `_index.md` frontmatter (for any other
+    /// path), falling back to the directory slug.
+    pub fn breadcrumbs(&self, path: &[String], lang: &str, current_title: &str) -> Vec<Value> {
+        // First item is a fixed "Index" / "首页" label rather than the site
+        // title (which can be long). i18n key: `breadcrumb_home`.
+        let home_label = self.config.t("breadcrumb_home", lang);
+        let mut items: Vec<Value> = vec![Value::Map(BTreeMap::from([
+            ("title".to_string(), Value::str(&home_label)),
+            (
+                "url".to_string(),
+                Value::str(&self.config.lang_prefix(lang)),
+            ),
+            ("is_current".to_string(), Value::Bool(false)),
+        ]))];
+        let mut acc: Vec<String> = Vec::new();
+        for seg in path {
+            acc.push(seg.clone());
+            let title = self.breadcrumb_title(&acc, lang);
+            let url = url_for(&self.config, &self.default_lang, &acc, None, lang);
+            items.push(Value::Map(BTreeMap::from([
+                ("title".to_string(), Value::str(&title)),
+                ("url".to_string(), Value::str(&url)),
+                ("is_current".to_string(), Value::Bool(false)),
+            ])));
+        }
+        items.push(Value::Map(BTreeMap::from([
+            ("title".to_string(), Value::str(current_title)),
+            ("url".to_string(), Value::Null),
+            ("is_current".to_string(), Value::Bool(true)),
+        ])));
+        items
+    }
+
+    fn breadcrumb_title(&self, path: &[String], lang: &str) -> String {
+        // 1. Category tree (covers `posts/*` and any other categorised path).
+        if let Some(cat) = find_category_by_path(&self.tree, path) {
+            return cat
+                .titles
+                .get(lang)
+                .cloned()
+                .unwrap_or_else(|| cat.slug.clone());
+        }
+        // 2. `_index.md` frontmatter for any other directory.
+        let key = path.join("/");
+        if let Some(items) = self.indices.get(&key) {
+            let entry = items
+                .iter()
+                .find(|v| v.path("lang").and_then(|l| l.as_str()) == Some(lang))
+                .or_else(|| items.first());
+            if let Some(item) = entry {
+                if let Some(t) = item
+                    .path("fields")
+                    .and_then(|f| f.as_map())
+                    .and_then(|m| m.get("title"))
+                    .and_then(|v| v.as_str())
+                {
+                    return t.to_string();
+                }
+            }
+        }
+        // 3. Fallback to the directory slug.
+        path.last().cloned().unwrap_or_default()
+    }
+
     /// Payload for a directory landing page (e.g. `/pages/docs/`). Looks up
     /// `_index.md` metadata in the requested language (falling back to the
     /// default language) and lists direct children: subdirectory links first,
@@ -946,6 +1014,18 @@ fn parse_name(stem: &str, languages: &[String], default: &str) -> (String, Strin
         }
     }
     (stem.to_string(), default.to_string())
+}
+
+fn find_category_by_path<'a>(cats: &'a [Category], path: &[String]) -> Option<&'a Category> {
+    for c in cats {
+        if c.path == path {
+            return Some(c);
+        }
+        if let Some(found) = find_category_by_path(&c.children, path) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 fn split_dir(dir: &str) -> Vec<String> {

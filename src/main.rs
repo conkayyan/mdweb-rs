@@ -337,6 +337,7 @@ keywords = "博客, rust"
 
 [i18n.zh]
 home          = "首页"
+breadcrumb_home = "首页"
 categories    = "分类"
 pages         = "页面"
 subpages      = "本节页面"

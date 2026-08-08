@@ -18,6 +18,7 @@ pub struct LangMeta {
 /// exposed to templates.
 pub(crate) const I18N_DEFAULTS: &[(&str, &str)] = &[
     ("home", "Home"),
+    ("breadcrumb_home", "Index"),
     ("categories", "Categories"),
     ("pages", "Pages"),
     ("subpages", "Pages in this section"),

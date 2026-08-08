@@ -2,6 +2,12 @@
 {% block title %}{{ article.title }} · {{ title }}{% endblock title %}
 {% block content %}
 <article class="post">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    {% for item in breadcrumbs %}
+      {% if item.url %}<a href="{{ item.url }}">{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}
+      {% if item.is_current %}{% else %}<span class="separator">/</span>{% endif %}
+    {% endfor %}
+  </nav>
   <h1 class="post-title">{{ article.title }}</h1>
   {% if article.reading_minutes %}<p class="reading-time">{{ article.reading_minutes }} {{ t.reading_time }}</p>{% endif %}
   <div class="post-content">{{ article.content | safe }}</div>

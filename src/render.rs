@@ -259,14 +259,22 @@ pub fn render_article(site: &Site, lang: &str, article: &Article) -> Result<Stri
     } else {
         "page.html"
     };
+    let breadcrumbs = site.breadcrumbs(&article.path, lang, &article.title);
+    let payload = article.to_value();
     let ctx = with_layout(
         site,
         lang,
         &article.url,
         template,
         "article",
-        article.to_value(),
+        payload,
     )?;
+    // Inject breadcrumbs at top-level so the template can iterate
+    // `{% for item in breadcrumbs %}`.
+    let mut ctx = ctx;
+    if let Value::Map(m) = &mut ctx {
+        m.insert("breadcrumbs".to_string(), Value::Arr(breadcrumbs));
+    }
     render_with_context(site, template, &ctx)
 }
 
@@ -299,7 +307,17 @@ pub fn render_section(
         .and_then(|m| m.get("url").and_then(|v| v.as_str()))
         .unwrap_or("")
         .to_string();
+    let title = payload
+        .as_map()
+        .and_then(|m| m.get("title").and_then(|v| v.as_str()))
+        .unwrap_or("")
+        .to_string();
+    let breadcrumbs = site.breadcrumbs(dir_path, lang, &title);
     let ctx = with_layout(site, lang, &url, "page_section.html", "section", payload)?;
+    let mut ctx = ctx;
+    if let Value::Map(m) = &mut ctx {
+        m.insert("breadcrumbs".to_string(), Value::Arr(breadcrumbs));
+    }
     render_with_context(site, "page_section.html", &ctx)
 }
 

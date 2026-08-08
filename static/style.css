@@ -413,6 +413,19 @@ button.nav-link {
   font-size: .9rem;
 }
 .pagination-status { font-variant-numeric: tabular-nums; }
+
+.breadcrumb {
+  font-size: .85rem;
+  color: var(--c-muted, #888);
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+.breadcrumb a { color: var(--c-muted, #888); }
+.breadcrumb a:hover { color: var(--c-accent); }
+.breadcrumb .separator { opacity: .5; }
 .pagination a {
   padding: 4px 10px;
   border: 1px solid var(--c-border, #e5e7eb);

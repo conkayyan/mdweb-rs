@@ -2,6 +2,12 @@
 {% block title %}{{ section.title }} · {{ title }}{% endblock title %}
 {% block content %}
 <section class="page-section">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    {% for item in breadcrumbs %}
+      {% if item.url %}<a href="{{ item.url }}">{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}
+      {% if item.is_current %}{% else %}<span class="separator">/</span>{% endif %}
+    {% endfor %}
+  </nav>
   <h1 class="section-title">{{ section.title }}</h1>
   {% if section.summary %}
   <p class="section-description">{{ section.summary }}</p>

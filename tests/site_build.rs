@@ -534,6 +534,87 @@ fn article_to_value_exposes_lang_field() {
 }
 
 #[test]
+fn breadcrumbs_render_above_posts_and_pages() {
+    // `posts/web/frontend/react.md` → home > posts > web > frontend > title
+    // `pages/docs/guide/intro.md` → home > pages > docs > guide > title
+    let dir = tempdir("crumbs");
+    write(&dir, "site.toml", r#"title = "My Blog"
+languages = ["en", "zh"]
+
+[i18n.zh]
+breadcrumb_home = "首页""#);
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    write(&dir, "content/posts/_index.md", "---\ntitle: Posts\n---\nbody\n");
+    write(&dir, "content/posts/web/_index.md", "---\ntitle: Web\n---\nbody\n");
+    write(
+        &dir,
+        "content/posts/web/frontend/_index.md",
+        "---\ntitle: Frontend\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/posts/web/frontend/react.md",
+        "---\ntitle: A React Note\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/docs/_index.md",
+        "---\ntitle: Docs\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/docs/guide/_index.md",
+        "---\ntitle: Guide\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/docs/guide/intro.md",
+        "---\ntitle: Intro\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/_index.md",
+        "---\ntitle: Pages\n---\nbody\n",
+    );
+    let site = Site::build(&dir, None).expect("build");
+    let post = site.articles.iter().find(|a| a.slug == "react").expect("post");
+    let html = mdweb::render::render_article(&site, "en", post).expect("render post");
+    assert!(html.contains("class=\"breadcrumb\""));
+    assert!(html.contains("href=\"/\">Index"));
+    assert!(html.contains("href=\"/posts/\">Posts"));
+    assert!(html.contains("href=\"/posts/web/\">Web"));
+    assert!(html.contains("href=\"/posts/web/frontend/\">Frontend"));
+    assert!(html.contains(">A React Note<"), "current item is the title");
+    // The current item is rendered as a <span> not an <a>, so no link.
+    let last_span_start = html.rfind("class=\"breadcrumb\"").unwrap_or(0);
+    let last_block = &html[last_span_start..];
+    assert!(last_block.contains("<span>A React Note</span>"), "current item is a non-link span");
+
+    let page = site.articles.iter().find(|a| a.slug == "intro").expect("page");
+    let page_html = mdweb::render::render_article(&site, "en", page).expect("render page");
+    // (pages/_index.md declared above so the "Pages" ancestor title is found)
+    assert!(page_html.contains("href=\"/pages/\">Pages"));
+    assert!(page_html.contains("href=\"/pages/docs/\">Docs"));
+    assert!(page_html.contains("href=\"/pages/docs/guide/\">Guide"));
+    assert!(page_html.contains("<span>Intro</span>"));
+
+    // ZH variant: home title is per-language, ancestor titles come from
+    // the `_index.<lang>.md` frontmatter.
+    write(&dir, "content/pages/docs/_index.zh.md", "---\ntitle: 文档\n---\nbody\n");
+    write(&dir, "content/pages/docs/guide/_index.zh.md", "---\ntitle: 指南\n---\nbody\n");
+    write(&dir, "content/pages/docs/guide/intro.zh.md", "---\ntitle: 简介\n---\nbody\n");
+    write(&dir, "content/pages/_index.zh.md", "---\ntitle: 页面\n---\nbody\n");
+    let site_zh = Site::build(&dir, None).expect("build zh");
+    let intro_zh = site_zh.articles.iter().find(|a| a.slug == "intro" && a.lang == "zh").expect("intro zh");
+    let html_zh = mdweb::render::render_article(&site_zh, "zh", intro_zh).expect("render zh");
+    assert!(html_zh.contains("href=\"/zh/\">首页"), "home is /zh/首页");
+    assert!(html_zh.contains("href=\"/zh/pages/\">页面"));
+    assert!(html_zh.contains("href=\"/zh/pages/docs/\">文档"));
+    assert!(html_zh.contains("href=\"/zh/pages/docs/guide/\">指南"));
+    assert!(html_zh.contains("<span>简介</span>"));
+}
+
+#[test]
 fn listing_pagination_slices_and_pagers_appear() {
     // 7 posts under `posts/`, default `home_limit` = 5 → 2 pages. Page 1
     // holds the newest 5; page 2 holds the 2 oldest.
