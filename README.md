@@ -166,6 +166,8 @@ my-blog/
         ├── category.html
         ├── article.html
         ├── page.html
+        ├── tag.html
+        ├── tags.html
         ├── 404.html
         ├── layout/        # slot fragments (header / footer / side / inject)
         │   ├── header.html
@@ -179,12 +181,14 @@ my-blog/
 Notes:
 
 - `content/` is a transparent container — its name does not appear in URLs.
-  `/content/posts/hello-world.md` is served at `/posts/hello-world/`, and
+  `{{ a.url }}` → `/posts/hello-world/`, and
   `content/_index.md` is served at `/`.
 - `content/_index.md` is the home page; only `_index.md` and `_index.<lang>.md`
   are accepted at the top of `content/`. Other top-level files are ignored.
 - `_index.md` in a sub-directory becomes that category's index page.
 - A directory's `_index.md` title/summary/description configure the category.
+- Tags from any document's frontmatter feed a per-language tag cloud in the
+  sidebar and `/tags/<tag>/` listing pages (see [Tag pages](#tag-pages)).
 - Slot fragments live in `template/<theme>/layout/` (header / footer / side /
   inject). Edit them in place to customize the theme.
 - Files in `template/<theme>/static/` are served at `/static/<path>`.
@@ -242,6 +246,15 @@ author = "Jane Doe"
 language = "en"              # default language (unprefixed URLs)
 languages = ["en", "zh"]     # enabled languages; other languages are ignored
 theme = "default"           # name of a directory under template/; leave empty for built-in default
+
+# Listing limits. Set `0` to disable pagination for that listing.
+home_limit = 10      # articles per page on /
+category_limit = 20  # articles per page in category landings
+pages_limit = 50     # pages per page in a directory landing
+tags_limit = 20      # articles per page on a /tags/<tag>/ landing
+
+# Tag cloud: show the tag widget in the sidebar (true) or hide it (false).
+show_tag_cloud = true
 
 [lang.en]                    # per-language overrides
 title = "My Blog"
@@ -312,9 +325,34 @@ no_posts     = "暂无文章。"
 ```
 
 Available keys: `home`, `categories`, `recent_posts`, `friend_links`, `no_posts`,
-`read_in`, `published`, `updated`, `author`, `prev`, `next`, `not_found`,
-`not_found_desc`. Missing keys fall back to English, then to a built-in default,
-then to the key string itself.
+`tags`, `tag_list`, `read_in`, `published`, `updated`, `author`, `prev`, `next`,
+`not_found`, `not_found_desc`. Missing keys fall back to English, then to a
+built-in default, then to the key string itself.
+
+## Tag pages
+
+Every document's frontmatter `tags` feeds a per-language tag index. The sidebar
+shows a **tag cloud** (every tag weighted by how many documents carry it) that
+is hidden entirely by setting `show_tag_cloud = false` in `site.toml`. Tags are
+clickable **everywhere** — in the sidebar cloud, on article pages, on page
+listings, and in search results — and link to the matching tag listing:
+
+```text
+/tags/              ← index of every tag (per language)
+/tags/<tag>/        ← posts carrying <tag> (default language)
+/<lang>/tags/<tag>/ ← other languages
+```
+
+The sidebar cloud shows at most `tag_cloud_limit` tags (`0` = show all), the
+most-used tags first — each rendered as `name(count)` where `count` is how many
+documents carry the tag. `/tags/` (and `/<lang>/tags/`) lists **every** tag in
+the language in the same `name(count)` form, linked to the matching listing. A
+tag listing page shows every document carrying
+that tag, newest first, with breadcrumbs (`Index › Tags › <tag>`) and pagination
+driven by `tags_limit` (`?page=N`). Tag names with spaces or punctuation are
+percent-encoded in URLs (`my tag` → `/tags/my%20tag/`).
+
+Category listings also show the same breadcrumb trail (`Index › Posts › Web`).
 
 ## Frontmatter
 
@@ -375,6 +413,9 @@ Globally available:
 | `t` | UI string map (keys: `home`, `categories`, `recent_posts`, …) |
 | `current_lang_display_name` | display name for the current language (e.g. button label) |
 | `categories` | category tree (nested `{ title, url, children }`) |
+| `tags` | per-language tag cloud: `[{ name, url, count }, …]` (limited to `tag_cloud_limit`) |
+| `tag_cloud_limit` | maximum sidebar tags to show (`0` = show all) |
+| `show_tag_cloud` | whether the sidebar tag cloud widget is enabled |
 | `home_url` | URL of the home page for the current language |
 | `current_url` | current request URL |
 | `current_year` | current year (for copyright footers) |
@@ -384,7 +425,9 @@ Per-template:
 
 - `index.html` → `home` `{ content, articles: [...] }`
 - `category.html` → `category` `{ title, slug, url, description, content, articles, children }`
-- `article.html` / `page.html` → `article` `{ title, lang, url, date, updated, author, tags, content, meta, fields, ... }`
+- `tag.html` → `tag` `{ name, title, url, articles, pagination, total }`
+- `tags.html` → `tags_index` `{ title, url, tags: [{ name, url, count }], total }`
+- `article.html` / `page.html` → `article` `{ title, lang, url, date, updated, author, tags, tag_links, content, meta, fields, ... }`
 - `404.html` → `page` `{ title: "Not Found" }`
 
 ## Multi-language URLs

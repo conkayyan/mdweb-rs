@@ -2,6 +2,12 @@
 {% block title %}{{ category.title }} · {{ title }}{% endblock title %}
 {% block content %}
 <h1 class="page-title">{{ category.title }}</h1>
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {% for item in breadcrumbs %}
+    {% if item.url %}<a href="{{ item.url }}">{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}
+    {% if item.is_current %}{% else %}<span class="separator">/</span>{% endif %}
+  {% endfor %}
+</nav>
 {% if category.description %}<p class="category-desc">{{ category.description }}</p>{% endif %}
 {% if category.content %}<div class="category-intro">{{ category.content | safe }}</div>{% endif %}
 <section class="article-list">
@@ -14,6 +20,7 @@
       {% if a.author %} · {{ a.author }}{% endif %}
     </div>
     {% if a.summary %}<p class="card-summary">{{ a.summary }}</p>{% endif %}
+    {% if a.tag_links %}<div class="tags">{% for tag in a.tag_links %}<a class="tag tag-link" href="{{ tag.url }}">{{ tag.name }}</a>{% endfor %}</div>{% endif %}
   </article>
   {% endfor %}
   {% endif %}

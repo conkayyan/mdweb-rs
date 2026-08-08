@@ -585,6 +585,53 @@ button.nav-link {
   font-size: .75rem;
   margin-right: 6px;
 }
+/* Tags rendered as links (article pages, cards, cloud): keep the pill look
+ * without the default underline, and darken on hover for affordance. */
+a.tag-link {
+  text-decoration: none;
+  transition: background-color .15s ease, color .15s ease;
+}
+a.tag-link:hover {
+  background: #e0e7ff;
+  color: #1e1b4b;
+}
+a.tag-link:visited {
+  color: #3730a3;
+}
+
+.tag-cloud-nav { margin-top: 28px; }
+.tag-cloud-nav h3 {
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--c-muted);
+  border-bottom: 1px solid var(--c-border);
+}
+.tag-cloud {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tag-cloud li {
+  display: inline-block;
+  margin: 0 4px 6px 0;
+}
+.tag-cloud .tag-link {
+  display: inline-block;
+}
+.tag-count {
+  font-size: .68rem;
+  color: var(--c-muted);
+  margin-left: 2px;
+}
+.tag-cloud-empty {
+  margin: 0;
+  color: var(--c-muted);
+  font-size: .9rem;
+}
 
 .post { max-width: 760px; }
 .post-title { margin: 0 0 10px; }

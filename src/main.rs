@@ -216,6 +216,8 @@ fn cmd_create(args: &[String]) -> i32 {
         ("template/default/page.html", theme_files::PAGE),
         ("template/default/page_section.html", theme_files::PAGE_SECTION),
         ("template/default/search.html", theme_files::SEARCH),
+        ("template/default/tag.html", theme_files::TAG),
+        ("template/default/tags.html", theme_files::TAGS),
         ("template/default/404.html", theme_files::NOT_FOUND),
         ("template/default/layout/header.html", theme_files::PARTIAL_HEADER),
         ("template/default/layout/footer.html", theme_files::PARTIAL_FOOTER),
@@ -322,6 +324,11 @@ show_sitemap = true
 home_limit = 5       # articles per page on /
 category_limit = 5   # articles per page in category landings
 pages_limit = 50     # pages per page in a directory landing
+tags_limit = 10      # articles per page on a /tags/<tag>/ landing
+
+# Tag cloud: show the tag widget in the sidebar (true) or hide it (false).
+show_tag_cloud = true
+tag_cloud_limit = 0   # max tags in the sidebar cloud; 0 = show all
 
 [lang.en]
 title = "My Blog"
@@ -343,6 +350,8 @@ pages         = "页面"
 subpages      = "本节页面"
 subcategories = "子分类"
 recent_posts  = "最近文章"
+tags          = "标签"
+tag_list      = "标签下的文章"
 friend_links  = "友情链接"
 no_posts      = "暂无文章。"
 read_in       = "其他语言："

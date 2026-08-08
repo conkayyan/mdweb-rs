@@ -24,6 +24,8 @@ pub(crate) const I18N_DEFAULTS: &[(&str, &str)] = &[
     ("subpages", "Pages in this section"),
     ("subcategories", "Subcategories"),
     ("recent_posts", "Recent Posts"),
+    ("tags", "Tags"),
+    ("tag_list", "Posts tagged"),
     ("friend_links", "Friend Links"),
     ("no_posts", "No posts yet."),
     ("read_in", "Read in:"),
@@ -77,6 +79,14 @@ pub struct Config {
     pub category_limit: usize,
     /// Pages shown per page in a directory landing listing. Default `50`.
     pub pages_limit: usize,
+    /// Whether to show the tag cloud widget in the sidebar. Default `true`.
+    pub show_tag_cloud: bool,
+    /// Articles shown per page on a tag listing page. `0` disables
+    /// pagination (every match on one page). Default `20`.
+    pub tags_limit: usize,
+    /// Maximum number of tags shown in the sidebar tag cloud. `0` shows every
+    /// tag. Default `0`.
+    pub tag_cloud_limit: usize,
     pub extra: Value,
 }
 
@@ -106,6 +116,9 @@ impl Default for Config {
             home_limit: 10,
             category_limit: 20,
             pages_limit: 50,
+            show_tag_cloud: true,
+            tags_limit: 20,
+            tag_cloud_limit: 0,
             extra: Value::map(),
         }
     }
@@ -179,6 +192,19 @@ impl Config {
         if let Some(n) = m.get("pages_limit").and_then(|v| v.as_int()) {
             if n >= 0 {
                 cfg.pages_limit = n as usize;
+            }
+        }
+        if let Some(b) = m.get("show_tag_cloud").and_then(|v| v.as_bool()) {
+            cfg.show_tag_cloud = b;
+        }
+        if let Some(n) = m.get("tags_limit").and_then(|v| v.as_int()) {
+            if n >= 0 {
+                cfg.tags_limit = n as usize;
+            }
+        }
+        if let Some(n) = m.get("tag_cloud_limit").and_then(|v| v.as_int()) {
+            if n >= 0 {
+                cfg.tag_cloud_limit = n as usize;
             }
         }
         if let Some(Value::Arr(items)) = m.get("friend_links") {
@@ -300,6 +326,21 @@ impl Config {
             .get(lang)
             .and_then(|m| m.display_name.clone())
             .unwrap_or_else(|| lang.to_string())
+    }
+
+    /// URL prefix for a language's tag listings: `/tags/` for the default
+    /// language, `/<code>/tags/` otherwise.
+    pub fn tag_index_url(&self, lang: &str) -> String {
+        format!("{}tags/", self.lang_prefix(lang))
+    }
+
+    /// URL for a single tag listing page in a language.
+    pub fn tag_url(&self, lang: &str, name: &str) -> String {
+        format!(
+            "{}tags/{}/",
+            self.lang_prefix(lang),
+            crate::content::percent_encode(name)
+        )
     }
 
     /// Resolve a UI string: current lang → English → built-in default → key itself.

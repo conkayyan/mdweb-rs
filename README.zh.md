@@ -157,12 +157,14 @@ my-blog/
 │               └── react.md
 └── template/              # 站点本地模板主题（见“主题”一节）
     └── default/           # 当前主题（site.toml 中 theme = "default"）
-        ├── base.html
-        ├── index.html
-        ├── category.html
-        ├── article.html
-        ├── page.html
-        ├── 404.html
+├── base.html
+    ├── index.html
+    ├── category.html
+    ├── article.html
+    ├── page.html
+    ├── tag.html
+    ├── tags.html
+    ├── 404.html
         ├── layout/        # 插槽片段（header / footer / side / inject）
         │   ├── header.html
         │   ├── footer.html
@@ -181,6 +183,8 @@ my-blog/
   `_index.<lang>.md`，其他顶层文件会被忽略。
 - 目录下的 `_index.md` 即该分类的索引页。
 - 目录 `_index.md` 的 title/summary/description 用于配置分类信息。
+- 任意文档 frontmatter 里的 `tags` 会生成每种语言的标签云（侧栏）与
+  `/tags/<tag>/` 标签列表页（见「标签页面」一节）。
 - 插槽片段在 `template/<theme>/layout/`（header / footer / side / inject），
   直接编辑即可定制主题。
 - `template/<theme>/static/` 中的文件通过 `/static/<path>` 对外提供。
@@ -235,6 +239,16 @@ author = "Jane Doe"
 language = "en"              # 默认语言（无前缀 URL）
 languages = ["en", "zh"]     # 启用的语言列表；未列出的语言将被忽略
 theme = "default"           # template/ 下的子目录名；留空等价于内置默认
+
+# 列表分页。设为 `0` 可对该列表禁用分页。
+home_limit = 10      # 首页每页文章数（/）
+category_limit = 20  # 分类页每页文章数
+pages_limit = 50     # 目录落地页每页数量
+tags_limit = 20      # 标签页每页文章数（/tags/<标签>/）
+
+# 标签云：是否在侧边栏显示标签小部件（true）或隐藏（false）。
+show_tag_cloud = true
+tag_cloud_limit = 0   # 侧边栏标签云最多显示几个标签；0 = 全部显示
 
 [lang.en]                    # 各语言的覆盖项
 title = "My Blog"
@@ -304,10 +318,31 @@ friend_links = "友情链接"
 no_posts     = "暂无文章。"
 ```
 
-可用键：`home`、`categories`、`recent_posts`、`friend_links`、`no_posts`、
-`read_in`、`published`、`updated`、`author`、`prev`、`next`、`not_found`、
-`not_found_desc`。缺失的键会回退到英文，再回退到内置默认值，最后回退到
-键名字符串本身。
+可用键：`home`、`categories`、`recent_posts`、`tags`、`tag_list`、
+`friend_links`、`no_posts`、`read_in`、`published`、`updated`、`author`、
+`prev`、`next`、`not_found`、`not_found_desc`。缺失的键会回退到英文，再回退到
+内置默认值，最后回退到键名字符串本身。
+
+## 标签页面
+
+每篇文档 frontmatter 里的 `tags` 会生成每种语言的标签云。侧边栏显示一个**标签云**（每个标签按其被多少篇文档使用加权），在 `site.toml` 中设置
+`show_tag_cloud = false` 即可完全隐藏。标签**处处可点击**——侧边栏云、文章页、
+页面列表、搜索结果里都是如此——每个链接指向对应的标签列表：
+
+```text
+/tags/              ← 全部标签索引（按语言）
+/tags/<标签>/        ← 默认语言的该标签列表
+/<lang>/tags/<标签>/ ← 其它语言
+```
+
+`tag_cloud_limit` 控制侧边栏云最多显示几个标签（`0` = 全部显示），按使用次数倒序，
+每个标签以 `名称(次数)` 形式渲染。`/tags/`（及 `/<lang>/tags/`）列出当前语言下的
+**所有**标签，同样以 `名称(次数)` 形式显示，链接到对应列表页。
+标签列表页显示带有该标签的所有文档，按时间倒序，带有面包屑
+（`首页 › 标签 › <标签>`）以及由 `tags_limit` 控制的分页（`?page=N`）。
+含空格或标点的标签名在 URL 中会被百分号转义（`my tag` → `/tags/my%20tag/`）。
+
+分类列表页同样带有面包屑（`首页 › 文章 › Web`）。
 
 ## Frontmatter
 
@@ -375,6 +410,9 @@ meta:                    # 任意映射，模板中以 article.meta 访问
 | `t` | 界面文案映射（键：`home`、`categories`、`recent_posts` 等） |
 | `current_lang_display_name` | 当前语言的显示名（如按钮标签） |
 | `categories` | 分类树（嵌套的 `{ title, url, children }`） |
+| `tags` | 当前语言的标签云：`[{ name, url, count }, …]`（数量上限由 `tag_cloud_limit` 控制） |
+| `tag_cloud_limit` | 侧边栏标签云最多显示的标签数（`0` = 全部显示） |
+| `show_tag_cloud` | 是否启用侧边栏标签云小部件 |
 | `home_url` | 当前语言首页的 URL |
 | `current_url` | 当前请求 URL |
 | `current_year` | 当前年份（用于版权页脚） |
@@ -384,7 +422,9 @@ meta:                    # 任意映射，模板中以 article.meta 访问
 
 - `index.html` → `home` `{ content, articles: [...] }`
 - `category.html` → `category` `{ title, slug, url, description, content, articles, children }`
-- `article.html` / `page.html` → `article` `{ title, lang, url, date, updated, author, tags, content, meta, fields, ... }`
+- `tag.html` → `tag` `{ name, title, url, articles, pagination, total }`
+- `tags.html` → `tags_index` `{ title, url, tags: [{ name, url, count }], total }`
+- `article.html` / `page.html` → `article` `{ title, lang, url, date, updated, author, tags, tag_links, content, meta, fields, ... }`
 - `404.html` → `page` `{ title: "Not Found" }`
 
 ## 多语言 URL

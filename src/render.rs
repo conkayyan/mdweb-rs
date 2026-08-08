@@ -33,6 +33,12 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
     // hierarchical Pages dropdown, since they live at the site root.
     let root_pages = root_pages_value(&site.articles, lang, current_url);
     let recent = recent_value(&site.articles, lang, 5);
+    let mut tag_cloud = site.tag_cloud_value(lang);
+    if let Value::Arr(list) = &mut tag_cloud {
+        if site.config.tag_cloud_limit > 0 {
+            list.truncate(site.config.tag_cloud_limit);
+        }
+    }
     let friend_links: Vec<Value> = site
         .config
         .friend_links
@@ -95,6 +101,8 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
         ("pages_tree".to_string(), pages_tree),
         ("root_pages".to_string(), root_pages),
         ("recent".to_string(), recent),
+        ("tags".to_string(), tag_cloud),
+        ("show_tag_cloud".to_string(), Value::Bool(config.show_tag_cloud)),
         ("friend_links".to_string(), Value::Arr(friend_links)),
         ("rss_url".to_string(), Value::str(&rss_url)),
         ("sitemap_url".to_string(), Value::str(&sitemap_url)),
@@ -286,8 +294,56 @@ pub fn render_category(
 ) -> Result<String, String> {
     let url = cat.urls.get(lang).cloned().unwrap_or_default();
     let payload = Site::category_value(site, cat, lang, page);
+    let title = payload
+        .as_map()
+        .and_then(|m| m.get("title").and_then(|v| v.as_str()))
+        .unwrap_or(&cat.slug)
+        .to_string();
+    let breadcrumbs = site.breadcrumbs(&cat.path, lang, &title);
     let ctx = with_layout(site, lang, &url, "category.html", "category", payload)?;
+    let mut ctx = ctx;
+    if let Value::Map(m) = &mut ctx {
+        m.insert("breadcrumbs".to_string(), Value::Arr(breadcrumbs));
+    }
     render_with_context(site, "category.html", &ctx)
+}
+
+/// Render a tag landing page (`/tags/<tag>/`): the list of every document
+/// carrying the tag, with breadcrumbs Index › Tags › <tag>.
+pub fn render_tag(site: &Site, lang: &str, name: &str, page: usize) -> Result<String, String> {
+    let payload = match site.tag_value(name, lang, page) {
+        Some(v) => v,
+        None => return Err("not found".into()),
+    };
+    let url = payload
+        .as_map()
+        .and_then(|m| m.get("url").and_then(|v| v.as_str()))
+        .unwrap_or("")
+        .to_string();
+    let breadcrumbs = site.tag_breadcrumbs(name, lang);
+    let ctx = with_layout(site, lang, &url, "tag.html", "tag", payload)?;
+    let mut ctx = ctx;
+    if let Value::Map(m) = &mut ctx {
+        m.insert("breadcrumbs".to_string(), Value::Arr(breadcrumbs));
+    }
+    render_with_context(site, "tag.html", &ctx)
+}
+
+/// Render the `/tags/` index page listing every tag for the language.
+pub fn render_tags_index(site: &Site, lang: &str) -> Result<String, String> {
+    let payload = site.tags_index_value(lang);
+    let url = payload
+        .as_map()
+        .and_then(|m| m.get("url").and_then(|v| v.as_str()))
+        .unwrap_or("")
+        .to_string();
+    let breadcrumbs = site.tags_index_breadcrumbs(lang);
+    let ctx = with_layout(site, lang, &url, "tags.html", "tags_index", payload)?;
+    let mut ctx = ctx;
+    if let Value::Map(m) = &mut ctx {
+        m.insert("breadcrumbs".to_string(), Value::Arr(breadcrumbs));
+    }
+    render_with_context(site, "tags.html", &ctx)
 }
 
 /// Render a directory landing page (e.g. `/pages/docs/`) using

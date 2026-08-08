@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ t.tags }} · {{ title }}{% endblock title %}
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  {% for item in breadcrumbs %}
+    {% if item.url %}<a href="{{ item.url }}">{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}
+    {% if item.is_current %}{% else %}<span class="separator">/</span>{% endif %}
+  {% endfor %}
+</nav>
+<h1 class="page-title">{{ t.tags }}</h1>
+{% if tags_index.tags %}
+<ul class="tag-cloud">
+  {% for tag in tags_index.tags %}
+  <li><a class="tag tag-link" href="{{ tag.url }}">{{ tag.name }}<span class="tag-count">({{ tag.count }})</span></a></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="tag-cloud-empty">{{ t.no_posts }}</p>
+{% endif %}
+{% endblock content %}

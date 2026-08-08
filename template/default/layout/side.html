@@ -33,6 +33,21 @@
   </ul>
 </nav>
 
+{% if show_tag_cloud %}
+<nav class="tag-cloud-nav">
+  <h3>{{ t.tags }}</h3>
+  {% if tags %}
+  <ul class="tag-cloud">
+    {% for tag in tags %}
+    <li><a class="tag tag-link" href="{{ tag.url }}">{{ tag.name }}<span class="tag-count">({{ tag.count }})</span></a></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="tag-cloud-empty">{{ t.no_posts }}</p>
+  {% endif %}
+</nav>
+{% endif %}
+
 {% if friend_links %}
 <nav class="friend-links-nav">
   <h3>{{ t.friend_links }}</h3>

@@ -854,6 +854,223 @@ fn sidebar_drops_rss_link() {
     );
 }
     #[test]
+fn tag_cloud_toggle_and_clickable_article_tags() {
+    let dir = tempdir("tags");
+    write(&dir, "site.toml", r#"title = "X"
+show_tag_cloud = true"#);
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    write(
+        &dir,
+        "content/posts/hello.md",
+        "---\ntitle: Hello\ndate: 2026-08-01\ntags: [\"rust\", \"my tag\"]\n---\nbody\n",
+    );
+
+    let site = Site::build(&dir, None).expect("build");
+
+    // Sidebar cloud renders tags as links (enabled by default / explicitly).
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
+    assert!(html.contains("tag-cloud-nav"), "tag cloud widget present when enabled");
+    assert!(html.contains("href=\"/tags/rust/\""), "cloud tag links to its page");
+    assert!(
+        html.contains("href=\"/tags/my%20tag/\""),
+        "tag names with spaces are percent-encoded"
+    );
+    assert!(
+        html.contains("rust<span class=\"tag-count\">(1)</span>"),
+        "cloud tags render as name(count)"
+    );
+
+    // Article tags are clickable links to their tag pages.
+    let post = site.articles.iter().find(|a| a.slug == "hello").expect("post");
+    let article = mdweb::render::render_article(&site, "en", post).expect("article");
+    assert!(article.contains("href=\"/tags/rust/\""), "article tag links to its page");
+    assert!(
+        article.contains("href=\"/tags/my%20tag/\""),
+        "spaced tag in an article is encoded too"
+    );
+
+    // show_tag_cloud = false hides the sidebar widget but keeps page tags.
+    let dir_off = tempdir("tags-off");
+    write(&dir_off, "site.toml", r#"title = "X"
+show_tag_cloud = false"#);
+    write(&dir_off, "content/_index.md", "---\n---\nbody\n");
+    write(
+        &dir_off,
+        "content/posts/hello.md",
+        "---\ntitle: Hello\ntags: [\"rust\"]\n---\nbody\n",
+    );
+    let site_off = Site::build(&dir_off, None).expect("build off");
+    assert!(!site_off.config.show_tag_cloud);
+    let off = mdweb::render::render_home(&site_off, "en", 1).expect("render off");
+    assert!(!off.contains("tag-cloud-nav"), "cloud hidden when show_tag_cloud=false");
+}
+
+#[test]
+fn tag_cloud_limit_truncates_sorted_by_count() {
+    let dir = tempdir("cloudlimit");
+    write(&dir, "site.toml", r#"title = "X"
+tag_cloud_limit = 2"#);
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    write(
+        &dir,
+        "content/posts/a.md",
+        "---\ntitle: A\ntags: [\"a\"]\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/posts/b.md",
+        "---\ntitle: B\ntags: [\"b\"]\n---\nbody\n",
+    );
+    // b now appears twice → count 2; a and c count 1 each.
+    write(
+        &dir,
+        "content/posts/c.md",
+        "---\ntitle: C\ntags: [\"b\", \"c\"]\n---\nbody\n",
+    );
+
+    let site = Site::build(&dir, None).expect("build");
+    assert_eq!(site.config.tag_cloud_limit, 2);
+
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
+    assert!(html.contains(">(2)</span>"), "only tags from the limited cloud shown");
+
+    // Sorted by count desc (b first), a/c tie-break by name, c cut off.
+    let cloud = html
+        .split("tag-cloud-nav")
+        .nth(1)
+        .expect("cloud section")
+        .split("</ul>")
+        .next()
+        .expect("cloud list");
+    let pos_b = cloud.find("tags/b/\"").expect("b in cloud");
+    let pos_a = cloud.find("tags/a/\"").expect("a in cloud");
+    assert!(pos_b < pos_a, "b (count 2) sorts before a (count 1)");
+    assert!(!cloud.contains("tags/c/\""), "c truncated by tag_cloud_limit");
+    assert!(
+        cloud.contains(">b<span class=\"tag-count\">(2)</span>"),
+        "top tag shows its count"
+    );
+
+    // The /tags/ index is *not* limited and shows every tag with a count.
+    let idx = mdweb::render::render_tags_index(&site, "en").expect("tags index");
+    assert!(idx.contains("href=\"/tags/c/\""), "index shows all tags");
+    assert!(idx.contains("b<span class=\"tag-count\">(2)</span>"), "index counts per tag");
+}
+
+#[test]
+fn tags_index_page_lists_all_tags() {
+    let dir = tempdir("tagsindex");
+    write(&dir, "site.toml", r#"title = "X"
+languages = ["en", "zh"]"#);
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    write(
+        &dir,
+        "content/posts/rust.md",
+        "---\ntitle: Rust\ndate: 2026-08-02\ntags: [\"rust\"]\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/posts/rust.zh.md",
+        "---\ntitle: Rust ZH\ndate: 2026-08-02\ntags: [\"rust\"]\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/posts/rust-b.md",
+        "---\ntitle: Rust B\ndate: 2026-08-01\ntags: [\"rust\", \"my tag\"]\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/posts/rust-b.zh.md",
+        "---\ntitle: Rust B ZH\ndate: 2026-08-01\ntags: [\"rust\", \"my tag\"]\n---\nbody\n",
+    );
+    let site = Site::build(&dir, None).expect("build");
+
+    // /tags/ lists every tag in the current language, linked + counted.
+    let html = mdweb::render::render_tags_index(&site, "en").expect("tags index");
+    assert!(html.contains("class=\"breadcrumb\""), "index has breadcrumbs");
+    assert!(html.contains("href=\"/\">Index"), "breadcrumb starts at home");
+    assert!(html.contains("<span>Tags</span>"), "current crumb is a span");
+    assert!(html.contains("href=\"/tags/rust/\""), "rust tag link");
+    assert!(html.contains("href=\"/tags/my%20tag/\""), "encoded spaced tag");
+    assert!(html.contains(">rust<span"), "rust tag shows its count");
+
+    // /zh/tags/ is language-scoped: only tags used by zh articles appear.
+    let zh_html = mdweb::render::render_tags_index(&site, "zh").expect("zh tags index");
+    assert!(zh_html.contains("href=\"/zh/tags/rust/\""), "zh tags link into /zh/tags/");
+    assert!(!zh_html.contains("href=\"/tags/"), "unprefixed en tag URLs must not leak into zh");
+}
+
+#[test]
+fn tag_page_lists_matching_articles_with_pagination() {
+    let dir = tempdir("tagpage");
+    write(&dir, "site.toml", r#"title = "X"
+tags_limit = 2"#);
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    for i in 1..=5 {
+        write(
+            &dir,
+            &format!("content/posts/p{i}.md"),
+            &format!("---\ntitle: P{i}\ndate: 2026-08-0{i}\ntags: [\"rust\"]\n---\nbody\n"),
+        );
+    }
+    write(
+        &dir,
+        "content/posts/food.md",
+        "---\ntitle: Food\ndate: 2026-08-01\ntags: [\"food\"]\n---\nbody\n",
+    );
+    let site = Site::build(&dir, None).expect("build");
+    assert_eq!(site.config.tags_limit, 2, "configured tags_limit wins");
+
+    let p1 = mdweb::render::render_tag(&site, "en", "rust", 1).expect("tag p1");
+    assert!(p1.contains("class=\"breadcrumb\""), "tag page has breadcrumbs");
+    assert!(p1.contains("href=\"/tags/\""), "Tags crumb points at the index");
+    assert!(p1.contains(">P5<"), "newest article on page 1");
+    assert!(!p1.contains("card-title\"><a href=\"/posts/p3/\">P3</a>"), "page 1 holds 2 of 5");
+    assert!(p1.contains("pagination-next"), "page 1 shows next link");
+
+    let p3 = mdweb::render::render_tag(&site, "en", "rust", 3).expect("tag p3");
+    assert!(p3.contains("card-title\"><a href=\"/posts/p1/\">P1</a>"), "page 3 shows the oldest");
+    assert!(p3.contains("pagination-prev"), "page 3 shows prev link");
+
+    // Unknown tag renders as a 404 (Err) rather than an empty page.
+    assert!(mdweb::render::render_tag(&site, "en", "nope", 1).is_err());
+
+    // The "food" tag lists only its own article, not the rust ones.
+    let food = mdweb::render::render_tag(&site, "en", "food", 1).expect("food");
+    assert!(food.contains("card-title\"><a href=\"/posts/food/\">Food</a>"));
+    assert!(!food.contains("card-title\"><a href=\"/posts/p1/\">P1</a>"));
+    assert!(!food.contains("pagination-next"), "single match has no pager");
+}
+
+#[test]
+fn category_page_shows_breadcrumbs() {
+    let dir = tempdir("catcrumbs");
+    write(&dir, "site.toml", r#"title = "X""#);
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    write(&dir, "content/posts/_index.md", "---\ntitle: Posts\n---\nbody\n");
+    write(&dir, "content/posts/web/_index.md", "---\ntitle: Web\n---\nbody\n");
+    write(
+        &dir,
+        "content/posts/web/intro.md",
+        "---\ntitle: Intro\ntags: [\"web\"]\n---\nbody\n",
+    );
+    let site = Site::build(&dir, None).expect("build");
+
+    let posts = site.tree.iter().find(|c| c.slug == "posts").expect("posts cat");
+    let html = mdweb::render::render_category(&site, "en", posts, 1).expect("render posts");
+    assert!(html.contains("class=\"breadcrumb\""), "category list has breadcrumbs");
+    assert!(html.contains("href=\"/\">Index"), "crumb starts at home");
+    assert!(html.contains("href=\"/posts/\">Posts"), "crumb names the category");
+    assert!(html.contains("<span>Posts</span>"), "current item is a non-link span");
+
+    let web = posts.children.iter().find(|c| c.slug == "web").expect("web cat");
+    let html2 = mdweb::render::render_category(&site, "en", web, 1).expect("render web");
+    assert!(html2.contains("href=\"/posts/\">Posts"), "ancestor crumb");
+    assert!(html2.contains("href=\"/posts/web/\">Web"), "parent crumb");
+    assert!(html2.contains("<span>Web</span>"), "current category is a span");
+}
+
+#[test]
 fn root_level_md_files_become_root_pages() {
     // `content/about.md` (directly under content/) is a top-level page with
     // an empty path and a flat URL `/about/`. It must NOT appear in the

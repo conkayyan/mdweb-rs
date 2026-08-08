@@ -16,6 +16,8 @@ pub mod theme_files {
     pub const ARTICLE: &str = include_str!("../template/default/article.html");
     pub const PAGE: &str = include_str!("../template/default/page.html");
     pub const SEARCH: &str = include_str!("../template/default/search.html");
+    pub const TAG: &str = include_str!("../template/default/tag.html");
+    pub const TAGS: &str = include_str!("../template/default/tags.html");
     pub const NOT_FOUND: &str = include_str!("../template/default/404.html");
     pub const PARTIAL_HEADER: &str = include_str!("../template/default/layout/header.html");
     pub const PARTIAL_FOOTER: &str = include_str!("../template/default/layout/footer.html");
@@ -25,6 +27,43 @@ pub mod theme_files {
     pub const PARTIAL_NAV_NODE: &str = include_str!("../template/default/layout/_nav_node.html");
     pub const PAGE_SECTION: &str = include_str!("../template/default/page_section.html");
     pub const STYLE: &str = include_str!("../static/style.css");
+}
+
+/// URL-encode a string so it can live in a single URL path segment. Only the
+/// unreserved RFC 3986 characters are kept verbatim; everything else
+/// (including `/`, spaces, `?`, `#`, …) becomes `%XX`. The server's
+/// `percent_decode` turns it back into the raw tag name on the way in.
+pub(crate) fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.as_bytes() {
+        match *b {
+            b'A'..=b'Z'
+            | b'a'..=b'z'
+            | b'0'..=b'9'
+            | b'-'
+            | b'_'
+            | b'.'
+            | b'~' => out.push(*b as char),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// A single tag in a language's alphabetised/weighted tag list. Used both for
+/// the sidebar cloud and the tag landing payloads.
+#[derive(Debug, Clone)]
+pub struct Tag {
+    pub name: String,
+    pub url: String,
+    pub count: usize,
+}
+
+/// A tag rendered inside an article context, pre-linked to its tag page.
+#[derive(Debug, Clone)]
+pub struct TagLink {
+    pub name: String,
+    pub url: String,
 }
 
 /// A rendered article/page in one language.
@@ -41,6 +80,7 @@ pub struct Article {
     pub updated_iso: Option<String>,
     pub author: String,
     pub tags: Vec<String>,
+    pub tag_links: Vec<TagLink>,
     pub summary: String,
     pub content: String,
     pub meta: Value,
@@ -111,6 +151,20 @@ impl Article {
         m.insert(
             "tags".into(),
             Value::Arr(self.tags.iter().cloned().map(Value::str).collect()),
+        );
+        m.insert(
+            "tag_links".into(),
+            Value::Arr(
+                self.tag_links
+                    .iter()
+                    .map(|l| {
+                        Value::Map(BTreeMap::from([
+                            ("name".into(), Value::str(&l.name)),
+                            ("url".into(), Value::str(&l.url)),
+                        ]))
+                    })
+                    .collect(),
+            ),
         );
         m.insert("summary".into(), Value::str(&self.summary));
         m.insert("content".into(), Value::str(&self.content));
@@ -201,6 +255,9 @@ pub struct Site {
     pub theme: String,
     pub tree: Vec<Category>,
     pub articles: Vec<Article>,
+    /// Per-language tag index: language → sorted list of `Tag`s (each with
+    /// the number of documents carrying it). Built once at `Site::build`.
+    pub tags: BTreeMap<String, Vec<Tag>>,
     pub home_content: BTreeMap<String, String>,
     /// Per-directory `_index.md` frontmatter (key = joined dir path).
     /// Used by the page-tree builder to label directory nodes.
@@ -439,6 +496,13 @@ impl Site {
                             .collect()
                     })
                     .unwrap_or_default();
+                let tag_links: Vec<TagLink> = tags
+                    .iter()
+                    .map(|t| TagLink {
+                        name: t.clone(),
+                        url: config.tag_url(&ra.lang, t),
+                    })
+                    .collect();
 
                 articles.push(Article {
                     slug: ra.slug.clone(),
@@ -452,6 +516,7 @@ impl Site {
                     updated_iso,
                     author,
                     tags,
+                    tag_links,
                     summary,
                     content: ra.html.clone(),
                     meta: ra.fm.get("meta").cloned().unwrap_or_else(Value::map),
@@ -490,6 +555,38 @@ impl Site {
         articles.sort_by_key(|a| std::cmp::Reverse(a.sort_ts));
         compute_navigation(&mut articles);
 
+        // Per-language tag index. Every document (post or page) contributes
+        // its frontmatter tags; pages without any territory feed nothing.
+        let mut tag_counts: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
+        for a in &articles {
+            if a.draft || a.tags.is_empty() {
+                continue;
+            }
+            let entry = tag_counts.entry(a.lang.clone()).or_default();
+            for t in &a.tags {
+                *entry.entry(t.clone()).or_insert(0) += 1;
+            }
+        }
+        let tags: BTreeMap<String, Vec<Tag>> = tag_counts
+            .into_iter()
+            .map(|(lang, names)| {
+                let mut vec: Vec<Tag> = names
+                    .into_iter()
+                    .map(|(name, count)| Tag {
+                        name: name.clone(),
+                        url: config.tag_url(&lang, &name),
+                        count,
+                    })
+                    .collect();
+                vec.sort_by(|a, b| {
+                    b.count
+                        .cmp(&a.count)
+                        .then_with(|| a.name.cmp(&b.name))
+                });
+                (lang, vec)
+            })
+            .collect();
+
         Ok(Site {
             config,
             doc_root,
@@ -498,6 +595,7 @@ impl Site {
             theme: theme_name.to_string(),
             tree,
             articles,
+            tags,
             home_content,
             indices,
             engine,
@@ -605,6 +703,112 @@ impl Site {
             out.push(Value::Map(m));
         }
         Value::Arr(out)
+    }
+
+    /// The tag cloud for a language: `[{name, url, count}, …]` sorted by
+    /// weight (count desc, then name). Empty when the language has no tags.
+    pub fn tag_cloud_value(&self, lang: &str) -> Value {
+        let out: Vec<Value> = self
+            .tags
+            .get(lang)
+            .map(|list| {
+                list.iter()
+                    .map(|t| {
+                        Value::Map(BTreeMap::from([
+                            ("name".to_string(), Value::str(&t.name)),
+                            ("url".to_string(), Value::str(&t.url)),
+                            ("count".to_string(), Value::int(t.count as i64)),
+                        ]))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Value::Arr(out)
+    }
+
+    /// Payload for a tag landing page (`/tags/<tag>/`): every non-draft
+    /// article carrying the tag, paginated with `config.tags_limit`.
+    /// Returns `None` when the language has no such tag.
+    pub fn tag_value(&self, name: &str, lang: &str, page: usize) -> Option<Value> {
+        let tag = self
+            .tags
+            .get(lang)
+            .and_then(|list| list.iter().find(|t| t.name == name))?;
+        let mut arts: Vec<Value> = self
+            .articles
+            .iter()
+            .filter(|a| {
+                a.lang == lang && !a.draft && a.tags.iter().any(|t| t == name)
+            })
+            .map(|a| a.to_value())
+            .collect();
+        arts.sort_by_key(|a| {
+            std::cmp::Reverse(a.path("sort_ts").and_then(|v| v.as_int()).unwrap_or(0))
+        });
+        let total = arts.len();
+        let (arts, pagination) = paginate(arts, page, self.config.tags_limit);
+        Some(Value::Map(BTreeMap::from([
+            ("name".to_string(), Value::str(name)),
+            ("title".to_string(), Value::str(name)),
+            ("url".to_string(), Value::str(&tag.url)),
+            ("articles".to_string(), Value::Arr(arts)),
+            ("pagination".to_string(), pagination_value(&pagination)),
+            ("total".to_string(), Value::int(total as i64)),
+        ])))
+    }
+
+    /// Breadcrumb trail for a tag listing: Index › Tags › <tag>.
+    pub fn tag_breadcrumbs(&self, name: &str, lang: &str) -> Vec<Value> {
+        let home_label = self.config.t("breadcrumb_home", lang);
+        let tags_label = self.config.t("tags", lang);
+        vec![
+            Value::Map(BTreeMap::from([
+                ("title".to_string(), Value::str(&home_label)),
+                ("url".to_string(), Value::str(&self.config.lang_prefix(lang))),
+                ("is_current".to_string(), Value::Bool(false)),
+            ])),
+            Value::Map(BTreeMap::from([
+                ("title".to_string(), Value::str(&tags_label)),
+                ("url".to_string(), Value::str(&self.config.tag_index_url(lang))),
+                ("is_current".to_string(), Value::Bool(false)),
+            ])),
+            Value::Map(BTreeMap::from([
+                ("title".to_string(), Value::str(name)),
+                ("url".to_string(), Value::Null),
+                ("is_current".to_string(), Value::Bool(true)),
+            ])),
+        ]
+    }
+
+    /// Payload for the `/tags/` index page: every tag in the language with
+    /// its count, so the page can render an overview cloud.
+    pub fn tags_index_value(&self, lang: &str) -> Value {
+        let tags = self.tag_cloud_value(lang);
+        let total = tags.as_arr().map(|a| a.len()).unwrap_or(0);
+        Value::Map(BTreeMap::from([
+            ("title".to_string(), Value::str(&self.config.t("tags", lang))),
+            ("url".to_string(), Value::str(&self.config.tag_index_url(lang))),
+            ("tags".to_string(), tags),
+            ("total".to_string(), Value::int(total as i64)),
+        ]))
+    }
+
+    /// Breadcrumb trail for the `/tags/` index: Home › Tags (current).
+    pub fn tags_index_breadcrumbs(&self, lang: &str) -> Vec<Value> {
+        let home_label = self.config.t("breadcrumb_home", lang);
+        let tags_label = self.config.t("tags", lang);
+        vec![
+            Value::Map(BTreeMap::from([
+                ("title".to_string(), Value::str(&home_label)),
+                ("url".to_string(), Value::Str(self.config.lang_prefix(lang))),
+                ("is_current".to_string(), Value::Bool(false)),
+            ])),
+            Value::Map(BTreeMap::from([
+                ("title".to_string(), Value::str(&tags_label)),
+                ("url".to_string(), Value::Null),
+                ("is_current".to_string(), Value::Bool(true)),
+            ])),
+        ]
     }
 
     /// Build the navigation tree for non-post (page) content. Everything that
@@ -900,6 +1104,8 @@ fn load_embedded(engine: &mut Engine) -> Result<(), String> {
         ("article.html", theme_files::ARTICLE.to_string()),
         ("page.html", theme_files::PAGE.to_string()),
         ("search.html", theme_files::SEARCH.to_string()),
+        ("tag.html", theme_files::TAG.to_string()),
+        ("tags.html", theme_files::TAGS.to_string()),
         ("404.html", theme_files::NOT_FOUND.to_string()),
         ("layout/header.html", theme_files::PARTIAL_HEADER.to_string()),
         ("layout/footer.html", theme_files::PARTIAL_FOOTER.to_string()),

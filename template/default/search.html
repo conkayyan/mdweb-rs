@@ -26,9 +26,9 @@
         <h2 class="search-result-title">{{ a.title }}</h2>
         {% if a.date %}<span class="search-result-date"><time datetime="{{ a.date_iso }}">{{ a.date }}</time></span>{% endif %}
         {% if a.summary %}<p class="search-result-summary">{{ a.summary }}</p>{% endif %}
-        {% if a.tags %}
+        {% if a.tag_links %}
         <div class="search-result-tags">
-          {% for tag in a.tags %}<span class="tag">{{ tag }}</span>{% endfor %}
+          {% for tag in a.tag_links %}<a class="tag tag-link" href="{{ tag.url }}">{{ tag.name }}</a>{% endfor %}
         </div>
         {% endif %}
         {% if a.current_lang %}

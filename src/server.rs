@@ -191,6 +191,24 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
         });
     }
 
+    // Tags index: /tags/ (or /<lang>/tags/) lists every tag in the language.
+    if rest.len() == 1 && rest[0] == "tags" {
+        return render::render_tags_index(site, &lang).map(|h| Response {
+            body: h.into_bytes(),
+            content_type: HTML,
+        });
+    }
+
+    // Tag listing: /tags/<tag>/ (or /<lang>/tags/<tag>/). Must come before
+    // category/section resolution so a tag name can't collide with a dir.
+    if rest.len() == 2 && rest[0] == "tags" {
+        let name = percent_decode(rest[1]);
+        return render::render_tag(site, &lang, &name, page).map(|h| Response {
+            body: h.into_bytes(),
+            content_type: HTML,
+        });
+    }
+
     if let Some(cat) = find_category(site, &rest.join("/")) {
         return render::render_category(site, &lang, cat, page).map(|h| Response {
             body: h.into_bytes(),
