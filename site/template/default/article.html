@@ -21,7 +21,7 @@
   {% if article.prev or article.next %}
   <nav class="post-nav">
     {% if article.prev %}<a class="prev" href="{{ article.prev.url }}">&lt; {{ t.prev }}: {{ article.prev.title }}</a>{% endif %}
-    {% if article.next %}<a class="next" href="{{ article.next.url }}">{{ article.next.title }} ({{ t.next }}) &gt;</a>{% endif %}
+    {% if article.next %}<a class="next" href="{{ article.next.url }}">{{ t.next }}: {{ article.next.title }} &gt;</a>{% endif %}
   </nav>
   {% endif %}
 </article>
