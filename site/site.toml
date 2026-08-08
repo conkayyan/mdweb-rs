@@ -20,6 +20,17 @@ tags_limit = 10      # articles per page on a /tags/<tag>/ landing
 show_tag_cloud = true
 tag_cloud_limit = 0   # max tags in the sidebar cloud; 0 = show all
 
+# Analytics — leave commented out (or `id = ""`) to disable. When `id` is
+# non-empty, the matching tracker JS is auto-injected into the page <head>
+# before any content from `template/<theme>/layout/inject.html`. Currently
+# supported providers: `google` (gtag.js) and `baidu` (Baidu Tongji).
+#
+# [analytics.google]
+# id = "G-XXXXXXXXXX"
+#
+# [analytics.baidu]
+# id = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
 [lang.en]
 title = "My Blog"
 display_name = "English"

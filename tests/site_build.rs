@@ -1215,3 +1215,95 @@ fn file_routes_reject_traversal_outside_the_doc_root() {
     assert!(site.resolve_file("/etc/passwd").is_none());
     assert!(site.resolve_image("../../../etc/passwd").is_none());
 }
+
+#[test]
+fn analytics_off_by_default() {
+    let dir = tempdir("anoff");
+    write(&dir, "site.toml", r#"title = "X""#);
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    let site = Site::build(&dir, None).expect("build");
+    assert!(!site.config.analytics.is_enabled());
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
+    assert!(
+        !html.contains("googletagmanager"),
+        "no Google snippet without config: {html}"
+    );
+    assert!(
+        !html.contains("hm.baidu.com"),
+        "no Baidu snippet without config: {html}"
+    );
+}
+
+#[test]
+fn analytics_google_injects_snippet() {
+    let dir = tempdir("an-google");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+[analytics.google]
+id = "G-TESTID42"
+"#,
+    );
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    let site = Site::build(&dir, None).expect("build");
+    assert!(site.config.analytics.is_enabled());
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
+    assert!(html.contains("googletagmanager.com/gtag/js?id=G-TESTID42"));
+    assert!(html.contains("gtag('config', 'G-TESTID42')"));
+    // The snippet must live inside <head> alongside the user-editable inject slot.
+    let head_end = html.find("</head>").expect("has </head>");
+    let snippet_at = html.find("googletagmanager.com").expect("snippet present");
+    assert!(snippet_at < head_end, "snippet lives inside <head>");
+}
+
+#[test]
+fn analytics_baidu_injects_snippet() {
+    let dir = tempdir("an-baidu");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+[analytics.baidu]
+id = "abcdef0123456789abcdef0123456789"
+"#,
+    );
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    let site = Site::build(&dir, None).expect("build");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
+    assert!(html.contains("hm.baidu.com/hm.js?abcdef0123456789abcdef0123456789"));
+    assert!(html.contains("_hmt = _hmt || []"));
+}
+
+#[test]
+fn analytics_precedes_user_inject_slot() {
+    // The analytics script must be inserted before any HTML the author
+    // hand-wrote in `layout/inject.html` so both blocks coexist.
+    let dir = tempdir("an-inject");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+[analytics.google]
+id = "G-FIRST"
+"#,
+    );
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    write(
+        &dir,
+        "template/default/layout/inject.html",
+        "<!-- user-inject-marker -->\n",
+    );
+    let site = Site::build(&dir, None).expect("build");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
+    let analytics_at = html
+        .find("googletagmanager")
+        .expect("analytics snippet present");
+    let user_at = html
+        .find("user-inject-marker")
+        .expect("user inject slot rendered");
+    assert!(
+        analytics_at < user_at,
+        "analytics snippet should precede user inject content"
+    );
+}

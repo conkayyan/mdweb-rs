@@ -29,6 +29,10 @@ press Ctrl-C to stop
 - **Layout slots** — a `template/<theme>/layout/` directory holds `header`,
   `footer`, `side` and `inject` fragments; the `inject` slot is the natural
   place for analytics / statistics JS.
+- **Built-in analytics** — set an `[analytics.google]` or `[analytics.baidu]`
+  block in `site.toml` with a non-empty `id` to auto-inject Google Analytics
+  (`gtag.js`) or Baidu Tongji into the page `<head>` — no template edits
+  required.
 - **Configurable metadata** — global site config via `site.toml`; per-article
   metadata via frontmatter. Templates + parameters make it easy to customise.
 - **Multi-language** — one site, many languages, selected by filename suffix such as
@@ -335,6 +339,16 @@ tags_limit = 20      # articles per page on a /tags/<tag>/ landing
 
 # Tag cloud: show the tag widget in the sidebar (true) or hide it (false).
 show_tag_cloud = true
+
+# Analytics — leave the section out (or set `id = ""`) to disable. Each
+# enabled provider's tracker JS is auto-injected into the page <head>
+# before any HTML from `template/<theme>/layout/inject.html`.
+#
+# [analytics.google]            # Google Analytics 4 (gtag.js)
+# id = "G-XXXXXXXXXX"
+#
+# [analytics.baidu]             # Baidu Tongji (百度统计)
+# id = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 
 [lang.en]                    # per-language overrides
 title = "My Blog"

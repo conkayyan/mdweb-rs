@@ -88,7 +88,132 @@ pub struct Config {
     /// Maximum number of tags shown in the sidebar tag cloud. `0` shows every
     /// tag. Default `0`.
     pub tag_cloud_limit: usize,
+    /// Traffic analytics providers. A provider block is enabled whenever its
+    /// `id` is set; the rendered snippet is injected into the page `<head>`
+    /// before the user-editable `layout/inject.html` content.
+    pub analytics: AnalyticsConfig,
     pub extra: Value,
+}
+
+/// Analytics providers parsed from the optional `[analytics.*]` tables.
+/// Each provider is independently optional; setting `id` enables its snippet.
+#[derive(Debug, Clone, Default)]
+pub struct AnalyticsConfig {
+    /// Google Analytics 4 (`gtag.js`) — measurement id like `G-XXXXXXX`.
+    pub google: Option<AnalyticsProvider>,
+    /// Baidu Tongji — site id like the long hash from the bm.supported panel.
+    pub baidu: Option<AnalyticsProvider>,
+}
+
+/// A single analytics provider entry. Currently the only field is the
+/// service-specific identifier; provider-specific extras (e.g. self-hosted
+/// script URLs) can be added here without breaking existing configs.
+#[derive(Debug, Clone)]
+pub struct AnalyticsProvider {
+    pub id: String,
+}
+
+impl AnalyticsProvider {
+    fn from_value(v: &Value) -> Option<Self> {
+        let m = v.as_map()?;
+        let id = m.get("id").and_then(|x| x.as_str())?.trim().to_string();
+        if id.is_empty() {
+            return None;
+        }
+        Some(AnalyticsProvider { id })
+    }
+}
+
+impl AnalyticsConfig {
+    /// `true` when at least one provider block has a non-empty `id`. The
+    /// template pipeline uses this to skip the analytics `<script>` block
+    /// entirely when no provider is configured.
+    pub fn is_enabled(&self) -> bool {
+        self.google.is_some() || self.baidu.is_some()
+    }
+
+    /// Render the analytics `<script>` blocks for every enabled provider.
+    /// Returns an empty string when no provider is configured so callers can
+    /// splice the result into the `inject` slot unconditionally.
+    pub fn snippets(&self) -> String {
+        let mut out = String::new();
+        if let Some(g) = &self.google {
+            out.push_str(&google_snippet(&g.id));
+        }
+        if let Some(b) = &self.baidu {
+            out.push_str(&baidu_snippet(&b.id));
+        }
+        out
+    }
+}
+
+/// Google Analytics 4 snippet. `id` is the measurement id (e.g. `G-XXXXXXX`).
+/// The async-loaded `gtag.js` pattern is Google's current recommendation.
+fn google_snippet(id: &str) -> String {
+    // The id is interpolated into a JS string literal that the browser will
+    // parse as JS, so an id containing `"` or `</script>` would be an
+    // injection vector. We escape both at build time.
+    let safe = html_attr_escape(id);
+    format!(
+        "<!-- Google Analytics (mdweb) -->\n\
+<script async src=\"https://www.googletagmanager.com/gtag/js?id={safe}\"></script>\n\
+<script>\n\
+  window.dataLayer = window.dataLayer || [];\n\
+  function gtag(){{dataLayer.push(arguments);}}\n\
+  gtag('js', new Date());\n\
+  gtag('config', '{safe}');\n\
+</script>\n"
+    )
+}
+
+/// Baidu Tongji snippet. `id` is the long hash from the bm.supported panel.
+fn baidu_snippet(id: &str) -> String {
+    let safe = js_string_escape(id);
+    format!(
+        "<!-- Baidu Tongji (mdweb) -->\n\
+<script>\n\
+  var _hmt = _hmt || [];\n\
+  (function() {{\n\
+    var hm = document.createElement(\"script\");\n\
+    hm.src = \"https://hm.baidu.com/hm.js?{safe}\";\n\
+    var s = document.getElementsByTagName(\"script\")[0];\n\
+    s.parentNode.insertBefore(hm, s);\n\
+  }})();\n\
+</script>\n"
+    )
+}
+
+/// Escape a string for safe use inside an HTML attribute value (double-quoted).
+fn html_attr_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '"' => out.push_str("&quot;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Escape a string for safe use inside a JS double-quoted string literal.
+fn js_string_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '<' => out.push_str("\\u003c"),
+            '>' => out.push_str("\\u003e"),
+            '&' => out.push_str("\\u0026"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 /// One entry under `[[friend_links]]`.
@@ -120,6 +245,7 @@ impl Default for Config {
             show_tag_cloud: true,
             tags_limit: 20,
             tag_cloud_limit: 0,
+            analytics: AnalyticsConfig::default(),
             extra: Value::map(),
         }
     }
@@ -232,6 +358,14 @@ impl Config {
         } else {
             Value::map()
         };
+        if let Some(am) = m.get("analytics").and_then(|v| v.as_map()) {
+            cfg.analytics.google = am
+                .get("google")
+                .and_then(AnalyticsProvider::from_value);
+            cfg.analytics.baidu = am
+                .get("baidu")
+                .and_then(AnalyticsProvider::from_value);
+        }
         if let Some(lang_map) = m.get("lang").and_then(|v| v.as_map()) {
             for (code, meta) in lang_map {
                 let mm = meta.as_map().cloned().unwrap_or_default();
@@ -435,5 +569,88 @@ mod tests {
     fn t_returns_key_for_unknown_when_no_default() {
         let cfg = parse(r#"languages = ["en"]"#);
         assert_eq!(cfg.t("totally_custom_key", "en"), "totally_custom_key");
+    }
+
+    #[test]
+    fn analytics_off_when_section_missing() {
+        let cfg = parse(r#"title = "X""#);
+        assert!(!cfg.analytics.is_enabled());
+        assert_eq!(cfg.analytics.snippets(), "");
+    }
+
+    #[test]
+    fn analytics_google_parsed() {
+        let cfg = parse(
+            r#"
+[analytics.google]
+id = "G-ABC123"
+"#,
+        );
+        assert!(cfg.analytics.is_enabled());
+        let g = cfg.analytics.google.clone().expect("google present");
+        assert_eq!(g.id, "G-ABC123");
+        let s = cfg.analytics.snippets();
+        assert!(s.contains("G-ABC123"), "snippet embeds id: {s}");
+        assert!(s.contains("googletagmanager.com/gtag/js"), "uses gtag.js");
+    }
+
+    #[test]
+    fn analytics_baidu_parsed() {
+        let cfg = parse(
+            r#"
+[analytics.baidu]
+id = "e4d2c4f3a1b2c3d4e5f6a7b8c9d0e1f2"
+"#,
+        );
+        assert!(cfg.analytics.is_enabled());
+        assert!(cfg.analytics.google.is_none());
+        let b = cfg.analytics.baidu.clone().expect("baidu present");
+        assert_eq!(b.id, "e4d2c4f3a1b2c3d4e5f6a7b8c9d0e1f2");
+        let s = cfg.analytics.snippets();
+        assert!(s.contains("hm.baidu.com/hm.js?e4d2c4f3a1b2c3d4e5f6a7b8c9d0e1f2"));
+    }
+
+    #[test]
+    fn analytics_both_providers() {
+        let cfg = parse(
+            r#"
+[analytics.google]
+id = "G-1"
+
+[analytics.baidu]
+id = "B-1"
+"#,
+        );
+        let s = cfg.analytics.snippets();
+        assert!(s.contains("googletagmanager"));
+        assert!(s.contains("hm.baidu.com"));
+    }
+
+    #[test]
+    fn analytics_empty_id_is_ignored() {
+        let cfg = parse(
+            r#"
+[analytics.google]
+id = ""
+"#,
+        );
+        assert!(!cfg.analytics.is_enabled());
+        assert!(cfg.analytics.google.is_none());
+    }
+
+    #[test]
+    fn analytics_id_with_special_chars_is_escaped() {
+        let cfg = parse(
+            r#"
+[analytics.google]
+id = "</script><script>alert(1)</script>"
+"#,
+        );
+        let s = cfg.analytics.snippets();
+        assert!(
+            !s.contains("</script><script>alert(1)</script>"),
+            "raw id must not leak into HTML attribute: {s}"
+        );
+        assert!(s.contains("&lt;/script&gt;"));
     }
 }

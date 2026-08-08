@@ -279,7 +279,27 @@ fn with_layout(
     let headers = render_slot(site, &ctx, "header");
     let side = render_slot(site, &ctx, "side");
     let footer = render_slot(site, &ctx, "footer");
-    let inject = render_slot(site, &ctx, "inject");
+    let user_inject = render_slot(site, &ctx, "inject");
+    // Analytics snippets come first so the page tracker boots before any
+    // user-supplied JS in `layout/inject.html` interacts with the DOM.
+    let inject = match user_inject {
+        Value::Str(s) => {
+            let snippets = site.config.analytics.snippets();
+            if snippets.is_empty() {
+                Value::Str(s)
+            } else {
+                Value::Str(format!("{snippets}{s}"))
+            }
+        }
+        other => {
+            let snippets = site.config.analytics.snippets();
+            if snippets.is_empty() {
+                other
+            } else {
+                Value::Str(snippets)
+            }
+        }
+    };
     if let Value::Map(map) = &mut ctx {
         map.insert("header".to_string(), headers);
         map.insert("side".to_string(), side);

@@ -28,6 +28,9 @@ press Ctrl-C to stop
 - **布局插槽** — `template/<theme>/layout/` 目录存放 `header`、`footer`、
   `side`、`inject` 片段；
   `inject` 插槽天然适合放置统计/分析 JS 代码。
+- **内置统计工具** — 在 `site.toml` 中设置 `[analytics.google]` 或
+  `[analytics.baidu]`，填入非空的 `id` 即可自动注入 Google Analytics
+  （`gtag.js`）或百度统计脚本到页面 `<head>`，无需修改模板。
 - **可配置元信息** — 站点全局配置通过 `site.toml`，文章元信息通过 frontmatter。
   模板 + 参数模式，方便 DIY 定制。
 - **多语言支持** — 一个站点多种语言，通过文件名后缀识别，例如 `hello.zh.md`。
@@ -315,6 +318,16 @@ tags_limit = 20      # 标签页每页文章数（/tags/<标签>/）
 # 标签云：是否在侧边栏显示标签小部件（true）或隐藏（false）。
 show_tag_cloud = true
 tag_cloud_limit = 0   # 侧边栏标签云最多显示几个标签；0 = 全部显示
+
+# 流量统计 —— 整段省略（或将 `id` 置空）即可关闭。每个被启用的提供方
+# 脚本会自动注入到页面 <head>，且排在 `template/<theme>/layout/inject.html`
+# 内容之前。
+#
+# [analytics.google]            # Google Analytics 4 (gtag.js)
+# id = "G-XXXXXXXXXX"
+#
+# [analytics.baidu]             # 百度统计
+# id = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 
 [lang.en]                    # 各语言的覆盖项
 title = "My Blog"
