@@ -24,7 +24,14 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
     for l in &config.languages {
         config_langs.push(Value::str(l));
     }
-    let categories = site.category_tree_value(&site.tree, lang, current_url);
+    // `posts/` is a special directory, not a category: its sub-directories
+    // are the first-level categories. Flatten the container node away so the
+    // sidebar tree starts at the real categories.
+    let cats_root = match site.tree.first() {
+        Some(root) if root.slug == "posts" => &root.children,
+        _ => &site.tree,
+    };
+    let categories = site.category_tree_value(cats_root, lang, current_url);
     let categories_active = tree_has_active(&categories);
     let pages = pages_value(&site.articles, lang, current_url);
     let pages_tree = site.pages_tree_value(lang, current_url);
