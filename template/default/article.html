@@ -13,7 +13,8 @@
     {% if article.date_display %}<span>{{ t.published }} <time datetime="{{ article.date_display }}">{{ article.date_display }}</time></span>{% endif %}
     {% if article.updated %}<span>{{ t.updated }} <time datetime="{{ article.updated_iso }}">{{ article.updated }}</time></span>{% endif %}
     {% if article.author %}<span>{{ t.author }} {{ article.author }}</span>{% endif %}
-    {% if article.reading_minutes %}<span class="reading-time">{{ article.reading_minutes }} {{ t.reading_time }}</span>{% endif %}
+    {% if article.reading_minutes %}<span class="reading-time">{{ article.reading_minutes }} {{ t.reading_time }}</span>
+    {% else %}{% if article.reading_seconds %}<span class="reading-time">{{ article.reading_seconds }} {{ t.reading_time_seconds }}</span>{% endif %}{% endif %}
   </div>
   {% if article.tag_links %}<div class="tags">{% for tag in article.tag_links %}<a class="tag tag-link" href="{{ tag.url }}">{{ tag.name }}</a>{% endfor %}</div>{% endif %}
   <div class="post-content">{{ article.content | safe }}</div>

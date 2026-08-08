@@ -9,7 +9,8 @@
     {% endfor %}
   </nav>
   <h1 class="post-title">{{ article.title }}</h1>
-  {% if article.reading_minutes %}<p class="reading-time">{{ article.reading_minutes }} {{ t.reading_time }}</p>{% endif %}
+  {% if article.reading_minutes %}<p class="reading-time">{{ article.reading_minutes }} {{ t.reading_time }}</p>
+  {% else %}{% if article.reading_seconds %}<p class="reading-time">{{ article.reading_seconds }} {{ t.reading_time_seconds }}</p>{% endif %}{% endif %}
   {% if article.tag_links %}<div class="tags">{% for tag in article.tag_links %}<a class="tag tag-link" href="{{ tag.url }}">{{ tag.name }}</a>{% endfor %}</div>{% endif %}
   <div class="post-content">{{ article.content | safe }}</div>
 </article>

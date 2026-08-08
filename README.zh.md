@@ -320,6 +320,7 @@ no_posts     = "暂无文章。"
 
 可用键：`home`、`categories`、`recent_posts`、`tags`、`tag_list`、
 `friend_links`、`no_posts`、`read_in`、`published`、`updated`、`author`、
+`reading_time`、`reading_time_seconds`、
 `prev`、`next`、`not_found`、`not_found_desc`。缺失的键会回退到英文，再回退到
 内置默认值，最后回退到键名字符串本身。
 

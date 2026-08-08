@@ -753,16 +753,35 @@ fn reading_minutes_estimates_cjk_and_words() {
     let short = site.articles.iter().find(|a| a.slug == "short").expect("short");
     let empty = site.articles.iter().find(|a| a.slug == "empty").expect("empty");
     assert_eq!(long.reading_minutes(), 5, "600 CJK + 600 words → 5 min");
-    assert!(short.reading_minutes() >= 1, "short content still ≥ 1 min");
+    assert_eq!(long.reading_seconds(), 300, "5 min in seconds");
+    assert_eq!(short.reading_minutes(), 0, "sub-minute content has 0 minutes");
+    assert_eq!(short.reading_seconds(), 1, "sub-minute content is finer-grained…");
     assert_eq!(empty.reading_minutes(), 0, "empty content reports 0");
-    // to_value surfaces the count.
+    // to_value surfaces both counts.
     let v = short.to_value();
     assert!(v
         .as_map()
         .and_then(|m| m.get("reading_minutes"))
         .and_then(|x| x.as_int())
-        .unwrap_or(0)
-        >= 1);
+        .unwrap_or(-1)
+        == 0);
+    assert!(v
+        .as_map()
+        .and_then(|m| m.get("reading_seconds"))
+        .and_then(|x| x.as_int())
+        .unwrap_or(-1)
+        == 1);
+    // Long posts render "N min read"; short ones fall back to "N sec read".
+    let long_html = mdweb::render::render_article(&site, "en", long).expect("render long");
+    assert!(
+        long_html.contains("reading-time\">5 min read"),
+        "long content renders minute label"
+    );
+    let short_html = mdweb::render::render_article(&site, "en", short).expect("render short");
+    assert!(
+        short_html.contains("reading-time\">1 sec read"),
+        "short content refines the estimate to seconds"
+    );
     // Rendered output exposes the label for both post and page paths.
     let page_dir = tempdir("readingpg");
     write(&page_dir, "site.toml", r#"title = "X""#);
@@ -776,8 +795,8 @@ fn reading_minutes_estimates_cjk_and_words() {
     let html = mdweb::render::render_article(&site2, "en", about).expect("render page");
     assert!(html.contains("reading-time"), "pages surface reading-time block");
     assert!(
-        html.contains("min read"),
-        "rendered output uses the i18n reading_time label"
+        html.contains("sec read"),
+        "rendered output uses the i18n reading_time_seconds label"
     );
 }
 

@@ -93,11 +93,9 @@ pub struct Article {
 }
 
 impl Article {
-    /// Estimated reading time in minutes. Counts CJK characters at ~300
-    /// chars/min and whitespace-separated tokens in the rest at ~200 wpm;
-    /// rounds up. Returns `0` for empty content so callers can omit the
-    /// display with a simple truthy check.
-    pub fn reading_minutes(&self) -> i64 {
+    /// Word-like and CJK-character counts for the readable body, ignoring any
+    /// markup tags so the estimate reflects what a reader actually sees.
+    fn reading_content_counts(&self) -> (usize, usize) {
         let mut cjk: usize = 0;
         let mut other = String::new();
         let mut in_tag = false;
@@ -119,12 +117,32 @@ impl Article {
                 _ => {}
             }
         }
-        let words = other.split_whitespace().count();
+        (cjk, other.split_whitespace().count())
+    }
+
+    /// Estimated reading time in *seconds*, counting CJK characters at ~300
+    /// chars/min and whitespace-separated tokens in the rest at ~200 wpm;
+    /// rounds up to at least one second. Returns `0` for empty content so
+    /// callers can omit the display with a simple truthy check.
+    pub fn reading_seconds(&self) -> i64 {
+        let (cjk, words) = self.reading_content_counts();
         if cjk == 0 && words == 0 {
             return 0;
         }
-        let minutes = (cjk as f64 / 300.0) + (words as f64 / 200.0);
-        minutes.ceil() as i64
+        let seconds = ((cjk as f64 / 300.0) + (words as f64 / 200.0)) * 60.0;
+        seconds.ceil() as i64
+    }
+
+    /// Estimated reading time in minutes. `0` for content shorter than a
+    /// minute — callers should fall back to `reading_seconds` there instead
+    /// of showing "1 min read". Returns `0` for empty content too.
+    pub fn reading_minutes(&self) -> i64 {
+        let s = self.reading_seconds();
+        if s < 60 {
+            0
+        } else {
+            (s + 59) / 60
+        }
     }
 
     /// Always-on display date: the frontmatter `date` if set. Returns an
@@ -148,6 +166,7 @@ impl Article {
         m.insert("date_display".into(), opt_str(Some(&self.date_display())));
         m.insert("author".into(), Value::str(&self.author));
         m.insert("reading_minutes".into(), Value::int(self.reading_minutes()));
+        m.insert("reading_seconds".into(), Value::int(self.reading_seconds()));
         m.insert(
             "tags".into(),
             Value::Arr(self.tags.iter().cloned().map(Value::str).collect()),
