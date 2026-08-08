@@ -1,6 +1,7 @@
 ---
 title: "Hello"
-summary: "A first hello-world post."
+summary: "Welcomes, announcements and first posts."
 ---
 
-Welcome and announcements.
+A place for greetings, site news and the very first post on a new
+mdweb site.

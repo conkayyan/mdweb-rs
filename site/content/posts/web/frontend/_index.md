@@ -3,4 +3,5 @@ title: "Frontend"
 summary: "UI, components, build tools."
 ---
 
-Nested two levels deep — under Posts → Web → Frontend.
+Frontend engineering: interfaces, components, frameworks and the build
+pipelines that ship them.
