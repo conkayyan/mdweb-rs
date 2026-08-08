@@ -157,8 +157,15 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
         _ => (site.default_lang.clone(), segs.clone()),
     };
 
+    // ?page=N applies to home, category, and page-section listings.
+    let page = parse_form_query(query, "page")
+        .parse::<usize>()
+        .ok()
+        .filter(|&n| n > 0)
+        .unwrap_or(1);
+
     if rest.is_empty() {
-        return render::render_home(site, &lang).map(|h| Response {
+        return render::render_home(site, &lang, page).map(|h| Response {
             body: h.into_bytes(),
             content_type: HTML,
         });
@@ -185,7 +192,7 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
     }
 
     if let Some(cat) = find_category(site, &rest.join("/")) {
-        return render::render_category(site, &lang, cat).map(|h| Response {
+        return render::render_category(site, &lang, cat, page).map(|h| Response {
             body: h.into_bytes(),
             content_type: HTML,
         });
@@ -195,7 +202,7 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
     // lookups already handled `posts/*`; here we resolve `_index.md`-bearing
     // directories under e.g. `pages/`, `notes/`, …
     if let Some(dir) = find_section(site, &rest) {
-        return render::render_section(site, &lang, &dir).map(|h| Response {
+        return render::render_section(site, &lang, &dir, page).map(|h| Response {
             body: h.into_bytes(),
             content_type: HTML,
         });

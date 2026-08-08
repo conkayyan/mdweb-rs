@@ -18,5 +18,12 @@
   {% else %}
   <p>No articles yet. Add some markdown files to the site directory.</p>
   {% endif %}
+  {% if home.pagination.show_pagination %}
+  <nav class="pagination" aria-label="Pagination">
+    {% if home.pagination.has_prev %}<a class="pagination-prev" href="?page={{ home.pagination.prev_page }}" rel="prev">{{ t.prev_page | default(value="< Previous") }}</a>{% endif %}
+    <span class="pagination-status">{{ home.pagination.page }} / {{ home.pagination.total_pages }}</span>
+    {% if home.pagination.has_next %}<a class="pagination-next" href="?page={{ home.pagination.next_page }}" rel="next">{{ t.next_page | default(value="Next >") }}</a>{% endif %}
+  </nav>
+  {% endif %}
 </section>
 {% endblock content %}

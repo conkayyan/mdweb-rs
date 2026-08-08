@@ -210,6 +210,64 @@ pub struct Site {
     pub engine_embedded: bool,
 }
 
+/// Pagination result: which items to show + meta for the pager UI.
+#[derive(Debug)]
+struct Pagination {
+    page: usize,
+    total_pages: usize,
+    total: usize,
+    limit: usize,
+}
+
+/// `limit == 0` means "no pagination": every item on one page.
+fn paginate<T>(items: Vec<T>, page: usize, limit: usize) -> (Vec<T>, Pagination) {
+    let total = items.len();
+    if limit == 0 || total == 0 {
+        return (
+            items,
+            Pagination {
+                page: 1,
+                total_pages: 1,
+                total,
+                limit,
+            },
+        );
+    }
+    let total_pages = (total + limit - 1) / limit;
+    let page = page.max(1).min(total_pages);
+    let start = (page - 1) * limit;
+    let end = (start + limit).min(total);
+    let items: Vec<T> = items.into_iter().skip(start).take(end - start).collect();
+    (
+        items,
+        Pagination {
+            page,
+            total_pages,
+            total,
+            limit,
+        },
+    )
+}
+
+fn pagination_value(p: &Pagination) -> Value {
+    let has_prev = p.page > 1;
+    let has_next = p.page < p.total_pages;
+    let prev_page = if has_prev { p.page - 1 } else { p.page };
+    let next_page = if has_next { p.page + 1 } else { p.page };
+    let show_pagination = p.total_pages > 1;
+    Value::Map(BTreeMap::from([
+        ("page".to_string(), Value::int(p.page as i64)),
+        ("total_pages".to_string(), Value::int(p.total_pages as i64)),
+        ("total".to_string(), Value::int(p.total as i64)),
+        ("limit".to_string(), Value::int(p.limit as i64)),
+        ("has_prev".to_string(), Value::Bool(has_prev)),
+        ("has_next".to_string(), Value::Bool(has_next)),
+        ("show_pagination".to_string(), Value::Bool(show_pagination)),
+        ("prev_page".to_string(), Value::int(prev_page as i64)),
+        ("next_page".to_string(), Value::int(next_page as i64)),
+    ]))
+}
+
 impl Site {
     pub fn build(
         doc_root: &Path,
@@ -451,7 +509,7 @@ impl Site {
         self.config.title_for(lang)
     }
 
-    pub fn home_value(&self, lang: &str) -> Value {
+    pub fn home_value(&self, lang: &str, page: usize) -> Value {
         let mut arts: Vec<Value> = self
             .articles
             .iter()
@@ -467,6 +525,9 @@ impl Site {
         arts.sort_by_key(|a| {
             std::cmp::Reverse(a.path("sort_ts").and_then(|v| v.as_int()).unwrap_or(0))
         });
+        let total = arts.len();
+        let (arts, pagination) =
+            paginate(arts, page, self.config.home_limit);
         let content = self
             .home_content
             .get(lang)
@@ -476,10 +537,12 @@ impl Site {
         Value::Map(BTreeMap::from([
             ("content".to_string(), content),
             ("articles".to_string(), Value::Arr(arts)),
+            ("pagination".to_string(), pagination_value(&pagination)),
+            ("total".to_string(), Value::int(total as i64)),
         ]))
     }
 
-    pub fn category_value(&self, cat: &Category, lang: &str) -> Value {
+    pub fn category_value(&self, cat: &Category, lang: &str, page: usize) -> Value {
         let mut arts: Vec<Value> = self
             .articles
             .iter()
@@ -489,6 +552,9 @@ impl Site {
         arts.sort_by_key(|a| {
             std::cmp::Reverse(a.path("sort_ts").and_then(|v| v.as_int()).unwrap_or(0))
         });
+        let total = arts.len();
+        let (arts, pagination) =
+            paginate(arts, page, self.config.category_limit);
         let children: Vec<Value> = cat.children.iter().map(|c| c.nav_value(lang, &self.config, &self.default_lang)).collect();
         Value::Map(BTreeMap::from([
             (
@@ -510,6 +576,8 @@ impl Site {
             ),
             ("articles".to_string(), Value::Arr(arts)),
             ("children".to_string(), Value::Arr(children)),
+            ("pagination".to_string(), pagination_value(&pagination)),
+            ("total".to_string(), Value::int(total as i64)),
         ]))
     }
 
@@ -593,7 +661,12 @@ impl Site {
     /// `_index.md` metadata in the requested language (falling back to the
     /// default language) and lists direct children: subdirectory links first,
     /// then sibling pages.
-    pub fn page_section_value(&self, dir_path: &[String], lang: &str) -> Option<Value> {
+    pub fn page_section_value(
+        &self,
+        dir_path: &[String],
+        lang: &str,
+        page: usize,
+    ) -> Option<Value> {
         let key = dir_path.join("/");
         let entry = self.indices.get(&key)?;
         let entry = entry
@@ -631,7 +704,6 @@ impl Site {
 
         // Children = subdirectories first (by name), then leaf pages (by title).
         let mut children: Vec<Value> = Vec::new();
-        let key_for_match = dir_path.join("/");
         let subdirs: std::collections::BTreeSet<Vec<String>> = self
             .indices
             .keys()
@@ -690,8 +762,10 @@ impl Site {
                 ("is_section".to_string(), Value::Bool(false)),
             ])));
         }
-        let _ = key_for_match; // silence unused warning if any
 
+        let total = children.len();
+        let (children, pagination) =
+            paginate(children, page, self.config.pages_limit);
         let url = url_for(&self.config, &self.default_lang, dir_path, None, lang);
         Some(Value::Map(BTreeMap::from([
             ("title".to_string(), Value::str(&title)),
@@ -699,6 +773,8 @@ impl Site {
             ("summary".to_string(), opt_str(Some(&summary))),
             ("content".to_string(), opt_str(Some(&html))),
             ("children".to_string(), Value::Arr(children)),
+            ("pagination".to_string(), pagination_value(&pagination)),
+            ("total".to_string(), Value::int(total as i64)),
         ])))
     }
 

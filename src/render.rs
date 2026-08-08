@@ -245,9 +245,9 @@ fn render_with_context(site: &Site, template_name: &str, ctx: &Value) -> Result<
     site.engine.render(template_name, ctx)
 }
 
-pub fn render_home(site: &Site, lang: &str) -> Result<String, String> {
+pub fn render_home(site: &Site, lang: &str, page: usize) -> Result<String, String> {
     let url = site.config.lang_prefix(lang);
-    let payload = Site::home_value(site, lang);
+    let payload = Site::home_value(site, lang, page);
     let ctx = with_layout(site, lang, &url, "index.html", "home", payload)?;
     render_with_context(site, "index.html", &ctx)
 }
@@ -270,17 +270,27 @@ pub fn render_article(site: &Site, lang: &str, article: &Article) -> Result<Stri
     render_with_context(site, template, &ctx)
 }
 
-pub fn render_category(site: &Site, lang: &str, cat: &Category) -> Result<String, String> {
+pub fn render_category(
+    site: &Site,
+    lang: &str,
+    cat: &Category,
+    page: usize,
+) -> Result<String, String> {
     let url = cat.urls.get(lang).cloned().unwrap_or_default();
-    let payload = Site::category_value(site, cat, lang);
+    let payload = Site::category_value(site, cat, lang, page);
     let ctx = with_layout(site, lang, &url, "category.html", "category", payload)?;
     render_with_context(site, "category.html", &ctx)
 }
 
 /// Render a directory landing page (e.g. `/pages/docs/`) using
 /// `page_section.html`. Falls back to 404 if the path has no `_index.md`.
-pub fn render_section(site: &Site, lang: &str, dir_path: &[String]) -> Result<String, String> {
-    let payload = match site.page_section_value(dir_path, lang) {
+pub fn render_section(
+    site: &Site,
+    lang: &str,
+    dir_path: &[String],
+    page: usize,
+) -> Result<String, String> {
+    let payload = match site.page_section_value(dir_path, lang, page) {
         Some(v) => v,
         None => return Err("not found".into()),
     };

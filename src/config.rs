@@ -32,6 +32,8 @@ pub(crate) const I18N_DEFAULTS: &[(&str, &str)] = &[
     ("reading_time", "min read"),
     ("prev", "Previous"),
     ("next", "Next"),
+    ("prev_page", "< Previous"),
+    ("next_page", "Next >"),
     ("not_found", "Not Found"),
     ("not_found_desc", "The page you're looking for doesn't exist."),
     ("search", "Search"),
@@ -67,6 +69,13 @@ pub struct Config {
     pub show_rss: bool,
     /// Whether to surface the sitemap link in templates. Default `true`.
     pub show_sitemap: bool,
+    /// Articles shown per page on the home feed. `0` disables pagination
+    /// (every article on one page). Default `10`.
+    pub home_limit: usize,
+    /// Articles shown per page in a category listing. Default `20`.
+    pub category_limit: usize,
+    /// Pages shown per page in a directory landing listing. Default `50`.
+    pub pages_limit: usize,
     pub extra: Value,
 }
 
@@ -93,6 +102,9 @@ impl Default for Config {
             friend_links: Vec::new(),
             show_rss: true,
             show_sitemap: true,
+            home_limit: 10,
+            category_limit: 20,
+            pages_limit: 50,
             extra: Value::map(),
         }
     }
@@ -152,6 +164,21 @@ impl Config {
         }
         if let Some(b) = m.get("show_sitemap").and_then(|v| v.as_bool()) {
             cfg.show_sitemap = b;
+        }
+        if let Some(n) = m.get("home_limit").and_then(|v| v.as_int()) {
+            if n >= 0 {
+                cfg.home_limit = n as usize;
+            }
+        }
+        if let Some(n) = m.get("category_limit").and_then(|v| v.as_int()) {
+            if n >= 0 {
+                cfg.category_limit = n as usize;
+            }
+        }
+        if let Some(n) = m.get("pages_limit").and_then(|v| v.as_int()) {
+            if n >= 0 {
+                cfg.pages_limit = n as usize;
+            }
         }
         if let Some(Value::Arr(items)) = m.get("friend_links") {
             for item in items {

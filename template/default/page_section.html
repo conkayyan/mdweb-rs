@@ -21,5 +21,12 @@
     {% endfor %}
   </ul>
   {% endif %}
+  {% if section.pagination.show_pagination %}
+  <nav class="pagination" aria-label="Pagination">
+    {% if section.pagination.has_prev %}<a class="pagination-prev" href="?page={{ section.pagination.prev_page }}" rel="prev">{{ t.prev_page | default(value="< Previous") }}</a>{% endif %}
+    <span class="pagination-status">{{ section.pagination.page }} / {{ section.pagination.total_pages }}</span>
+    {% if section.pagination.has_next %}<a class="pagination-next" href="?page={{ section.pagination.next_page }}" rel="next">{{ t.next_page | default(value="Next >") }}</a>{% endif %}
+  </nav>
+  {% endif %}
 </section>
 {% endblock content %}

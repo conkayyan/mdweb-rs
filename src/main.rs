@@ -183,6 +183,18 @@ fn cmd_create(args: &[String]) -> i32 {
         ("content/notes/_index.zh.md", NOTES_INDEX_ZH_MD),
         ("content/notes/tips.md", TIPS_MD),
         ("content/notes/tips.zh.md", TIPS_ZH_MD),
+        // Tutorial posts (EN + ZH) — enough to exercise home + category
+        // pagination at the default `home_limit = 5`.
+        ("content/posts/installing-mdweb.md", TUTORIAL_POSTS[0].1),
+        ("content/posts/installing-mdweb.zh.md", TUTORIAL_POSTS[1].1),
+        ("content/posts/writing-your-first-post.md", TUTORIAL_POSTS[2].1),
+        ("content/posts/writing-your-first-post.zh.md", TUTORIAL_POSTS[3].1),
+        ("content/posts/adding-pages.md", TUTORIAL_POSTS[4].1),
+        ("content/posts/adding-pages.zh.md", TUTORIAL_POSTS[5].1),
+        ("content/posts/customising-the-theme.md", TUTORIAL_POSTS[6].1),
+        ("content/posts/customising-the-theme.zh.md", TUTORIAL_POSTS[7].1),
+        ("content/posts/syndication-and-seo.md", TUTORIAL_POSTS[8].1),
+        ("content/posts/syndication-and-seo.zh.md", TUTORIAL_POSTS[9].1),
         ("samples/page.md", SAMPLE_PAGE_MD),
         ("samples/post.md", SAMPLE_POST_MD),
         ("template/default/static/style.css", theme_files::STYLE),
@@ -306,6 +318,11 @@ theme = "default"
 show_rss = true
 show_sitemap = true
 
+# Listing limits. Set `0` to disable pagination for that listing.
+home_limit = 5       # articles per page on /
+category_limit = 5   # articles per page in category landings
+pages_limit = 50     # pages per page in a directory landing
+
 [lang.en]
 title = "My Blog"
 display_name = "English"
@@ -334,6 +351,8 @@ author        = "作者："
 reading_time  = "分钟阅读"
 prev          = "上一篇"
 next          = "下一篇"
+prev_page     = "< 上一页"
+next_page     = "下一页 >"
 not_found     = "页面未找到"
 not_found_desc = "您访问的页面不存在。"
 search        = "搜索"
@@ -557,6 +576,176 @@ tags: ["tips"]
 - 编辑 `template/default/layout/<slot>.html` 即可定制插槽片段
   （header / footer / side / inject）。
 "#;
+
+// ---------- Tutorial posts to drive pagination on `/` and `/posts/` ----------
+// Sorted newest-first in the rendered feed (`sort_ts` desc). With the default
+// `home_limit = 5` / `category_limit = 5`, the latest five fill page 1 and
+// the older ones spill into subsequent pages.
+const TUTORIAL_POSTS: &[(&str, &str)] = &[
+    (
+        "content/posts/installing-mdweb.md",
+        "---\n\
+        title: \"Installing mdweb\"\n\
+        date: \"2026-08-04\"\n\
+        tags: [\"tutorial\", \"setup\"]\n\
+        ---\n\
+        \n\
+        mdweb is a single static binary. Grab a release from GitHub or build\n\
+        from source with `cargo install mdweb`. Once on your `$PATH`, run:\n\
+        \n\
+        ```bash\n\
+        mdweb create my-blog\n\
+        cd my-blog\n\
+        mdweb run\n\
+        ```\n\
+        \n\
+        Then open <http://127.0.0.1:8080> and you'll see the demo site.\n\
+        ",
+    ),
+    (
+        "content/posts/installing-mdweb.zh.md",
+        "---\n\
+        title: \"安装 mdweb\"\n\
+        date: \"2026-08-04\"\n\
+        tags: [\"tutorial\", \"setup\"]\n\
+        ---\n\
+        \n\
+        mdweb 是单一静态二进制。从 GitHub 下载 release，或用\n\
+        `cargo install mdweb` 从源码构建。加入 `$PATH` 后执行：\n\
+        \n\
+        ```bash\n\
+        mdweb create my-blog\n\
+        cd my-blog\n\
+        mdweb run\n\
+        ```\n\
+        \n\
+        打开 <http://127.0.0.1:8080> 即可看到演示站点。\n\
+        ",
+    ),
+    (
+        "content/posts/writing-your-first-post.md",
+        "---\n\
+        title: \"Writing your first post\"\n\
+        date: \"2026-08-03\"\n\
+        tags: [\"tutorial\", \"content\"]\n\
+        ---\n\
+        \n\
+        Posts live under `content/posts/` as plain Markdown. The directory\n\
+        becomes a category, subdirectories become subcategories. Filenames\n\
+        like `hello.zh.md` register as a Chinese variant of `hello.md`.\n\
+        \n\
+        Frontmatter accepts `title`, `date`, `updated`, `author`, `tags`,\n\
+        `summary`, and arbitrary `extra` keys exposed to templates.\n\
+        ",
+    ),
+    (
+        "content/posts/writing-your-first-post.zh.md",
+        "---\n\
+        title: \"撰写第一篇文章\"\n\
+        date: \"2026-08-03\"\n\
+        tags: [\"tutorial\", \"content\"]\n\
+        ---\n\
+        \n\
+        文章放在 `content/posts/` 目录下，就是普通 Markdown。目录即分类，\n\
+        子目录即子分类。形如 `hello.zh.md` 的文件名注册为 `hello.md` 的\n\
+        中文版本。\n\
+        \n\
+        frontmatter 支持 `title`、`date`、`updated`、`author`、`tags`、\n\
+        `summary`，以及任意 `extra` 字段（可在模板里取到）。\n\
+        ",
+    ),
+    (
+        "content/posts/adding-pages.md",
+        "---\n\
+        title: \"Adding static pages\"\n\
+        date: \"2026-08-02\"\n\
+        tags: [\"tutorial\", \"pages\"]\n\
+        ---\n\
+        \n\
+        Anything outside `posts/` is a **page**: about, contact, docs,\n\
+        tutorials. Nested folders under `pages/` form a hierarchy and get\n\
+        an instant landing page listing their children.\n\
+        \n\
+        A top-level `.md` file like `content/about.md` becomes `/about/` —\n\
+        perfect for one-off links that don't deserve their own section.\n\
+        ",
+    ),
+    (
+        "content/posts/adding-pages.zh.md",
+        "---\n\
+        title: \"添加静态页面\"\n\
+        date: \"2026-08-02\"\n\
+        tags: [\"tutorial\", \"pages\"]\n\
+        ---\n\
+        \n\
+        `posts/` 之外的任何内容都是**页面**：关于、联系、文档、教程。\n\
+        `pages/` 下嵌套的目录形成层级，并自动生成子页面列表的 landing。\n\
+        \n\
+        顶层的 `.md` 文件（如 `content/about.md`）会变成 `/about/`——\n\
+        适合不需要独立分区的快捷链接。\n\
+        ",
+    ),
+    (
+        "content/posts/customising-the-theme.md",
+        "---\n\
+        title: \"Customising the theme\"\n\
+        date: \"2026-07-30\"\n\
+        tags: [\"tutorial\", \"theme\"]\n\
+        ---\n\
+        \n\
+        Override individual files under `template/default/`. mdweb loads\n\
+        anything you ship there on top of the embedded defaults, so a\n\
+        single `layout/header.html` is enough to recolour the navigation.\n\
+        \n\
+        Slots available: `header`, `footer`, `side`, `inject`. Use\n\
+        `inject.html` to add analytics snippets before `</head>`.\n\
+        ",
+    ),
+    (
+        "content/posts/customising-the-theme.zh.md",
+        "---\n\
+        title: \"自定义主题\"\n\
+        date: \"2026-07-30\"\n\
+        tags: [\"tutorial\", \"theme\"]\n\
+        ---\n\
+        \n\
+        在 `template/default/` 下覆盖任意文件即可。mdweb 会先加载内嵌的\n\
+        默认模板，再用你提供的文件覆盖，所以你只需替换 `layout/header.html`\n\
+        就能重新着色导航栏。\n\
+        \n\
+        可用插槽：`header`、`footer`、`side`、`inject`。用 `inject.html`\n\
+        在 `</head>` 之前注入统计脚本。\n\
+        ",
+    ),
+    (
+        "content/posts/syndication-and-seo.md",
+        "---\n\
+        title: \"RSS, sitemap and SEO\"\n\
+        date: \"2026-07-28\"\n\
+        tags: [\"tutorial\", \"seo\"]\n\
+        ---\n\
+        \n\
+        mdweb generates `/rss.xml`, `/sitemap.xml`, and a `<link rel=alternate>`\n\
+        in the document head. Toggle the footer links via `show_rss` and\n\
+        `show_sitemap` in `site.toml`. The sitemap covers every page, post,\n\
+        and category across all configured languages.\n\
+        ",
+    ),
+    (
+        "content/posts/syndication-and-seo.zh.md",
+        "---\n\
+        title: \"RSS、站点地图与 SEO\"\n\
+        date: \"2026-07-28\"\n\
+        tags: [\"tutorial\", \"seo\"]\n\
+        ---\n\
+        \n\
+        mdweb 自动生成 `/rss.xml`、`/sitemap.xml`，并在 `<head>` 中放置\n\
+        `<link rel=alternate>`。通过 `site.toml` 中的 `show_rss` 和\n\
+        `show_sitemap` 控制底部链接显示。站点地图覆盖所有语言下的所有\n\
+        页面、文章和分类。\n\
+        ",
+    ),
+];
 
 // ---------- Multi-level nested pages example (EN + ZH) ----------
 // pages/docs/_index.md and pages/docs/guide/_index.md are landing pages

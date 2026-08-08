@@ -402,6 +402,22 @@ button.nav-link {
   transition: color .15s ease;
 }
 .recent-link:hover { color: var(--c-accent); }
+
+.pagination {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--c-muted, #888);
+  font-size: .9rem;
+}
+.pagination-status { font-variant-numeric: tabular-nums; }
+.pagination a {
+  padding: 4px 10px;
+  border: 1px solid var(--c-border, #e5e7eb);
+  border-radius: 6px;
+}
 .recent-date {
   display: block;
   font-size: .76rem;

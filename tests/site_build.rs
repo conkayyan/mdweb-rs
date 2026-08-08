@@ -87,10 +87,10 @@ fn home_content_resolves_per_language() {
         Some("<p>中文内容</p>\n")
     );
 
-    let en = site.home_value("en");
+    let en = site.home_value("en", 1);
     let en = en.as_map().expect("en map");
     assert_eq!(en.get("content").and_then(|v| v.as_str()), Some("<p>English body</p>\n"));
-    let zh = site.home_value("zh");
+    let zh = site.home_value("zh", 1);
     let zh = zh.as_map().expect("zh map");
     assert_eq!(zh.get("content").and_then(|v| v.as_str()), Some("<p>中文内容</p>\n"));
 }
@@ -108,7 +108,7 @@ fn render_context_exposes_t_and_current_lang_display_name() {
         categories = "分类"
         "#,
     );
-    let html = mdweb::render::render_home(&site, "zh").expect("render");
+    let html = mdweb::render::render_home(&site, "zh", 1).expect("render");
     assert!(html.contains("分类"), "Chinese label should appear in /zh/ home page");
     assert!(html.contains("简体中文"), "current language display name should appear");
 }
@@ -123,7 +123,7 @@ fn languages_have_display_name_not_title() {
         display_name = "简体中文"
         "#,
     );
-    let html = mdweb::render::render_home(&site, "en").expect("render");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
     // Dropdown should expose the Chinese label configured via [lang.zh].
     assert!(html.contains("简体中文"));
     // Old `l.title` / `languages[].title` shape should not appear.
@@ -133,7 +133,7 @@ fn languages_have_display_name_not_title() {
 #[test]
 fn empty_theme_falls_back_to_embedded_default() {
     let site = build_site_from_str("");
-    let html = mdweb::render::render_home(&site, "en").expect("render");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
     // No template/<name>/ dir exists, but the engine should still produce
     // a complete page from the embedded default theme (base.html shell).
     assert!(html.contains("<main"), "embedded default theme should render main shell");
@@ -153,7 +153,7 @@ fn custom_theme_in_template_dir_is_picked_up() {
     write(&dir, "content/_index.md", "---\n---\nbody\n");
 
     let site = Site::build(&dir, None).expect("build");
-    let html = mdweb::render::render_home(&site, "en").expect("render");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
     assert!(
         html.contains("CUSTOM"),
         "footer from template/alt/base.html should override the embedded default"
@@ -167,7 +167,7 @@ fn missing_custom_theme_falls_back_to_embedded() {
     write(&dir, "content/_index.md", "---\n---\nbody\n");
 
     let site = Site::build(&dir, None).expect("build");
-    let html = mdweb::render::render_home(&site, "en").expect("render");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
     assert!(html.contains("<main"), "embedded fallback should still render");
 }
 
@@ -183,7 +183,7 @@ fn sidebar_renders_search_input() {
     );
 
     let site = Site::build(&dir, None).expect("build");
-    let html = mdweb::render::render_home(&site, "en").expect("render");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
     assert!(
         html.contains("side-search-input"),
         "sidebar should expose the search input"
@@ -403,7 +403,7 @@ fn home_feed_excludes_pages_and_notes() {
         "---\ntitle: Tip\ndate: 2026-08-03\n---\nbody\n",
     );
     let site = Site::build(&dir, None).expect("build");
-    let home = site.home_value("en");
+    let home = site.home_value("en", 1);
     let home = home.as_map().expect("home map");
     let arts = home.get("articles").and_then(|v| v.as_arr()).expect("arr");
     let titles: Vec<String> = arts
@@ -484,11 +484,11 @@ fn page_section_renders_with_children_list() {
         "---\ntitle: Intro\n---\nbody\n",
     );
     let site = Site::build(&dir, None).expect("build");
-    let html = mdweb::render::render_home(&site, "en").expect("render home");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render home");
     // The home page renders the header which calls into the layout — verify
     // the section listing path through page_section_value.
     let payload = site
-        .page_section_value(&["pages".to_string(), "docs".to_string()], "en")
+        .page_section_value(&["pages".to_string(), "docs".to_string()], "en", 1)
         .expect("section");
     let m = payload.as_map().expect("map");
     assert_eq!(m.get("title").and_then(|v| v.as_str()), Some("Docs"));
@@ -504,7 +504,7 @@ fn page_section_renders_with_children_list() {
     assert!(titles.contains(&"Intro"), "leaf page lists itself");
     // And the rendering call succeeds.
     let section_html =
-        mdweb::render::render_section(&site, "en", &["pages".to_string(), "docs".to_string()])
+        mdweb::render::render_section(&site, "en", &["pages".to_string(), "docs".to_string()], 1)
             .expect("render section");
     assert!(section_html.contains("Docs"));
     assert!(section_html.contains("Intro"));
@@ -531,6 +531,76 @@ fn article_to_value_exposes_lang_field() {
     let en = site.articles.iter().find(|a| a.slug == "hello" && a.lang == "en").expect("en");
     let v = en.to_value();
     assert_eq!(v.as_map().and_then(|m| m.get("lang")).and_then(|l| l.as_str()), Some("en"));
+}
+
+#[test]
+fn listing_pagination_slices_and_pagers_appear() {
+    // 7 posts under `posts/`, default `home_limit` = 5 → 2 pages. Page 1
+    // holds the newest 5; page 2 holds the 2 oldest.
+    let dir = tempdir("paging");
+    write(&dir, "site.toml", r#"title = "X"
+home_limit = 5"#);
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    let titles_p1 = ["P01", "P02", "P03", "P04", "P05"];
+    let dates_p1 = ["2026-08-01", "2026-08-02", "2026-08-03", "2026-08-04", "2026-08-05"];
+    for (i, t) in titles_p1.iter().enumerate() {
+        write(
+            &dir,
+            &format!("content/posts/p{:02}.md", i + 1),
+            &format!("---\ntitle: \"{t}\"\ndate: \"{}\"\n---\nbody\n", dates_p1[i]),
+        );
+    }
+    let titles_p2 = ["P06", "P07"];
+    let dates_p2 = ["2026-07-01", "2026-06-01"];
+    for (i, t) in titles_p2.iter().enumerate() {
+        write(
+            &dir,
+            &format!("content/posts/p{:02}.md", i + 6),
+            &format!("---\ntitle: \"{t}\"\ndate: \"{}\"\n---\nbody\n", dates_p2[i]),
+        );
+    }
+    let site = Site::build(&dir, None).expect("build");
+    assert_eq!(site.config.home_limit, 5, "configured home_limit wins");
+    assert_eq!(site.config.category_limit, 20, "default category_limit");
+    assert_eq!(site.config.pages_limit, 50, "default pages_limit");
+
+    // page=1 → newest 5
+    let html1 = mdweb::render::render_home(&site, "en", 1).expect("p1");
+    assert!(html1.contains("class=\"pagination\""));
+    assert!(html1.contains(">1 / 2<"));
+    assert!(html1.contains("pagination-next"), "page 1 shows next link");
+    for t in titles_p1 {
+        assert!(html1.contains(t), "page 1 contains {t}");
+    }
+    for t in titles_p2 {
+        assert!(!html1.contains(&format!(">{t}<")), "page 1 hides {t}");
+    }
+
+    // page=2 → oldest 2
+    let html2 = mdweb::render::render_home(&site, "en", 2).expect("p2");
+    assert!(html2.contains(">2 / 2<"));
+    assert!(html2.contains("pagination-prev"), "page 2 shows prev link");
+    for t in titles_p2 {
+        assert!(html2.contains(&format!(">{t}<")), "page 2 contains {t}");
+    }
+
+    // page > total_pages clamps to last page; no next link on the clamp.
+    let html_last = mdweb::render::render_home(&site, "en", 99).expect("clamp");
+    assert!(html_last.contains(">2 / 2<"));
+    assert!(!html_last.contains("pagination-next"));
+
+    // Single-page result: pagination block is hidden entirely.
+    let dir_small = tempdir("paging-small");
+    write(&dir_small, "site.toml", r#"title = "X""#);
+    write(&dir_small, "content/_index.md", "---\n---\nbody\n");
+    write(
+        &dir_small,
+        "content/posts/only.md",
+        "---\ntitle: Only\ndate: 2026-08-01\n---\nbody\n",
+    );
+    let site_small = Site::build(&dir_small, None).expect("build small");
+    let html_small = mdweb::render::render_home(&site_small, "en", 1).expect("small");
+    assert!(!html_small.contains("class=\"pagination\""));
 }
 
 #[test]
@@ -645,7 +715,7 @@ show_sitemap = true"#,
     let site_on = Site::build(&dir_on, None).expect("build");
     assert!(site_on.config.show_rss);
     assert!(site_on.config.show_sitemap);
-    let html_on = mdweb::render::render_home(&site_on, "en").expect("render on");
+    let html_on = mdweb::render::render_home(&site_on, "en", 1).expect("render on");
     assert!(html_on.contains("footer-links"), "footer-links block visible when on");
     assert!(html_on.contains("<a href=\"/rss.xml\""), "RSS footer link visible when on");
     assert!(html_on.contains("<a href=\"/sitemap.xml\""), "sitemap footer link visible when on");
@@ -662,7 +732,7 @@ show_sitemap = false"#,
     let site_off = Site::build(&dir_off, None).expect("build");
     assert!(!site_off.config.show_rss);
     assert!(!site_off.config.show_sitemap);
-    let html_off = mdweb::render::render_home(&site_off, "en").expect("render off");
+    let html_off = mdweb::render::render_home(&site_off, "en", 1).expect("render off");
     assert!(!html_off.contains("footer-links"), "footer-links block hidden when both off");
     assert!(!html_off.contains("<a href=\"/rss.xml\""), "RSS footer link hidden when off");
     assert!(!html_off.contains("<a href=\"/sitemap.xml\""), "sitemap footer link hidden when off");
@@ -686,7 +756,7 @@ fn sidebar_drops_rss_link() {
         "---\ntitle: Hello\ndate: 2026-08-01\n---\nbody\n",
     );
     let site = Site::build(&dir, None).expect("build");
-    let html = mdweb::render::render_home(&site, "en").expect("render");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
     assert!(
         !html.contains("rss-link"),
         "sidebar no longer exposes the rss-link class"
@@ -736,7 +806,7 @@ fn root_level_md_files_become_root_pages() {
     let slugs: Vec<&str> = site.tree.iter().map(|c| c.slug.as_str()).collect();
     assert_eq!(slugs, vec!["posts"], "about must not leak into categories");
     // Home feed excludes the page.
-    let home = site.home_value("en");
+    let home = site.home_value("en", 1);
     let arts = home
         .as_map()
         .and_then(|m| m.get("articles"))

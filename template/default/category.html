@@ -23,5 +23,12 @@
     {% for ch in category.children %}<li><a href="{{ ch.url }}">{{ ch.title }}</a></li>{% endfor %}
   </ul>
   {% endif %}
+  {% if category.pagination.show_pagination %}
+  <nav class="pagination" aria-label="Pagination">
+    {% if category.pagination.has_prev %}<a class="pagination-prev" href="?page={{ category.pagination.prev_page }}" rel="prev">{{ t.prev_page | default(value="< Previous") }}</a>{% endif %}
+    <span class="pagination-status">{{ category.pagination.page }} / {{ category.pagination.total_pages }}</span>
+    {% if category.pagination.has_next %}<a class="pagination-next" href="?page={{ category.pagination.next_page }}" rel="next">{{ t.next_page | default(value="Next >") }}</a>{% endif %}
+  </nav>
+  {% endif %}
 </section>
 {% endblock content %}
