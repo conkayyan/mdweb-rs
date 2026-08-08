@@ -883,23 +883,29 @@ impl Site {
     }
 
     /// Build a breadcrumb trail for the given path. The result is a list of
-    /// `{title, url, is_current}` maps starting from the site root. The
-    /// final element is the current item (`is_current = true`, no `url`).
-    /// Each ancestor's title is resolved from the category tree (for
-    /// `posts/*` paths) or from `_index.md` frontmatter (for any other
-    /// path), falling back to the directory slug.
+    /// `{title, url, is_current}` maps. The final element is the current item
+    /// (`is_current = true`, no `url`). Each ancestor's title is resolved from
+    /// the category tree (for `posts/*` paths) or from `_index.md` frontmatter
+    /// (for any other path), falling back to the directory slug.
+    ///
+    /// The trail opens with a home crumb, except in the `posts/*` subtree:
+    /// article-class pages already start at a "Posts" ancestor, so the home
+    /// crumb adds nothing there.
     pub fn breadcrumbs(&self, path: &[String], lang: &str, current_title: &str) -> Vec<Value> {
-        // First item is a fixed "Index" / "首页" label rather than the site
-        // title (which can be long). i18n key: `breadcrumb_home`.
-        let home_label = self.config.t("breadcrumb_home", lang);
-        let mut items: Vec<Value> = vec![Value::Map(BTreeMap::from([
-            ("title".to_string(), Value::str(&home_label)),
-            (
-                "url".to_string(),
-                Value::str(&self.config.lang_prefix(lang)),
-            ),
-            ("is_current".to_string(), Value::Bool(false)),
-        ]))];
+        let mut items: Vec<Value> = Vec::new();
+        if path.first().map(|s| s.as_str()) != Some("posts") {
+            // A fixed "Index" / "首页" label rather than the site title (which
+            // can be long). i18n key: `breadcrumb_home`.
+            let home_label = self.config.t("breadcrumb_home", lang);
+            items.push(Value::Map(BTreeMap::from([
+                ("title".to_string(), Value::str(&home_label)),
+                (
+                    "url".to_string(),
+                    Value::str(&self.config.lang_prefix(lang)),
+                ),
+                ("is_current".to_string(), Value::Bool(false)),
+            ])));
+        }
         let mut acc: Vec<String> = Vec::new();
         for seg in path {
             acc.push(seg.clone());

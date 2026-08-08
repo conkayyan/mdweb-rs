@@ -535,7 +535,7 @@ fn article_to_value_exposes_lang_field() {
 
 #[test]
 fn breadcrumbs_render_above_posts_and_pages() {
-    // `posts/web/frontend/react.md` → home > posts > web > frontend > title
+    // `posts/web/frontend/react.md` → posts > web > frontend > title (no home)
     // `pages/docs/guide/intro.md` → home > pages > docs > guide > title
     let dir = tempdir("crumbs");
     write(&dir, "site.toml", r#"title = "My Blog"
@@ -580,7 +580,8 @@ breadcrumb_home = "首页""#);
     let post = site.articles.iter().find(|a| a.slug == "react").expect("post");
     let html = mdweb::render::render_article(&site, "en", post).expect("render post");
     assert!(html.contains("class=\"breadcrumb\""));
-    assert!(html.contains("href=\"/\">Index"));
+    // Articles drop the leading home crumb; the trail starts at "Posts".
+    assert!(!html.contains("href=\"/\">Index"));
     assert!(html.contains("href=\"/posts/\">Posts"));
     assert!(html.contains("href=\"/posts/web/\">Web"));
     assert!(html.contains("href=\"/posts/web/frontend/\">Frontend"));
@@ -1078,7 +1079,7 @@ fn category_page_shows_breadcrumbs() {
     let posts = site.tree.iter().find(|c| c.slug == "posts").expect("posts cat");
     let html = mdweb::render::render_category(&site, "en", posts, 1).expect("render posts");
     assert!(html.contains("class=\"breadcrumb\""), "category list has breadcrumbs");
-    assert!(html.contains("href=\"/\">Index"), "crumb starts at home");
+    assert!(!html.contains("href=\"/\">Index"), "posts crumbs drop the home node");
     assert!(html.contains("href=\"/posts/\">Posts"), "crumb names the category");
     assert!(html.contains("<span>Posts</span>"), "current item is a non-link span");
 
