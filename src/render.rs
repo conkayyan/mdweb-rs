@@ -35,9 +35,14 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
     let categories_active = tree_has_active(&categories);
     let pages = pages_value(&site.articles, lang, current_url);
     let pages_tree = site.pages_tree_value(lang, current_url);
+    // Direct entries for the header nav. Each first-level child of
+    // `content/pages/` is rendered as its own button — see `header.html`.
+    // The unwrap helper strips the redundant `pages/` wrapper when its
+    // only job is to wrap everything else.
+    let page_sections = unwrapped_page_sections_value(&pages_tree);
     // Top-level pages: articles whose path is empty (e.g. `content/about.md`
-    // → `/about/`). These show up as flat nav links, separate from the
-    // hierarchical Pages dropdown, since they live at the site root.
+    // → `/about/`). These show up as flat nav links alongside the page
+    // section buttons, since they live at the site root.
     let root_pages = root_pages_value(&site.articles, lang, current_url);
     let recent = recent_value(&site.articles, lang, 5);
     let mut tag_cloud = site.tag_cloud_value(lang);
@@ -106,6 +111,7 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
         ("categories_active".to_string(), Value::Bool(categories_active)),
         ("pages".to_string(), pages),
         ("pages_tree".to_string(), pages_tree),
+        ("page_sections".to_string(), page_sections),
         ("root_pages".to_string(), root_pages),
         ("recent".to_string(), recent),
         ("tags".to_string(), tag_cloud),
@@ -158,6 +164,34 @@ fn pages_value(articles: &[Article], lang: &str, current_url: &str) -> Value {
         }
     }
     Value::Arr(out)
+}
+
+/// Top-level entries for the header's **Pages** dropdown: every direct
+/// child of `content/pages/` (sub-directories and standalone `.md`
+/// leaves). When `pages_tree` is dominated by a single root node that
+/// just wraps everything else (which is the common case — `pages/`
+/// contains the whole non-post tree), drop the wrapper so the header
+/// doesn't render its own title twice when the template iterates the
+/// first-level items. Otherwise surface the top-level nodes as-is, so
+/// authors can still put siblings of `pages/` at the `content/` root
+/// if they really need to.
+fn unwrapped_page_sections_value(pages_tree: &Value) -> Value {
+    let items = match pages_tree {
+        Value::Arr(a) => a,
+        _ => return Value::Arr(Vec::new()),
+    };
+    if items.len() == 1 {
+        if let Some(Value::Map(m)) = items.first() {
+            if matches!(m.get("has_children"), Some(Value::Bool(true))) {
+                if let Some(Value::Arr(children)) = m.get("children") {
+                    if !children.is_empty() {
+                        return Value::Arr(children.clone());
+                    }
+                }
+            }
+        }
+    }
+    Value::Arr(items.clone())
 }
 
 /// Top-level pages — articles whose path is empty (e.g. `content/about.md`

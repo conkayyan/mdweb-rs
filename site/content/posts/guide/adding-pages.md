@@ -4,9 +4,15 @@ date: "2026-08-02"
 tags: ["tutorial", "pages"]
 ---
 
-Anything outside `posts/` is a **page**: about, contact, docs,
-tutorials. Nested folders under `pages/` form a hierarchy and get
-an instant landing page listing their children.
+Anything outside `posts/` is a **page**, and pages always live under
+`pages/`. Pages are the counterpart to posts:
 
-A top-level `.md` file like `content/about.md` becomes `/about/` —
-perfect for one-off links that don't deserve their own section.
+- A sub-directory like `content/pages/docs/` becomes its own section
+  (`/pages/docs/`) and lists its direct children on its landing page.
+- A standalone `.md` like `content/pages/about.md` becomes a flat
+  link at `/pages/about/` — perfect for one-off pages that don't
+  need their own section.
+
+The header's **Pages** dropdown surfaces each first-level child of
+`pages/`, so any section you add at that level (sub-directory or
+top-level `.md`) automatically becomes part of the site nav.

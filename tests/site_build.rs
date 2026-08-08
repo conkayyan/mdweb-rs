@@ -593,8 +593,10 @@ breadcrumb_home = "首页""#);
 
     let page = site.articles.iter().find(|a| a.slug == "intro").expect("page");
     let page_html = mdweb::render::render_article(&site, "en", page).expect("render page");
-    // (pages/_index.md declared above so the "Pages" ancestor title is found)
-    assert!(page_html.contains("href=\"/pages/\">Pages"));
+    // The `pages/` container is a transparent sibling of `posts/`: its
+    // segment is dropped from the trail, so users see Index › docs › guide
+    // instead of Index › pages › docs › guide.
+    assert!(!page_html.contains("href=\"/pages/\">Pages"), "pages/ container hidden");
     assert!(page_html.contains("href=\"/pages/docs/\">Docs"));
     assert!(page_html.contains("href=\"/pages/docs/guide/\">Guide"));
     assert!(page_html.contains("<span>Intro</span>"));
@@ -609,7 +611,7 @@ breadcrumb_home = "首页""#);
     let intro_zh = site_zh.articles.iter().find(|a| a.slug == "intro" && a.lang == "zh").expect("intro zh");
     let html_zh = mdweb::render::render_article(&site_zh, "zh", intro_zh).expect("render zh");
     assert!(html_zh.contains("href=\"/zh/\">首页"), "home is /zh/首页");
-    assert!(html_zh.contains("href=\"/zh/pages/\">页面"));
+    assert!(!html_zh.contains("href=\"/zh/pages/\">页面"), "pages/ container hidden in zh too");
     assert!(html_zh.contains("href=\"/zh/pages/docs/\">文档"));
     assert!(html_zh.contains("href=\"/zh/pages/docs/guide/\">指南"));
     assert!(html_zh.contains("<span>简介</span>"));

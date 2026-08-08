@@ -23,8 +23,8 @@ press Ctrl-C to stop
 
 ## 功能特性
 
-- **文档即站点结构** — `doc/` 目录树会自动渲染为分类层级（`posts/` → `/posts/`，
-  `notes/` → `/notes/`，以此类推）。
+- **文档即站点结构** — `content/` 目录树映射成 URL 路由：
+  `posts/<分类>/` → `/posts/<分类>/`，`pages/<章节>/` → `/pages/<章节>/`。
 - **布局插槽** — `template/<theme>/layout/` 目录存放 `header`、`footer`、
   `side`、`inject` 片段；
   `inject` 插槽天然适合放置统计/分析 JS 代码。
@@ -147,11 +147,17 @@ my-blog/
 │   ├── page.md            # `mdweb new page` 的素材
 │   └── post.md            # `mdweb new post` 的素材
 ├── content/               # 所有写作内容都在这里——路径即路由
-│   ├── _index.md          # → /          （首页，每个语言一个）
-│   ├── _index.zh.md       # → /zh/
-│   ├── pages/             # 页面 → /pages/<slug>/；不进时间线
-│   │   ├── _index.md
-│   │   └── about.md
+│   │                       # 顶层不放 `_index.md` —— 首页默认就是
+│   │                       # 文章时间线流；想要 hero 介绍才补一个
+│   ├── pages/             # 一切非文章内容都在这里
+│   │   ├── _index.md      # → /pages/    （容器落地页）
+│   │   ├── about.md       # → /pages/about/      （同级叶子页）
+│   │   ├── notes/         # → /pages/notes/      （一个页面 section）
+│   │   │   ├── _index.md
+│   │   │   └── tips.md    # → /pages/notes/tips/
+│   │   └── docs/          # 另一个页面 section
+│   │       ├── _index.md
+│   │       └── guide/intro.md
 │   └── posts/             # 文章 → /posts/<category>/<slug>/
 │       ├── _index.md      # /posts/ 分类页
 │       ├── guide/         # 一个分类；文章都放在子目录里
@@ -186,15 +192,32 @@ my-blog/
 
 - `content/` 是透明容器，不出现在 URL 中。
   `/content/posts/guide/hello-world.md` 对外的访问路径是
-  `/posts/guide/hello-world/`；
-  `content/_index.md` 对外是 `/`。
-- 文章必须放在分类子目录下：`posts/guide/hello-world.md` 会变成
-  `/posts/guide/hello-world/`。直接放在 `posts/` 下的
-  `posts/hello-world.md` 没有分类页面，不会被任何列表收录。
-- `content/_index.md` 是首页；`content/` 顶层只接受 `_index.md` 与
-  `_index.<lang>.md`，其他顶层文件会被忽略。
-- 目录下的 `_index.md` 即该分类的索引页。
-- 目录 `_index.md` 的 title/summary/description 用于配置分类信息。
+  `/posts/guide/hello-world/`。首页（`/`）默认就是文章列表——若想
+  在列表上方加 hero 介绍，再单独放一个 `content/_index.md`
+  （或 `_index.<lang>.md`）就行。
+- 顶层**只有两个**目录：`posts/` 与 `pages/`。其他一切（包括
+  `about.md` 与任何自定义页面 section）都放进 `pages/`。
+- **文章**（`posts/<分类>/...`）：进入时间线。`posts/` 的每个直接子目录
+  （`posts/guide/`、`posts/web/` 等）是一个分类，挂在导航「**分类**」
+  下拉里。子目录下的 `_index.md` 是分类落地页；文章本体放在
+  `posts/<分类>/<slug>.md`。直接落在 `posts/` 根下的文件不会被任何列表
+  收录。
+- **页面**（`pages/...`）：一切不是文章的内容。导航把 `pages/` 的每个
+  直接孩子各自呈现为**一个独立的顶级入口**——有子页面的就成为下拉
+  （下拉里自动拉取该 section 全部多级子树），没有子页面的就是平铺链接：
+  - 子目录（如 `pages/docs/`）→ 一个 `Docs` 下拉，里面的项自动遍历
+    它的整棵子树；
+  - 顶级 `.md` 文件（如 `pages/about.md`）→ 平铺的 `About` 链接。
+  每个 section 或叶子页都可以挂自己的 `_image/` 目录；当文章中通过
+  相对路径跨章节引用图片时，本地编辑器直接打开 `.md` 与最终渲染的
+  网页效果一致。模板里的 `{% for s in page_sections %}` 循环就是布局
+  的唯一入口，改它即可重排/分组/删除某个 section。
+- 顶层 `content/_index.md` 是**可选的**——不放时，`/` 就是文章列表；
+  放上后，其正文以 hero 块形式渲染在列表上方。`content/` 顶层的其它
+  `.md` 文件会被忽略，请放进 `pages/`。
+- 目录下的 `_index.md` 即该 section 的索引页（`posts/*` 下显示分类列表，
+  其他位置显示页面 section）。
+- 目录 `_index.md` 的 title/summary/description 用于配置 section 信息。
 - 任意文档 frontmatter 里的 `tags` 会生成每种语言的标签云（侧栏）与
   `/tags/<tag>/` 标签列表页（见「标签页面」一节）。
 - 插槽片段在 `template/<theme>/layout/`（header / footer / side / inject），

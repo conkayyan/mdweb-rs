@@ -16,16 +16,26 @@
         </ul>
       </div>
       {% endif %}
-      {% if pages_tree %}
-      <div class="nav-item">
-        <button type="button" class="nav-link has-caret" aria-haspopup="true">{{ t.pages }}</button>
-        <ul class="dropdown">
-          {% for c in pages_tree %}
-          {% include "layout/_nav_node.html" %}
-          {% endfor %}
-        </ul>
-      </div>
-      {% endif %}
+      {# Each first-level child of `content/pages/` is its own top-level nav
+         entry — a dropdown if it has sub-pages, otherwise a flat link. This
+         mirrors the layout of post categories (which all live under a single
+         "Categories" wrapper) without forcing a parallel "Pages" wrapper on
+         the page side: every page section gets its own button, matching the
+         way it lives on disk. #}
+      {% for s in page_sections %}
+        {% if s.has_children %}
+        <div class="nav-item">
+          <button type="button" class="nav-link has-caret{% if s.descendant_active %} is-active{% endif %}" aria-haspopup="true">{{ s.title }}</button>
+          <ul class="dropdown">
+            {% for c in s.children %}
+              {% include "layout/_nav_node.html" %}
+            {% endfor %}
+          </ul>
+        </div>
+        {% else %}
+        <a class="nav-link{% if s.descendant_active %} is-active{% endif %}" href="{{ s.url }}">{{ s.title }}</a>
+        {% endif %}
+      {% endfor %}
       {% for p in root_pages %}
       <a class="nav-link{% if p.active %} is-active{% endif %}" href="{{ p.url }}">{{ p.title }}</a>
       {% endfor %}

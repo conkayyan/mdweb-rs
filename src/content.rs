@@ -892,6 +892,12 @@ impl Site {
     /// The trail opens with a home crumb, except in the `posts/*` subtree:
     /// article-class pages already start at a "Posts" ancestor, so the home
     /// crumb adds nothing there.
+    ///
+    /// `pages/` is a transparent container parallel to `posts/`: when the
+    /// current path lives **under** `pages/`, the `pages` segment itself is
+    /// dropped from the trail so users see Index › docs › guide rather than
+    /// Index › pages › docs › guide. The `pages/` landing itself still shows
+    /// Index › pages.
     pub fn breadcrumbs(&self, path: &[String], lang: &str, current_title: &str) -> Vec<Value> {
         let mut items: Vec<Value> = Vec::new();
         if path.first().map(|s| s.as_str()) != Some("posts") {
@@ -907,11 +913,21 @@ impl Site {
                 ("is_current".to_string(), Value::Bool(false)),
             ])));
         }
+        // The `pages/` container is a transparent sibling of `posts/`: its
+        // segment never takes up a breadcrumb slot, regardless of whether
+        // the path contains additional children. Articles whose parent is
+        // `pages/[…]` (e.g. `pages/about.md` whose path is just `["pages"]`)
+        // therefore drop the Pages level entirely; the current title then
+        // becomes the only post-home crumb.
+        let skip_pages = path.first().map(|s| s.as_str()) == Some("pages");
         let mut acc: Vec<String> = Vec::new();
-        for seg in path {
+        for (i, seg) in path.iter().enumerate() {
             acc.push(seg.clone());
             let title = self.breadcrumb_title(&acc, lang);
             let url = url_for(&self.config, &self.default_lang, &acc, None, lang);
+            if skip_pages && i == 0 {
+                continue;
+            }
             items.push(Value::Map(BTreeMap::from([
                 ("title".to_string(), Value::str(&title)),
                 ("url".to_string(), Value::str(&url)),

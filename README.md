@@ -23,8 +23,9 @@ press Ctrl-C to stop
 
 ## Features
 
-- **Doc-driven site structure** — the `doc/` directory tree is rendered as category
-  levels automatically (`posts/` → `/posts/`, `notes/` → `/notes/`, …).
+- **Doc-driven site structure** — the `content/` directory tree maps to web
+  routes: `posts/<category>/` → `/posts/<category>/`,
+  `pages/<section>/` → `/pages/<section>/`.
 - **Layout slots** — a `template/<theme>/layout/` directory holds `header`,
   `footer`, `side` and `inject` fragments; the `inject` slot is the natural
   place for analytics / statistics JS.
@@ -153,13 +154,22 @@ my-blog/
 │   ├── page.md            # source for `mdweb new page`
 │   └── post.md            # source for `mdweb new post`
 ├── content/               # everything you write — content path = web routing
-│   ├── _index.md          # → /          (home page; one per language)
-│   ├── _index.zh.md       # → /zh/
-│   ├── pages/             # pages → /pages/<slug>/; not in the chronological feed
-│   │   ├── _index.md
-│   │   └── about.md
+│   │                       # (no `_index.md` here — the home page is just
+│   │                       # the article stream; add one if you want
+│   │                       # a hero intro per language)
+│   ├── pages/             # everything that isn't a post goes here
+│   │   │                   # (no `/pages/` landing — `pages/` is a
+│   │   │                   # transparent container; sections and leaf
+│   │   │                   # pages surface at their own URLs)
+│   │   ├── about.md       # → /pages/about/      (leaf page)
+│   │   ├── notes/         # → /pages/notes/      (a page section)
+│   │   │   ├── _index.md
+│   │   │   └── tips.md    # → /pages/notes/tips/
+│   │   └── docs/          # another page section
+│   │       ├── _index.md
+│   │       └── guide/intro.md
 │   └── posts/             # posts → /posts/<category>/<slug>/
-│       ├── _index.md      # category page for /posts/
+│       ├── _index.md      # category page for /posts/ (the chronological feed)
 │       ├── guide/         # a category; posts live in a sub-directory
 │       │   ├── _index.md
 │       │   ├── hello-world.md
@@ -191,15 +201,37 @@ my-blog/
 Notes:
 
 - `content/` is a transparent container — its name does not appear in URLs.
-  `{{ a.url }}` → `/posts/guide/hello-world/`, and
-  `content/_index.md` is served at `/`.
-- Posts must sit in a category sub-directory: `posts/guide/hello-world.md`
-  becomes `/posts/guide/hello-world/`. A bare `posts/hello-world.md` has no
-  category page, so it is not listed anywhere.
-- `content/_index.md` is the home page; only `_index.md` and `_index.<lang>.md`
-  are accepted at the top of `content/`. Other top-level files are ignored.
-- `_index.md` in a sub-directory becomes that category's index page.
-- A directory's `_index.md` title/summary/description configure the category.
+  `content/posts/guide/hello-world.md` → `/posts/guide/hello-world/`. The
+  home page (`/`) is the article stream by default — drop in an optional
+  `content/_index.md` (or `_index.<lang>.md`) if you want a hero intro
+  above the list.
+- Only two directories live at the top of `content/`: **`posts/`** and
+  **`pages/`**. Everything else (including `about.md` and any custom page
+  sections) belongs inside `pages/`.
+- **Posts** (`posts/<category>/...`): the chronological feed. Each immediate
+  sub-directory of `posts/` (`posts/guide/`, `posts/web/`, …) is a category
+  and shows up in the header's **Categories** dropdown. A category's
+  `_index.md` is its landing page; posts sit at
+  `posts/<category>/<slug>.md`. A bare `posts/foo.md` (no category folder) is
+  intentionally unlisted.
+- **Pages** (`pages/...`): everything that isn't a post. `pages/` has no
+  landing page of its own — `/pages/` returns 404 — but the header
+  surfaces every first-level child of `pages/` as **its own top-level
+  nav entry**. A sub-directory becomes a dropdown (auto-walking the full
+  multi-level subtree under it); a `.md` leaf becomes a flat link:
+  - a sub-directory like `pages/docs/` → a `Docs` dropdown whose items
+    walk the full tree under it;
+  - a `.md` leaf like `pages/about.md` → a flat `About` link.
+  Each section or leaf can host its own `_image/` directory for sibling
+  images; cross-section references via relative paths still resolve
+  symmetrically when the docs are opened locally in an editor. The
+  template's `{% for s in page_sections %}` loop is the single source of
+  truth for the layout — edit it to reorder, group, or drop entries.
+- A top-level `content/_index.md` is **optional**. Without one, `/` is just
+  the article stream; with one, its body renders as a hero block above
+  the list. Other top-level `.md` files at the site root are ignored —
+  put them under `pages/` instead.
+- A directory's `_index.md` title/summary/description configure the section.
 - Tags from any document's frontmatter feed a per-language tag cloud in the
   sidebar and `/tags/<tag>/` listing pages (see [Tag pages](#tag-pages)).
 - Slot fragments live in `template/<theme>/layout/` (header / footer / side /
