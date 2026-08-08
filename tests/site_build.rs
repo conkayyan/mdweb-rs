@@ -1307,3 +1307,139 @@ id = "G-FIRST"
         "analytics snippet should precede user inject content"
     );
 }
+
+#[test]
+fn custom_routes_flow_through_render_pipeline() {
+    let dir = tempdir("routes");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+languages = ["en", "zh"]
+[routes]
+search = "find"
+tags = "topics"
+rss = "feed.xml"
+sitemap = "site.xml"
+static = "assets"
+"#,
+    );
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    write(&dir, "content/_index.zh.md", "---\n---\nbody\n");
+    write(
+        &dir,
+        "content/posts/hello.md",
+        "---\ntitle: Hello\ndate: 2026-08-01\ntags: [rust]\n---\nbody\n",
+    );
+
+    let site = Site::build(&dir, None).expect("build");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render en");
+    assert!(
+        html.contains("href=\"/assets/style.css\""),
+        "stylesheet uses the configured static route"
+    );
+    assert!(
+        html.contains("href=\"/feed.xml\""),
+        "footer RSS link uses the configured rss route"
+    );
+    assert!(
+        html.contains("href=\"/site.xml\""),
+        "footer sitemap link uses the configured sitemap route"
+    );
+    assert!(
+        html.contains("action=\"/find\""),
+        "search form action uses the configured search route"
+    );
+
+    // Language-prefixed pages inherit the same renames.
+    let zh = mdweb::render::render_home(&site, "zh", 1).expect("render zh");
+    assert!(zh.contains("href=\"/zh/feed.xml\""), "zh RSS link is language-prefixed");
+    assert!(zh.contains("action=\"/zh/find\""), "zh search action is language-prefixed");
+
+    // Tag links reflect the configured tags route in both languages.
+    let en_tag = site.config.tag_url("en", "rust");
+    assert_eq!(en_tag, "/topics/rust/");
+    let zh_tag = site.config.tag_url("zh", "rust");
+    assert_eq!(zh_tag, "/zh/topics/rust/");
+
+    // The rendered article links its tags through the renamed route.
+    let article = mdweb::render::render_article(
+        &site,
+        "en",
+        site.articles.iter().find(|a| a.slug == "hello").expect("hello"),
+    )
+    .expect("render article");
+    assert!(
+        article.contains("href=\"/topics/rust/\""),
+        "article tag link uses the configured tags route"
+    );
+}
+
+#[test]
+fn content_container_routes_rename_posts_and_pages_urls() {
+    let dir = tempdir("containers");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+languages = ["en", "zh"]
+[routes]
+posts = "blog"
+pages = "docs"
+"#,
+    );
+    write(&dir, "content/_index.md", "---\n---\nhome\n");
+    write(
+        &dir,
+        "content/pages/_image/logo.svg",
+        "<svg/>",
+    );
+    write(&dir, "content/pages/about.md", "---\ntitle: About\n---\nbody\n");
+    write(
+        &dir,
+        "content/posts/guide/hello.md",
+        concat!(
+            "---\ntitle: Hello\ndate: 2026-08-01\n---\n",
+            "![L](../../pages/_image/logo.svg)\n",
+        ),
+    );
+
+    let site = Site::build(&dir, None).expect("build");
+
+    // Content still lives under content/posts|pages on disk, but URLs expose
+    // the renamed prefixes.
+    let hello = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "hello")
+        .expect("hello post");
+    assert_eq!(hello.url, "/blog/guide/hello/", "post URL uses the posts route");
+    let about = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "about")
+        .expect("about page");
+    assert_eq!(about.url, "/docs/about/", "page URL uses the pages route");
+
+    // Images are rewritten through the same prefixes and stay resolvable.
+    assert!(
+        hello.content.contains("src=\"/docs/logo.svg\""),
+        "image URL mirrors the pages route"
+    );
+    assert!(site.resolve_image("docs/logo.svg").is_some(), "server inverts prefix back to disk");
+
+    // The home feed still only surfaces posts, via the new URL.
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
+    assert!(html.contains("/blog/guide/hello/"), "home feed links through the posts route");
+    assert!(!html.contains("/posts/guide/hello/"), "old posts prefix gone");
+
+    // Category landings and the sitemap follow the renamed prefix.
+    let posts_root = site.tree.iter().find(|c| c.slug == "posts").expect("posts root");
+    let cat = posts_root.children.iter().find(|c| c.slug == "guide").expect("guide cat");
+    assert_eq!(cat.urls.get("en").map(|s| s.as_str()), Some("/blog/guide/"), "category URL uses the posts route");
+    let sitemap = mdweb::feed::sitemap_xml(&site);
+    assert!(sitemap.contains("/blog/guide/hello/"), "sitemap uses the posts route");
+    assert!(sitemap.contains("/docs/about/"), "sitemap uses the pages route");
+    let rss = mdweb::feed::rss_xml(&site, "en", 10).expect("rss");
+    assert!(rss.contains("/blog/guide/hello/"), "RSS uses the posts route");
+}

@@ -187,7 +187,7 @@ pub fn rss_xml(site: &Site, lang: &str, limit: usize) -> Result<String, String> 
     let title = site.title_for(lang);
     let desc = site.config.description_for(lang);
     let base = site.config.base_url.trim_end_matches('/').to_string();
-    let feed_url = format!("{}{}/rss.xml", base, site.config.lang_prefix(lang).trim_end_matches('/'));
+    let feed_url = format!("{}{}", base, site.config.rss_url(lang));
 
     let mut out = String::with_capacity(2048 + arts.len() * 512);
     out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");

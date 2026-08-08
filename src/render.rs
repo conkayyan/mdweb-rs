@@ -62,9 +62,20 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
             ]))
         })
         .collect();
-    let rss_url = format!("{}rss.xml", config.lang_prefix(lang));
-    let search_action = format!("{}search", config.lang_prefix(lang));
-    let sitemap_url = "/sitemap.xml".to_string();
+    let rss_url = config.rss_url(lang);
+    let search_action = config.search_url(lang);
+    let sitemap_url = config.sitemap_url();
+    let static_url = config.static_url();
+    let routes = Value::Map(BTreeMap::from([
+        ("search".to_string(), Value::str(&config.routes.search)),
+        ("tags".to_string(), Value::str(&config.routes.tags)),
+        ("rss".to_string(), Value::str(&config.routes.rss)),
+        ("sitemap".to_string(), Value::str(&config.routes.sitemap)),
+        ("search_index".to_string(), Value::str(&config.routes.search_index)),
+        ("static".to_string(), Value::str(&config.routes.static_dir)),
+        ("posts".to_string(), Value::str(&config.routes.posts)),
+        ("pages".to_string(), Value::str(&config.routes.pages)),
+    ]));
     let mut t = BTreeMap::new();
     for (key, _) in I18N_DEFAULTS {
         t.insert((*key).to_string(), Value::str(&config.t(key, lang)));
@@ -119,6 +130,8 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
         ("friend_links".to_string(), Value::Arr(friend_links)),
         ("rss_url".to_string(), Value::str(&rss_url)),
         ("sitemap_url".to_string(), Value::str(&sitemap_url)),
+        ("static_url".to_string(), Value::str(&static_url)),
+        ("routes".to_string(), routes),
         ("show_rss".to_string(), Value::Bool(config.show_rss)),
         ("show_sitemap".to_string(), Value::Bool(config.show_sitemap)),
         ("search_action".to_string(), Value::str(&search_action)),
@@ -475,12 +488,8 @@ pub fn render_search(site: &Site, lang: &str, query: &str) -> Result<String, Str
         ("articles".to_string(), Value::Arr(articles)),
     ]));
     // Use lang_prefix so the URL is stable per language and matches the
-    // sidebar's `action="/<lang>/search"` shape.
-    let url = if lang == site.default_lang {
-        "/search".to_string()
-    } else {
-        format!("/{lang}/search")
-    };
+    // sidebar's `action="/<lang>/search"` shape (or the configured route).
+    let url = site.config.search_url(lang);
     let ctx = with_layout(site, lang, &url, "search.html", "search", payload)?;
     render_with_context(site, "search.html", &ctx)
 }

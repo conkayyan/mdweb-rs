@@ -389,7 +389,7 @@ impl Site {
                 };
                 let stem = fname.strip_suffix(".md").unwrap_or(&fname).to_string();
                 let (base, lang) = parse_name(&stem, &languages, &default_lang);
-                let html = image_path::rewrite_img_srcs(&markdown::render(&body), &dir);
+                let html = image_path::rewrite_img_srcs(&markdown::render(&body), &dir, &config.routes);
                 let mtime = std::fs::metadata(&abs)
                     .ok()
                     .and_then(|m| m.modified().ok())
@@ -1121,10 +1121,18 @@ impl Site {
     }
 
     /// Image at a URL-relative path, served from the `_image/` directory the
-    /// URL was built from: `/pages/a.png` → `content/pages/_image/a.png`.
+    /// URL was built from: `/pages/a.png` → `content/pages/_image/a.png`. The
+    /// first segment is inverted through the configured routes so a renamed
+    /// prefix (`/docs/a.png` → `content/pages/_image/a.png`) still lands on
+    /// disk.
     pub fn resolve_image(&self, rel: &str) -> Option<PathBuf> {
         let (dir, file) = rel.rsplit_once('/').unwrap_or(("", rel));
-        let parts = ["content", dir, image_path::DIR, file];
+        let dir: String = dir
+            .split('/')
+            .map(|seg| self.config.routes.prefix_disk(seg))
+            .collect::<Vec<_>>()
+            .join("/");
+        let parts = ["content", &dir, image_path::DIR, file];
         let under: Vec<&str> = parts.into_iter().filter(|s| !s.is_empty()).collect();
         image_path::contained(&self.doc_root, &under.join("/"))
     }
@@ -1422,6 +1430,11 @@ fn url_for(
     let mut pieces: Vec<String> = path.to_vec();
     if let Some(s) = slug {
         pieces.push(s.clone());
+    }
+    // The first segment is the on-disk container name (`posts`/`pages`);
+    // expose it through the configured route instead.
+    if let Some(first) = pieces.first_mut() {
+        *first = config.routes.prefix_url(first);
     }
     let joined = pieces.join("/");
     let prefix = config.lang_prefix(lang);

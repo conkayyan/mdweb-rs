@@ -18,18 +18,22 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::config::Routes;
+
 /// The marker directory name. Single source of truth for both directions.
 pub const DIR: &str = "_image";
 
 /// Resolve one markdown/HTML `src` against `article_dir` (a content-relative
 /// directory such as `posts/guide`, or `""` for the content root) and return
-/// the site URL to use instead.
+/// the site URL to use instead. The URL's first segment is run through
+/// `routes.prefix_url`, so a renamed `posts`/`pages` route shows up in image
+/// URLs too.
 ///
 /// Returns `None` — meaning "leave the src untouched" — for anything that
 /// isn't a relative path into an `_image/` directory: absolute URLs, schemes,
 /// site-absolute paths, paths without an `_image` segment, and `../` chains
 /// that would escape `content/`.
-pub fn to_url(src: &str, article_dir: &str) -> Option<String> {
+pub fn to_url(src: &str, article_dir: &str, routes: &Routes) -> Option<String> {
     let path = src.split(['?', '#']).next().unwrap_or("");
     if path.is_empty() || path.starts_with('/') || has_scheme(path) {
         return None;
@@ -56,7 +60,19 @@ pub fn to_url(src: &str, article_dir: &str) -> Option<String> {
         return None;
     }
     segs.remove(parent);
-    Some(format!("/{}", segs.join("/")))
+    // The URL's first segment mirrors the configured posts/pages route.
+    let out: Vec<String> = segs
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            if i == 0 {
+                routes.prefix_url(s)
+            } else {
+                (*s).to_string()
+            }
+        })
+        .collect();
+    Some(format!("/{}", out.join("/")))
 }
 
 /// Rewrite the `src` of every `<img>` tag in rendered HTML.
@@ -65,7 +81,7 @@ pub fn to_url(src: &str, article_dir: &str) -> Option<String> {
 /// syntax and raw HTML `<img>` tags that markdown passes through verbatim.
 /// Code spans and fenced blocks are already escaped to `&lt;img`, so examples
 /// inside them are not touched.
-pub fn rewrite_img_srcs(html: &str, article_dir: &str) -> String {
+pub fn rewrite_img_srcs(html: &str, article_dir: &str, routes: &Routes) -> String {
     let mut out = String::with_capacity(html.len());
     let mut rest = html;
     while let Some(at) = rest.find("<img") {
@@ -74,7 +90,7 @@ pub fn rewrite_img_srcs(html: &str, article_dir: &str) -> String {
             Some(end) => end + 1,
             None => break,
         };
-        out.push_str(&rewrite_tag(&rest[at..at + tag_len], article_dir));
+        out.push_str(&rewrite_tag(&rest[at..at + tag_len], article_dir, routes));
         rest = &rest[at + tag_len..];
     }
     out.push_str(rest);
@@ -116,14 +132,14 @@ fn has_scheme(s: &str) -> bool {
 }
 
 /// Substitute the `src` value of a single `<img …>` tag, if it maps.
-fn rewrite_tag(tag: &str, article_dir: &str) -> String {
+fn rewrite_tag(tag: &str, article_dir: &str, routes: &Routes) -> String {
     let Some((start, quote)) = find_src_value(tag) else {
         return tag.to_string();
     };
     let Some(len) = tag[start..].find(quote) else {
         return tag.to_string();
     };
-    match to_url(&tag[start..start + len], article_dir) {
+    match to_url(&tag[start..start + len], article_dir, routes) {
         Some(url) => format!("{}{}{}", &tag[..start], url, &tag[start + len..]),
         None => tag.to_string(),
     }
@@ -151,48 +167,58 @@ fn find_src_value(tag: &str) -> Option<(usize, char)> {
 mod tests {
     use super::*;
 
+    fn routes() -> Routes {
+        Routes::default()
+    }
+
     #[test]
     fn maps_sibling_image_dir() {
-        assert_eq!(to_url("_image/a.png", "pages").as_deref(), Some("/pages/a.png"));
-        assert_eq!(to_url("./_image/a.png", "pages").as_deref(), Some("/pages/a.png"));
+        assert_eq!(
+            to_url("_image/a.png", "pages", &routes()).as_deref(),
+            Some("/pages/a.png")
+        );
+        assert_eq!(
+            to_url("./_image/a.png", "pages", &routes()).as_deref(),
+            Some("/pages/a.png")
+        );
     }
 
     #[test]
     fn maps_from_content_root() {
-        assert_eq!(to_url("_image/a.png", "").as_deref(), Some("/a.png"));
+        assert_eq!(to_url("_image/a.png", "", &routes()).as_deref(), Some("/a.png"));
     }
 
     #[test]
     fn maps_across_directories() {
         assert_eq!(
-            to_url("../../pages/_image/logo.svg", "posts/guide").as_deref(),
+            to_url("../../pages/_image/logo.svg", "posts/guide", &routes()).as_deref(),
             Some("/pages/logo.svg")
         );
     }
 
     #[test]
     fn leaves_paths_that_escape_content() {
-        assert_eq!(to_url("../../../_image/a.png", "pages"), None);
+        assert_eq!(to_url("../../../_image/a.png", "pages", &routes()), None);
     }
 
     #[test]
     fn leaves_paths_without_an_image_segment() {
-        assert_eq!(to_url("../other/a.png", "pages"), None);
-        assert_eq!(to_url("images/a.png", "pages"), None);
+        assert_eq!(to_url("../other/a.png", "pages", &routes()), None);
+        assert_eq!(to_url("images/a.png", "pages", &routes()), None);
     }
 
     #[test]
     fn leaves_nested_image_subdirectories() {
         // Not invertible: the server would look under `sub/_image/`.
-        assert_eq!(to_url("_image/sub/a.png", "pages"), None);
+        assert_eq!(to_url("_image/sub/a.png", "pages", &routes()), None);
     }
 
     #[test]
     fn leaves_absolute_and_external_srcs() {
-        assert_eq!(to_url("/static/hero.png", "pages"), None);
-        assert_eq!(to_url("https://example.com/_image/a.png", "pages"), None);
-        assert_eq!(to_url("//cdn.example.com/_image/a.png", "pages"), None);
-        assert_eq!(to_url("data:image/svg+xml,<svg/>", "pages"), None);
+        assert_eq!(to_url("/static/hero.png", "pages", &routes()), None);
+        assert_eq!(to_url("https://example.com/_image/a.png", "pages", &routes()), None);
+        assert_eq!(to_url("//cdn.example.com/_image/a.png", "pages", &routes()), None);
+        assert_eq!(to_url("data:image/svg+xml,<svg/>", "pages", &routes()), None);
     }
 
     #[test]
@@ -200,6 +226,7 @@ mod tests {
         let h = rewrite_img_srcs(
             "<p><img src=\"_image/a.png\" alt=\"A\" /></p>\n<img width='40' src='_image/b.svg'>",
             "posts/guide",
+            &routes(),
         );
         assert!(h.contains("src=\"/posts/guide/a.png\""));
         assert!(h.contains("alt=\"A\""), "other attributes survive");
@@ -208,9 +235,26 @@ mod tests {
     }
 
     #[test]
+    fn uses_configured_content_prefix() {
+        let r = Routes {
+            posts: "blog".into(),
+            pages: "docs".into(),
+            ..Routes::default()
+        };
+        assert_eq!(
+            to_url("_image/hero.svg", "posts/guide", &r).as_deref(),
+            Some("/blog/guide/hero.svg")
+        );
+        assert_eq!(
+            to_url("../../pages/_image/logo.svg", "posts/guide", &r).as_deref(),
+            Some("/docs/logo.svg")
+        );
+    }
+
+    #[test]
     fn skips_escaped_tags_in_code_blocks() {
         let src = "<pre><code>&lt;img src=\"_image/a.png\"&gt;</code></pre>";
-        assert_eq!(rewrite_img_srcs(src, "pages"), src);
+        assert_eq!(rewrite_img_srcs(src, "pages", &routes()), src);
     }
 
     #[test]

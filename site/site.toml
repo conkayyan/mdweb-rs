@@ -5,6 +5,23 @@ language = "en"
 languages = ["en", "zh"]
 theme = "default"
 
+# Routing rules — URL slugs for the well-known, non-content routes. Each value
+# renames that route everywhere: the server, generated links, the footer/theme
+# templates and the feed/sitemap/search-index URLs all pick up the new value.
+# `posts`/`pages` rename the URL prefixes of `content/posts/` and
+# `content/pages/`; the on-disk layout stays as-is.
+# These are the defaults; uncomment to change, or delete the whole block to
+# fall back to them implicitly.
+[routes]
+search       = "search"        # search page:          /search  (/<lang>/search)
+tags         = "tags"          # tags index + listing: /tags/   (/<lang>/tags/<tag>/)
+rss          = "rss.xml"       # RSS feed:             /rss.xml (/<lang>/rss.xml)
+sitemap      = "sitemap.xml"   # XML sitemap:          /sitemap.xml
+search_index = "search.json"   # client-side search:   /search.json
+static       = "static"        # theme assets:         /static/...
+posts        = "posts"         # blog container:       content/posts/... → /posts/...
+pages        = "pages"         # pages container:      content/pages/... → /pages/...
+
 # Syndication: toggle visibility of the RSS feed and sitemap links in the
 # footer. Both default to `true`; flip to `false` to hide.
 show_rss = true

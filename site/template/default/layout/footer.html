@@ -3,15 +3,15 @@
     <p>&copy; {{ current_year }} {{ title }} · Powered by mdweb</p>
     {% if show_rss %}
     <p class="footer-links">
-      <a href="/rss.xml" type="application/rss+xml" target="_blank" rel="noopener">RSS</a>
+      <a href="{{ rss_url }}" type="application/rss+xml" target="_blank" rel="noopener">RSS</a>
       {% if show_sitemap %} · {% endif %}
-      {% if show_sitemap %}<a href="/sitemap.xml" type="application/xml" target="_blank" rel="noopener">{{ t.sitemap | default(value="Sitemap") }}</a>{% endif %}
+      {% if show_sitemap %}<a href="{{ sitemap_url }}" type="application/xml" target="_blank" rel="noopener">{{ t.sitemap | default(value="Sitemap") }}</a>{% endif %}
     </p>
     {% endif %}
     {% if show_sitemap %}
     {% if show_rss %}{% else %}
     <p class="footer-links">
-      <a href="/sitemap.xml" type="application/xml" target="_blank" rel="noopener">{{ t.sitemap | default(value="Sitemap") }}</a>
+      <a href="{{ sitemap_url }}" type="application/xml" target="_blank" rel="noopener">{{ t.sitemap | default(value="Sitemap") }}</a>
     </p>
     {% endif %}
     {% endif %}

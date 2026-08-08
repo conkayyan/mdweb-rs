@@ -54,6 +54,80 @@ fn builtin_default(key: &str) -> Option<&'static str> {
         .map(|(_, v)| *v)
 }
 
+/// Route rules for well-known, non-content URL paths. Each field is the URL
+/// slug (path segment or file name) for a built-in route; configuring one
+/// renames the route everywhere — server matching, generated links, feeds and
+/// the template `routes` map. Defaults preserve the classic mdweb layout.
+#[derive(Debug, Clone)]
+pub struct Routes {
+    /// Search page: `/search` (or `/<lang>/search`). Default `"search"`.
+    pub search: String,
+    /// Tag index and tag listings: `/tags/` and `/tags/<tag>/`. Default
+    /// `"tags"`.
+    pub tags: String,
+    /// Per-language RSS feed: `/rss.xml` (or `/<lang>/rss.xml`). Default
+    /// `"rss.xml"`.
+    pub rss: String,
+    /// Site-wide XML sitemap at the site root: `/sitemap.xml`. Default
+    /// `"sitemap.xml"`.
+    pub sitemap: String,
+    /// Client-side search index at the site root: `/search.json`. Default
+    /// `"search.json"`.
+    pub search_index: String,
+    /// Static assets served from `template/<theme>/static/`: `/static/…`.
+    /// Default `"static"`.
+    pub static_dir: String,
+    /// URL prefix for the blog container `content/posts/`: `/posts/…`.
+    /// Content still lives on disk under `content/posts/`; only the URL
+    /// prefix changes. Default `"posts"`.
+    pub posts: String,
+    /// URL prefix for the pages container `content/pages/`: `/pages/…`.
+    /// Content still lives on disk under `content/pages/`; only the URL
+    /// prefix changes. Default `"pages"`.
+    pub pages: String,
+}
+
+impl Default for Routes {
+    fn default() -> Self {
+        Routes {
+            search: "search".into(),
+            tags: "tags".into(),
+            rss: "rss.xml".into(),
+            sitemap: "sitemap.xml".into(),
+            search_index: "search.json".into(),
+            static_dir: "static".into(),
+            posts: "posts".into(),
+            pages: "pages".into(),
+        }
+    }
+}
+
+impl Routes {
+    /// Translate an on-disk content container segment (`posts` / `pages`)
+    /// into its configured URL prefix. Any other segment passes through
+    /// unchanged, so non-container paths (root pages, `notes/`, …) are never
+    /// touched.
+    pub fn prefix_url(&self, seg: &str) -> String {
+        match seg {
+            "posts" => self.posts.clone(),
+            "pages" => self.pages.clone(),
+            other => other.to_string(),
+        }
+    }
+
+    /// Inverse of `prefix_url`: map a URL prefix back to the on-disk content
+    /// container directory name.
+    pub fn prefix_disk(&self, seg: &str) -> String {
+        if seg == self.posts {
+            "posts".to_string()
+        } else if seg == self.pages {
+            "pages".to_string()
+        } else {
+            seg.to_string()
+        }
+    }
+}
+
 /// Site configuration from `site.toml`.
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -92,6 +166,8 @@ pub struct Config {
     /// `id` is set; the rendered snippet is injected into the page `<head>`
     /// before the user-editable `layout/inject.html` content.
     pub analytics: AnalyticsConfig,
+    /// Route rules for well-known, non-content URLs.
+    pub routes: Routes,
     pub extra: Value,
 }
 
@@ -246,6 +322,7 @@ impl Default for Config {
             tags_limit: 20,
             tag_cloud_limit: 0,
             analytics: AnalyticsConfig::default(),
+            routes: Routes::default(),
             extra: Value::map(),
         }
     }
@@ -366,6 +443,40 @@ impl Config {
                 .get("baidu")
                 .and_then(AnalyticsProvider::from_value);
         }
+        if let Some(rm) = m.get("routes").and_then(|v| v.as_map()) {
+            // Each value is a URL slug; trim stray whitespace and slashes so
+            // `"/search/"` behaves identically to `"search"`.
+            let slug = |k: &str| {
+                rm.get(k)
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.trim().trim_matches('/').to_string())
+                    .filter(|s| !s.is_empty())
+            };
+            if let Some(s) = slug("search") {
+                cfg.routes.search = s;
+            }
+            if let Some(s) = slug("tags") {
+                cfg.routes.tags = s;
+            }
+            if let Some(s) = slug("rss") {
+                cfg.routes.rss = s;
+            }
+            if let Some(s) = slug("sitemap") {
+                cfg.routes.sitemap = s;
+            }
+            if let Some(s) = slug("search_index") {
+                cfg.routes.search_index = s;
+            }
+            if let Some(s) = slug("static") {
+                cfg.routes.static_dir = s;
+            }
+            if let Some(s) = slug("posts") {
+                cfg.routes.posts = s;
+            }
+            if let Some(s) = slug("pages") {
+                cfg.routes.pages = s;
+            }
+        }
         if let Some(lang_map) = m.get("lang").and_then(|v| v.as_map()) {
             for (code, meta) in lang_map {
                 let mm = meta.as_map().cloned().unwrap_or_default();
@@ -464,18 +575,47 @@ impl Config {
     }
 
     /// URL prefix for a language's tag listings: `/tags/` for the default
-    /// language, `/<code>/tags/` otherwise.
+    /// language, `/<code>/tags/` otherwise. Follows the configured `routes.tags`.
     pub fn tag_index_url(&self, lang: &str) -> String {
-        format!("{}tags/", self.lang_prefix(lang))
+        format!("{}{}/", self.lang_prefix(lang), self.routes.tags)
     }
 
     /// URL for a single tag listing page in a language.
     pub fn tag_url(&self, lang: &str, name: &str) -> String {
         format!(
-            "{}tags/{}/",
+            "{}{}/{}/",
             self.lang_prefix(lang),
+            self.routes.tags,
             crate::content::percent_encode(name)
         )
+    }
+
+    /// URL of the search page for a language: `/search` for the default
+    /// language, `/<code>/search` otherwise.
+    pub fn search_url(&self, lang: &str) -> String {
+        format!("{}{}", self.lang_prefix(lang), self.routes.search)
+    }
+
+    /// URL of the per-language RSS feed: `/rss.xml` for the default language,
+    /// `/<code>/rss.xml` otherwise.
+    pub fn rss_url(&self, lang: &str) -> String {
+        format!("{}{}", self.lang_prefix(lang), self.routes.rss)
+    }
+
+    /// URL of the site-wide XML sitemap. Serves every language, so it lives at
+    /// the root regardless of the current language.
+    pub fn sitemap_url(&self) -> String {
+        format!("/{}", self.routes.sitemap)
+    }
+
+    /// URL of the client-side search index. Spans all languages.
+    pub fn search_index_url(&self) -> String {
+        format!("/{}", self.routes.search_index)
+    }
+
+    /// URL prefix of the theme's static directory, e.g. `/static/`.
+    pub fn static_url(&self) -> String {
+        format!("/{}/", self.routes.static_dir)
     }
 
     /// Resolve a UI string: current lang → English → built-in default → key itself.
@@ -652,5 +792,89 @@ id = "</script><script>alert(1)</script>"
             "raw id must not leak into HTML attribute: {s}"
         );
         assert!(s.contains("&lt;/script&gt;"));
+    }
+
+    #[test]
+    fn routes_default_to_classic_layout() {
+        let cfg = parse(r#"title = "X""#);
+        assert_eq!(cfg.routes.search, "search");
+        assert_eq!(cfg.routes.tags, "tags");
+        assert_eq!(cfg.routes.rss, "rss.xml");
+        assert_eq!(cfg.routes.sitemap, "sitemap.xml");
+        assert_eq!(cfg.routes.search_index, "search.json");
+        assert_eq!(cfg.routes.static_dir, "static");
+        assert_eq!(cfg.routes.posts, "posts");
+        assert_eq!(cfg.routes.pages, "pages");
+        assert_eq!(cfg.search_url("en"), "/search");
+        assert_eq!(cfg.search_url("zh"), "/zh/search");
+        assert_eq!(cfg.rss_url("en"), "/rss.xml");
+        assert_eq!(cfg.rss_url("zh"), "/zh/rss.xml");
+        assert_eq!(cfg.sitemap_url(), "/sitemap.xml");
+        assert_eq!(cfg.search_index_url(), "/search.json");
+        assert_eq!(cfg.static_url(), "/static/");
+        assert_eq!(cfg.tag_index_url("en"), "/tags/");
+        assert_eq!(cfg.tag_url("zh", "rust"), "/zh/tags/rust/");
+    }
+
+    #[test]
+    fn routes_can_be_customised() {
+        let cfg = parse(
+            r#"
+languages = ["en", "zh"]
+
+[routes]
+search = "find"
+tags = "topics"
+rss = "feed.xml"
+sitemap = "site.xml"
+search_index = "lookup.json"
+static = "assets"
+posts = "blog"
+pages = "docs"
+"#,
+        );
+        assert_eq!(cfg.routes.search, "find");
+        assert_eq!(cfg.routes.tags, "topics");
+        assert_eq!(cfg.routes.rss, "feed.xml");
+        assert_eq!(cfg.routes.sitemap, "site.xml");
+        assert_eq!(cfg.routes.search_index, "lookup.json");
+        assert_eq!(cfg.routes.static_dir, "assets");
+        assert_eq!(cfg.routes.posts, "blog");
+        assert_eq!(cfg.routes.pages, "docs");
+        // Content container translation both directions.
+        assert_eq!(cfg.routes.prefix_url("posts"), "blog");
+        assert_eq!(cfg.routes.prefix_url("pages"), "docs");
+        assert_eq!(cfg.routes.prefix_url("notes"), "notes");
+        assert_eq!(cfg.routes.prefix_disk("blog"), "posts");
+        assert_eq!(cfg.routes.prefix_disk("docs"), "pages");
+        assert_eq!(cfg.routes.prefix_disk("notes"), "notes");
+        assert_eq!(cfg.search_url("en"), "/find");
+        assert_eq!(cfg.search_url("zh"), "/zh/find");
+        assert_eq!(cfg.rss_url("en"), "/feed.xml");
+        assert_eq!(cfg.rss_url("zh"), "/zh/feed.xml");
+        assert_eq!(cfg.sitemap_url(), "/site.xml");
+        assert_eq!(cfg.search_index_url(), "/lookup.json");
+        assert_eq!(cfg.static_url(), "/assets/");
+        assert_eq!(cfg.tag_index_url("en"), "/topics/");
+        assert_eq!(cfg.tag_url("zh", "a b"), "/zh/topics/a%20b/");
+    }
+
+    #[test]
+    fn routes_ignore_empty_and_slash_padded_values() {
+        let cfg = parse(
+            r#"
+[routes]
+search = ""
+tags = "/topics/"
+rss = "   "
+sitemap = "//site.xml"
+"#,
+        );
+        // Empty values fall back to the default; slashes are trimmed.
+        assert_eq!(cfg.routes.search, "search");
+        assert_eq!(cfg.routes.tags, "topics");
+        assert_eq!(cfg.routes.rss, "rss.xml");
+        assert_eq!(cfg.routes.sitemap, "site.xml");
+        assert_eq!(cfg.tag_index_url("en"), "/topics/");
     }
 }

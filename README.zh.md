@@ -403,6 +403,35 @@ no_posts     = "暂无文章。"
 `prev`、`next`、`not_found`、`not_found_desc`。缺失的键会回退到英文，再回退到
 内置默认值，最后回退到键名字符串本身。
 
+### 路由规则（`[routes]`）
+
+内置的非内容路由可以通过 `[routes]` 表配置化。每个值就是该路由的 URL 段
+（路径段或文件名）；修改它会**全局**重命名该路由——服务端匹配、生成的链接、
+页脚/主题模板、RSS/站点地图/搜索索引 URL 都会随之变化。带语言前缀的变体会
+自动沿用新名字（`/<lang>/search`、`/<lang>/rss.xml` 等）。
+
+```toml
+[routes]
+search       = "search"        # 搜索页：           /search  (/<lang>/search)
+tags         = "tags"          # 标签索引/列表：    /tags/   (/<lang>/tags/<tag>/)
+rss          = "rss.xml"       # RSS 订阅：         /rss.xml (/<lang>/rss.xml)
+sitemap      = "sitemap.xml"   # XML 站点地图：     /sitemap.xml
+search_index = "search.json"   # 客户端搜索索引：   /search.json
+static       = "static"        # 主题静态资源：     /static/...
+posts        = "posts"         # 博客容器：         content/posts/... → /posts/...
+pages        = "pages"         # 页面容器：         content/pages/... → /pages/...
+```
+
+上面的取值就是默认值，因此可以整个省略该配置块。空值回退到默认值；首尾多余的
+斜杠会被去掉（`"/search"` 与 `"search"` 等价）。主题模板可通过 `routes.*`
+上下文键读取这些值（如 `routes.static`、`routes.search_index`），完整 URL
+则由 `static_url`、`search_action`、`rss_url`、`sitemap_url` 提供。
+
+`posts`/`pages` 只改**URL 前缀**：内容仍存放在磁盘的 `content/posts/` 与
+`content/pages/` 下，所有派生产物——文章/分类 URL、页面分区落地页、面包屑、
+导航、图片 URL、RSS 与站点地图——都跟随新前缀（例如 `posts = "blog"` 会把
+`content/posts/guide/hello.md` 变成 `/blog/guide/hello/`）。
+
 ## 标签页面
 
 每篇文档 frontmatter 里的 `tags` 会生成每种语言的标签云。侧边栏显示一个**标签云**（每个标签按其被多少篇文档使用加权），在 `site.toml` 中设置

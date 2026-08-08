@@ -424,6 +424,39 @@ Available keys: `home`, `categories`, `recent_posts`, `friend_links`, `no_posts`
 `not_found`, `not_found_desc`. Missing keys fall back to English, then to a
 built-in default, then to the key string itself.
 
+### Routes
+
+The built-in, non-content routes are configurable via a `[routes]` table. Each
+value is the URL slug (path segment or file name) for that route; changing it
+renames the route **everywhere** — server matching, generated links, the
+footer/theme templates, and the feed/sitemap/search-index URLs. Language-prefixed
+variants keep working automatically (`/<lang>/search`, `/<lang>/rss.xml`, …).
+
+```toml
+[routes]
+search       = "search"        # search page:          /search  (/<lang>/search)
+tags         = "tags"          # tags index + listing: /tags/   (/<lang>/tags/<tag>/)
+rss          = "rss.xml"       # RSS feed:             /rss.xml (/<lang>/rss.xml)
+sitemap      = "sitemap.xml"   # XML sitemap:          /sitemap.xml
+search_index = "search.json"   # client-side search:   /search.json
+static       = "static"        # theme assets:         /static/...
+posts        = "posts"         # blog container:       content/posts/... → /posts/...
+pages        = "pages"         # pages container:      content/pages/... → /pages/...
+```
+
+The values above are the defaults, so the block may be omitted entirely. An
+empty value falls back to its default; surrounding slashes are trimmed (so
+`"/search/"` behaves like `"search"`). The theme templates can read the resolved
+values from the `routes.*` context keys (e.g. `routes.static`,
+`routes.search_index`) and the full URLs from `static_url`, `search_action`,
+`rss_url`, `sitemap_url`.
+
+`posts`/`pages` only rename the **URL prefix**: content stays on disk under
+`content/posts/` and `content/pages/`, and everything derived from it — article
+and category URLs, page-section landings, breadcrumbs, navigation, image URLs,
+the RSS feed and the sitemap — follows the new prefix (`posts = "blog"` turns
+`content/posts/guide/hello.md` into `/blog/guide/hello/`).
+
 ## Tag pages
 
 Every document's frontmatter `tags` feeds a per-language tag index. The sidebar

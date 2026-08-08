@@ -122,9 +122,11 @@ fn detect_lang_from_path(site: &Arc<Site>, path: &str) -> String {
 fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> {
     let clean = path.trim_matches('/');
     let segs: Vec<&str> = clean.split('/').filter(|s| !s.is_empty()).collect();
+    let routes = &site.config.routes;
 
-    // Static assets: doc `_static/<rel>` then embedded theme defaults.
-    if !segs.is_empty() && segs[0] == "static" {
+    // Static assets: doc `template/<theme>/static/<rel>` then embedded theme
+    // defaults.
+    if !segs.is_empty() && segs[0] == routes.static_dir {
         if segs.len() > 1 {
             let rest = segs[1..].join("/");
             if let Some(body) = serve_static(site, &rest) {
@@ -138,7 +140,7 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
     }
 
     // Search index: unprefixed, spans all languages.
-    if segs.len() == 1 && segs[0] == "search.json" {
+    if segs.len() == 1 && segs[0] == routes.search_index {
         let body = feed::search_index_json(site);
         return Ok(Response {
             body: body.into_bytes(),
@@ -147,7 +149,7 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
     }
 
     // Sitemap: unprefixed, spans all languages.
-    if segs.len() == 1 && segs[0] == "sitemap.xml" {
+    if segs.len() == 1 && segs[0] == routes.sitemap {
         let body = feed::sitemap_xml(site);
         return Ok(Response {
             body: body.into_bytes(),
@@ -155,10 +157,10 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
         });
     }
 
-    // RSS feed for the default language at /rss.xml; for other languages at
-    // /<lang>/rss.xml. Detect both shapes after stripping the lang prefix
-    // below.
-    let rss_request = segs.last().copied() == Some("rss.xml");
+    // RSS feed for the default language at `routes.rss`; for other languages
+    // at `/<lang>/routes.rss`. Detect both shapes after stripping the lang
+    // prefix below.
+    let rss_request = segs.last().copied() == Some(routes.rss.as_str());
 
     // Determine language (explicit prefix, or default for unprefixed paths).
     let (lang, rest): (String, Vec<&str>) = match segs.first() {
@@ -187,8 +189,8 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
     }
 
     // RSS feed: must come before category/article resolution so it isn't
-    // swallowed by a category whose slug happens to be "rss".
-    if rss_request && rest == ["rss.xml"] {
+    // swallowed by a category whose slug happens to be the configured rss name.
+    if rss_request && rest == [routes.rss.as_str()] {
         let body = feed::rss_xml(site, &lang, 50)
             .map_err(|e| format!("rss: {e}"))?;
         return Ok(Response {
@@ -198,7 +200,7 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
     }
 
     // Search page: /search?q=... (or /<lang>/search?q=...).
-    if rest == ["search"] {
+    if rest == [routes.search.as_str()] {
         let q = parse_form_query(query, "q");
         return render::render_search(site, &lang, &q).map(|h| Response {
             body: h.into_bytes(),
@@ -206,22 +208,34 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
         });
     }
 
-    // Tags index: /tags/ (or /<lang>/tags/) lists every tag in the language.
-    if rest.len() == 1 && rest[0] == "tags" {
+    // Tags index: {routes.tags}/ (or /<lang>/{routes.tags}/) lists every tag
+    // in the language.
+    if rest.len() == 1 && rest[0] == routes.tags.as_str() {
         return render::render_tags_index(site, &lang).map(|h| Response {
             body: h.into_bytes(),
             content_type: HTML,
         });
     }
 
-    // Tag listing: /tags/<tag>/ (or /<lang>/tags/<tag>/). Must come before
-    // category/section resolution so a tag name can't collide with a dir.
-    if rest.len() == 2 && rest[0] == "tags" {
+    // Tag listing: {routes.tags}/<tag>/ (or /<lang>/{routes.tags}/<tag>/).
+    // Must come before category/section resolution so a tag name can't
+    // collide with a dir.
+    if rest.len() == 2 && rest[0] == routes.tags.as_str() {
         let name = percent_decode(rest[1]);
         return render::render_tag(site, &lang, &name, page).map(|h| Response {
             body: h.into_bytes(),
             content_type: HTML,
         });
+    }
+
+    // Content routes match against on-disk paths, so map the URL container
+    // prefix back to its directory name first (e.g. a `routes.posts = "blog"`
+    // prefix → `posts`). Components under a renamed prefix are translated by
+    // the first segment only; `images` and raw-file resolution keep working
+    // because `resolve_image`/`resolve_file` invert their own prefix.
+    let mut rest: Vec<String> = rest.iter().map(|s| s.to_string()).collect();
+    if let Some(first) = rest.first_mut() {
+        *first = routes.prefix_disk(first);
     }
 
     if let Some(cat) = find_category(site, &rest.join("/")) {
@@ -273,6 +287,8 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
 }
 
 fn serve_static(site: &Arc<Site>, rel: &str) -> Option<Vec<u8>> {
+    // Files live in `template/<theme>/static/` on disk regardless of the
+    // configured URL prefix; only the route changes.
     let theme = if site.theme.is_empty() { "default" } else { site.theme.as_str() };
     let p = site.doc_root.join("template").join(theme).join("static").join(rel);
     if let Ok(data) = std::fs::read(&p) {
@@ -302,9 +318,9 @@ fn find_category<'a>(site: &'a Site, key: &str) -> Option<&'a Category> {
 fn find_article<'a>(
     site: &'a Site,
     lang: &str,
-    rest: &[&str],
+    rest: &[String],
 ) -> Option<&'a crate::content::Article> {
-    let last = rest.last().copied().unwrap_or("");
+    let last = rest.last().map(|s| s.as_str()).unwrap_or("");
     let path_parts = &rest[..rest.len().saturating_sub(1)];
     site.articles.iter().find(|a| {
         a.lang == lang
@@ -317,11 +333,11 @@ fn find_article<'a>(
 /// Match a request path against any `_index.md` directory in the doc tree,
 /// excluding `posts/*` (those are categories). Returns the matched directory
 /// path segments when found.
-fn find_section(site: &Site, rest: &[&str]) -> Option<Vec<String>> {
+fn find_section(site: &Site, rest: &[String]) -> Option<Vec<String>> {
     if rest.is_empty() {
         return None;
     }
-    let dir: Vec<String> = rest.iter().map(|s| s.to_string()).collect();
+    let dir: Vec<String> = rest.to_vec();
     let key = dir.join("/");
     if site.indices.contains_key(&key)
         && dir.first().map(|s| s.as_str()) != Some("posts")
