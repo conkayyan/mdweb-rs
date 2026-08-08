@@ -12,23 +12,8 @@
 //! `search_results` runs the matching logic on the server side so the
 //! `/search?q=...` page can render without round-tripping through JSON.
 
-use crate::content::{Article, Category, Site};
-
-/// Strip HTML tags from a markdown-rendered string. Used to keep the search
-/// index small (no `<p>` / `<strong>` tokens for the browser to chew on).
-pub fn strip_html(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut in_tag = false;
-    for c in s.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ if !in_tag => out.push(c),
-            _ => {}
-        }
-    }
-    out
-}
+use crate::config::POSTS_DIR;
+use crate::content::{strip_html, Article, Category, Site};
 
 fn collapse_ws(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
@@ -150,11 +135,18 @@ pub fn search_results<'a>(site: &'a Site, query: &str, lang: &str) -> Vec<Search
             "{} {} {} {}",
             a.title.to_lowercase(),
             a.summary.to_lowercase(),
-            a.tags.iter().map(|t| t.to_lowercase()).collect::<Vec<_>>().join(" "),
+            a.tags
+                .iter()
+                .map(|t| t.to_lowercase())
+                .collect::<Vec<_>>()
+                .join(" "),
             article_text(a).to_lowercase()
         );
         if terms.iter().all(|t| haystack.contains(*t)) {
-            hits.push(SearchHit { article: a, haystack });
+            hits.push(SearchHit {
+                article: a,
+                haystack,
+            });
         }
     }
     hits.sort_by(|x, y| {
@@ -176,9 +168,7 @@ pub fn rss_xml(site: &Site, lang: &str, limit: usize) -> Result<String, String> 
         .articles
         .iter()
         .filter(|a| {
-            a.lang == lang
-                && a.path.first().map(|s| s.as_str()) == Some("posts")
-                && !a.draft
+            a.lang == lang && a.path.first().map(|s| s.as_str()) == Some(POSTS_DIR) && !a.draft
         })
         .collect();
     arts.sort_by_key(|a| std::cmp::Reverse(a.sort_ts));
@@ -210,7 +200,11 @@ pub fn rss_xml(site: &Site, lang: &str, limit: usize) -> Result<String, String> 
         xml_escape(&feed_url)
     ));
 
-    let lang_attr = if lang.is_empty() { String::new() } else { format!(" xml:lang=\"{lang}\"") };
+    let lang_attr = if lang.is_empty() {
+        String::new()
+    } else {
+        format!(" xml:lang=\"{lang}\"")
+    };
     for a in arts {
         let link = format!("{base}{}", a.url);
         let pub_date = a
@@ -305,7 +299,11 @@ fn rfc822_from_iso(iso: &str) -> String {
     if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
         return iso.to_string();
     }
-    let time = if time_part.is_empty() { "00:00:00" } else { time_part };
+    let time = if time_part.is_empty() {
+        "00:00:00"
+    } else {
+        time_part
+    };
     format!("{y:04}-{m:02}-{d:02}T{time}Z")
 }
 
@@ -317,11 +315,7 @@ pub fn sitemap_xml(site: &Site) -> String {
     let mut urls: Vec<(String, Option<String>)> = Vec::new();
     urls.push((site.config.lang_prefix(&site.default_lang), None));
 
-    fn walk_cat(
-        cats: &[Category],
-        lang: &str,
-        out: &mut Vec<(String, Option<String>)>,
-    ) {
+    fn walk_cat(cats: &[Category], lang: &str, out: &mut Vec<(String, Option<String>)>) {
         for c in cats {
             if let Some(url) = c.urls.get(lang) {
                 if !url.is_empty() && url != "#" {
@@ -374,7 +368,10 @@ mod tests {
 
     #[test]
     fn strip_html_removes_tags() {
-        assert_eq!(strip_html("<p>hello <strong>world</strong></p>"), "hello world");
+        assert_eq!(
+            strip_html("<p>hello <strong>world</strong></p>"),
+            "hello world"
+        );
     }
 
     #[test]

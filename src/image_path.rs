@@ -106,7 +106,10 @@ pub fn contained(root: &Path, rel: &str) -> Option<PathBuf> {
     if rel.is_empty() || rel.starts_with('/') {
         return None;
     }
-    if rel.split('/').any(|s| s.is_empty() || s == "." || s == "..") {
+    if rel
+        .split('/')
+        .any(|s| s.is_empty() || s == "." || s == "..")
+    {
         return None;
     }
     let base = root.canonicalize().ok()?;
@@ -185,7 +188,10 @@ mod tests {
 
     #[test]
     fn maps_from_content_root() {
-        assert_eq!(to_url("_image/a.png", "", &routes()).as_deref(), Some("/a.png"));
+        assert_eq!(
+            to_url("_image/a.png", "", &routes()).as_deref(),
+            Some("/a.png")
+        );
     }
 
     #[test]
@@ -216,9 +222,18 @@ mod tests {
     #[test]
     fn leaves_absolute_and_external_srcs() {
         assert_eq!(to_url("/static/hero.png", "pages", &routes()), None);
-        assert_eq!(to_url("https://example.com/_image/a.png", "pages", &routes()), None);
-        assert_eq!(to_url("//cdn.example.com/_image/a.png", "pages", &routes()), None);
-        assert_eq!(to_url("data:image/svg+xml,<svg/>", "pages", &routes()), None);
+        assert_eq!(
+            to_url("https://example.com/_image/a.png", "pages", &routes()),
+            None
+        );
+        assert_eq!(
+            to_url("//cdn.example.com/_image/a.png", "pages", &routes()),
+            None
+        );
+        assert_eq!(
+            to_url("data:image/svg+xml,<svg/>", "pages", &routes()),
+            None
+        );
     }
 
     #[test]
@@ -264,6 +279,9 @@ mod tests {
         assert!(contained(root, "../Cargo.toml").is_none());
         assert!(contained(root, "src/../Cargo.toml").is_none());
         assert!(contained(root, "/etc/passwd").is_none());
-        assert!(contained(root, "src").is_none(), "directories are not files");
+        assert!(
+            contained(root, "src").is_none(),
+            "directories are not files"
+        );
     }
 }

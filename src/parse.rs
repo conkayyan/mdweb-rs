@@ -44,13 +44,20 @@ pub fn parse_frontmatter(source: &str) -> (BTreeMap<String, Value>, String) {
     let block = lines.join("\n");
 
     let fields = if delim == "+++" {
-        parse_toml(&block).ok().and_then(|v| v.as_map().cloned()).unwrap_or_default()
+        parse_toml(&block)
+            .ok()
+            .and_then(|v| v.as_map().cloned())
+            .unwrap_or_default()
     } else {
         parse_yaml(&block)
     };
 
     // Reconstruct the body (may contain the delimiter inside code? unlikely)
-    let body = trimmed.lines().skip(body_start).collect::<Vec<_>>().join("\n");
+    let body = trimmed
+        .lines()
+        .skip(body_start)
+        .collect::<Vec<_>>()
+        .join("\n");
     (fields, body)
 }
 
@@ -77,11 +84,7 @@ impl<'a> Cursor<'a> {
 
     fn parse_map(&mut self, indent: usize) -> Option<BTreeMap<String, Value>> {
         let mut map = BTreeMap::new();
-        loop {
-            let line = match self.peek() {
-                Some(l) => l,
-                None => break,
-            };
+        while let Some(line) = self.peek() {
             let trimmed_start = line.trim_start();
             if trimmed_start.is_empty() || trimmed_start.starts_with('#') {
                 self.pos += 1;
@@ -138,11 +141,7 @@ impl<'a> Cursor<'a> {
 
     fn parse_list(&mut self, indent: usize) -> Vec<Value> {
         let mut list = Vec::new();
-        loop {
-            let line = match self.peek() {
-                Some(l) => l,
-                None => break,
-            };
+        while let Some(line) = self.peek() {
             let trimmed_start = line.trim_start();
             if trimmed_start.is_empty() || trimmed_start.starts_with('#') {
                 self.pos += 1;
@@ -433,7 +432,16 @@ mod tests {
         let t = "title = \"Blog\"\n[lang.en]\ntitle = \"English\"\n";
         let v = parse_toml(t).unwrap();
         let lang = v.as_map().unwrap().get("lang").unwrap().as_map().unwrap();
-        assert_eq!(lang.get("en").unwrap().as_map().unwrap().get("title").unwrap().as_str(), Some("English"));
+        assert_eq!(
+            lang.get("en")
+                .unwrap()
+                .as_map()
+                .unwrap()
+                .get("title")
+                .unwrap()
+                .as_str(),
+            Some("English")
+        );
     }
 
     #[test]

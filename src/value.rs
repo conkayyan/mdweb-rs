@@ -2,20 +2,15 @@ use std::collections::BTreeMap;
 
 /// A tiny dynamic value used for both parsed config/frontmatter and template
 /// contexts. Deliberately std-only.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum Value {
     Str(String),
     Int(i64),
     Bool(bool),
+    #[default]
     Null,
     Arr(Vec<Value>),
     Map(BTreeMap<String, Value>),
-}
-
-impl Default for Value {
-    fn default() -> Self {
-        Value::Null
-    }
 }
 
 impl Value {
@@ -172,5 +167,14 @@ impl Value {
             }
             Value::Map(_) => "[object]".to_string(),
         }
+    }
+}
+
+/// A string value, or `Null` when absent or empty. Used for optional template
+/// fields where "unset" and "empty" both mean "don't render".
+pub fn opt_str(s: Option<&str>) -> Value {
+    match s {
+        Some(v) if !v.is_empty() => Value::str(v),
+        _ => Value::Null,
     }
 }

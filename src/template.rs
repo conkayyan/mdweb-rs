@@ -28,11 +28,26 @@ use crate::value::Value;
 pub enum Node {
     Text(String),
     /// `expr` is the full filter-chained expression (e.g. `a.title | upper`).
-    Out { expr: String },
-    If { cond: String, then: Vec<Node>, els: Vec<Node> },
-    For { var: String, iter: String, body: Vec<Node> },
-    Block { name: String, body: Vec<Node> },
-    Include { name: String },
+    Out {
+        expr: String,
+    },
+    If {
+        cond: String,
+        then: Vec<Node>,
+        els: Vec<Node>,
+    },
+    For {
+        var: String,
+        iter: String,
+        body: Vec<Node>,
+    },
+    Block {
+        name: String,
+        body: Vec<Node>,
+    },
+    Include {
+        name: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -57,9 +72,21 @@ enum Lex {
 }
 
 enum Frame {
-    If { cond: String, then: Vec<Node>, els: Vec<Node>, saw_else: bool },
-    For { var: String, iter: String, body: Vec<Node> },
-    Block { name: String, body: Vec<Node> },
+    If {
+        cond: String,
+        then: Vec<Node>,
+        els: Vec<Node>,
+        saw_else: bool,
+    },
+    For {
+        var: String,
+        iter: String,
+        body: Vec<Node>,
+    },
+    Block {
+        name: String,
+        body: Vec<Node>,
+    },
 }
 
 pub struct Engine {
@@ -71,14 +98,30 @@ pub struct Engine {
 const MAX_INCLUDE_DEPTH: usize = 32;
 
 const MONTHS: [&str; 12] = [
-    "January", "February", "March", "April", "May", "June", "July", "August",
-    "September", "October", "November", "December",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 ];
 const MONTHS_SHORT: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 const WEEKDAYS: [&str; 7] = [
-    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
 ];
 const WEEKDAYS_SHORT: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -147,11 +190,9 @@ impl ParsedDate {
             y -= 1;
             doy += days_in_year(y);
             w = (doy - dow + 10) / 7;
-        } else if w > 52 {
-            if doy - dow + 10 >= 7 * 53 {
-                y += 1;
-                w = 1;
-            }
+        } else if w > 52 && doy - dow + 10 >= 7 * 53 {
+            y += 1;
+            w = 1;
         }
         (y, w)
     }
@@ -160,7 +201,11 @@ impl ParsedDate {
 /// Parse `2026-08-02`, `2026-08-02T12:30:45Z` or `2026-08-02 12:30`.
 fn parse_date_value(s: &str) -> Option<ParsedDate> {
     let s = s.trim();
-    let s = s.strip_suffix('Z').unwrap_or(s).strip_suffix('z').unwrap_or(s);
+    let s = s
+        .strip_suffix('Z')
+        .unwrap_or(s)
+        .strip_suffix('z')
+        .unwrap_or(s);
     let (date_part, time_part) = match s.find('T').or_else(|| s.find(' ')) {
         Some(i) => (&s[..i], &s[i + 1..]),
         None => (s, ""),
@@ -176,9 +221,24 @@ fn parse_date_value(s: &str) -> Option<ParsedDate> {
         Some(v) if !v.is_empty() => v.parse::<u32>().ok()?,
         _ => 0,
     };
-    let min = time_part.split(':').nth(1).and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
-    let sec = time_part.split(':').nth(2).and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
-    Some(ParsedDate { y, m, d, h, min, sec })
+    let min = time_part
+        .split(':')
+        .nth(1)
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+    let sec = time_part
+        .split(':')
+        .nth(2)
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+    Some(ParsedDate {
+        y,
+        m,
+        d,
+        h,
+        min,
+        sec,
+    })
 }
 
 /// Format a date string with `%`-tokens (`%Y %y %m %e %d %H %I %M %S %p
@@ -246,6 +306,12 @@ fn date_format(s: &str, fmt: &str) -> Option<String> {
         i += 1;
     }
     Some(out)
+}
+
+impl Default for Engine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Engine {
@@ -323,10 +389,7 @@ impl Engine {
             return Err(format!("template not found: {name}"));
         }
         let chain = self.chain(name, Vec::new());
-        let root = chain
-            .last()
-            .cloned()
-            .unwrap_or_else(|| name.to_string());
+        let root = chain.last().cloned().unwrap_or_else(|| name.to_string());
 
         // Walk base -> leaf so leaf overrides win.
         let mut blocks: BTreeMap<String, Vec<Node>> = BTreeMap::new();
@@ -499,13 +562,19 @@ fn apply_filter(name: &str, v: &mut Value, args: &[String], safe: &mut bool) {
         }
         "limit" => {
             if let Value::Arr(a) = v {
-                let n = args.first().and_then(|x| x.parse::<usize>().ok()).unwrap_or(0);
+                let n = args
+                    .first()
+                    .and_then(|x| x.parse::<usize>().ok())
+                    .unwrap_or(0);
                 a.truncate(n);
             }
         }
         "offset" => {
             if let Value::Arr(a) = v {
-                let n = args.first().and_then(|x| x.parse::<usize>().ok()).unwrap_or(0);
+                let n = args
+                    .first()
+                    .and_then(|x| x.parse::<usize>().ok())
+                    .unwrap_or(0);
                 if n <= a.len() {
                     a.drain(..n);
                 } else {
@@ -533,7 +602,7 @@ fn arr_mut(v: &mut Value) -> &mut Vec<Value> {
     v.as_arr_mut().unwrap()
 }
 
-fn sort_slice(a: &mut Vec<Value>, field: Option<&str>, desc: bool) {
+fn sort_slice(a: &mut [Value], field: Option<&str>, desc: bool) {
     a.sort_by(|x, y| {
         let kx = match field {
             Some(f) => x.path(f).cloned().unwrap_or_else(|| x.clone()),
@@ -784,7 +853,10 @@ fn parse_for(body: &str) -> Lex {
             var: var.trim().to_string(),
             iter: iter.trim().to_string(),
         },
-        None => Lex::For { var: body.to_string(), iter: body.to_string() },
+        None => Lex::For {
+            var: body.to_string(),
+            iter: body.to_string(),
+        },
     }
 }
 
@@ -824,13 +896,20 @@ fn build(
         }
         Lex::EndIf => {
             let frame = stack.pop().ok_or("unexpected endif")?;
-            let Frame::If { cond, then, els, .. } = frame else {
+            let Frame::If {
+                cond, then, els, ..
+            } = frame
+            else {
                 return Err("mismatched endif".into());
             };
             push_list(nodes, Node::If { cond, then, els }, stack)
         }
         Lex::For { var, iter } => {
-            stack.push(Frame::For { var, iter, body: Vec::new() });
+            stack.push(Frame::For {
+                var,
+                iter,
+                body: Vec::new(),
+            });
             Ok(())
         }
         Lex::EndFor => {
@@ -841,7 +920,10 @@ fn build(
             push_list(nodes, Node::For { var, iter, body }, stack)
         }
         Lex::Block(name) => {
-            stack.push(Frame::Block { name, body: Vec::new() });
+            stack.push(Frame::Block {
+                name,
+                body: Vec::new(),
+            });
             Ok(())
         }
         Lex::EndBlock => {
@@ -854,14 +936,15 @@ fn build(
     }
 }
 
-fn push_list(
-    nodes: &mut Vec<Node>,
-    node: Node,
-    stack: &mut Vec<Frame>,
-) -> Result<(), String> {
+fn push_list(nodes: &mut Vec<Node>, node: Node, stack: &mut [Frame]) -> Result<(), String> {
     if let Some(top) = stack.last_mut() {
         match top {
-            Frame::If { then, els, saw_else, .. } => {
+            Frame::If {
+                then,
+                els,
+                saw_else,
+                ..
+            } => {
                 if *saw_else {
                     els.push(node);
                 } else {
@@ -883,14 +966,38 @@ mod tests {
     #[test]
     fn default_template_files_parse() {
         let files = [
-            ("base.html", include_str!("../site/template/default/base.html")),
-            ("index.html", include_str!("../site/template/default/index.html")),
-            ("category.html", include_str!("../site/template/default/category.html")),
-            ("article.html", include_str!("../site/template/default/article.html")),
-            ("page.html", include_str!("../site/template/default/page.html")),
-            ("404.html", include_str!("../site/template/default/404.html")),
-            ("layout/header.html", include_str!("../site/template/default/layout/header.html")),
-            ("layout/side.html", include_str!("../site/template/default/layout/side.html")),
+            (
+                "base.html",
+                include_str!("../site/template/default/base.html"),
+            ),
+            (
+                "index.html",
+                include_str!("../site/template/default/index.html"),
+            ),
+            (
+                "category.html",
+                include_str!("../site/template/default/category.html"),
+            ),
+            (
+                "article.html",
+                include_str!("../site/template/default/article.html"),
+            ),
+            (
+                "page.html",
+                include_str!("../site/template/default/page.html"),
+            ),
+            (
+                "404.html",
+                include_str!("../site/template/default/404.html"),
+            ),
+            (
+                "layout/header.html",
+                include_str!("../site/template/default/layout/header.html"),
+            ),
+            (
+                "layout/side.html",
+                include_str!("../site/template/default/layout/side.html"),
+            ),
         ];
         for (name, src) in files {
             let mut e = Engine::new();
@@ -923,12 +1030,21 @@ mod tests {
         assert_eq!(render_str("{{ name | upper }}", &ctx), "HELLO WORLD");
         assert_eq!(render_str("{{ name | lower }}", &ctx), "hello world");
         assert_eq!(
-            render_str("{% if name | length > 10 %}big{% else %}small{% endif %}", &ctx),
+            render_str(
+                "{% if name | length > 10 %}big{% else %}small{% endif %}",
+                &ctx
+            ),
             "big"
         );
-        assert_eq!(render_str("{% if name == \"Hello World\" %}eq{% endif %}", &ctx), "eq");
         assert_eq!(
-            render_str("{% if name != \"x\" and name | length >= 5 %}ok{% endif %}", &ctx),
+            render_str("{% if name == \"Hello World\" %}eq{% endif %}", &ctx),
+            "eq"
+        );
+        assert_eq!(
+            render_str(
+                "{% if name != \"x\" and name | length >= 5 %}ok{% endif %}",
+                &ctx
+            ),
             "ok"
         );
         assert_eq!(
@@ -955,11 +1071,17 @@ mod tests {
             ]),
         )]));
         assert_eq!(
-            render_str("{% for x in items | sort | limit:2 %}{{ x }}{% endfor %}", &ctx),
+            render_str(
+                "{% for x in items | sort | limit:2 %}{{ x }}{% endfor %}",
+                &ctx
+            ),
             "ab"
         );
         assert_eq!(
-            render_str("{% for x in items | sort_desc | limit:1 %}{{ x }}{% endfor %}", &ctx),
+            render_str(
+                "{% for x in items | sort_desc | limit:1 %}{{ x }}{% endfor %}",
+                &ctx
+            ),
             "e"
         );
         assert_eq!(
@@ -967,7 +1089,10 @@ mod tests {
             "cde"
         );
         assert_eq!(
-            render_str("{% for x in items | reverse | limit:1 %}{{ x }}{% endfor %}", &ctx),
+            render_str(
+                "{% for x in items | reverse | limit:1 %}{{ x }}{% endfor %}",
+                &ctx
+            ),
             "e"
         );
         // sort:field orders map elements by a named key.
@@ -985,11 +1110,17 @@ mod tests {
             ]),
         )]));
         assert_eq!(
-            render_str("{% for r in rows | sort:title %}{{ r.title }}{% endfor %}", &ctx2),
+            render_str(
+                "{% for r in rows | sort:title %}{{ r.title }}{% endfor %}",
+                &ctx2
+            ),
             "AB"
         );
         assert_eq!(
-            render_str("{% for r in rows | sort_desc:n %}{{ r.title }}{% endfor %}", &ctx2),
+            render_str(
+                "{% for r in rows | sort_desc:n %}{{ r.title }}{% endfor %}",
+                &ctx2
+            ),
             "BA"
         );
     }
@@ -1002,7 +1133,10 @@ mod tests {
             "2026/08/02"
         );
         assert_eq!(
-            render_str("{{ \"2026-08-02T14:30:05Z\" | date:\"%Y-%m-%d %H:%M\" }}", &null),
+            render_str(
+                "{{ \"2026-08-02T14:30:05Z\" | date:\"%Y-%m-%d %H:%M\" }}",
+                &null
+            ),
             "2026-08-02 14:30"
         );
         assert_eq!(

@@ -106,7 +106,7 @@ fn parse_run_flags(args: &[String]) -> (Option<PathBuf>, String, u16, Option<Pat
         }
         i += 1;
     }
-    if let Some(d) = positional.get(0) {
+    if let Some(d) = positional.first() {
         doc = Some(PathBuf::from(d));
     }
     (doc, host, port, tpl)
@@ -196,24 +196,20 @@ fn cmd_new(args: &[String]) -> i32 {
     }
 
     match kind {
-        "page" => {
-            match mdweb::site::get("samples/page.md") {
-                Some(sample) => cmd_new_one(name, &site, "page", category, sample),
-                None => {
-                    eprintln!("error: embedded sample page missing");
-                    1
-                }
+        "page" => match mdweb::site::get("samples/page.md") {
+            Some(sample) => cmd_new_one(name, &site, "page", category, sample),
+            None => {
+                eprintln!("error: embedded sample page missing");
+                1
             }
-        }
-        "post" => {
-            match mdweb::site::get("samples/post.md") {
-                Some(sample) => cmd_new_one(name, &site, "post", category, sample),
-                None => {
-                    eprintln!("error: embedded sample post missing");
-                    1
-                }
+        },
+        "post" => match mdweb::site::get("samples/post.md") {
+            Some(sample) => cmd_new_one(name, &site, "post", category, sample),
+            None => {
+                eprintln!("error: embedded sample post missing");
+                1
             }
-        }
+        },
         other => {
             eprintln!("error: unknown type '{other}' (expected 'page' or 'post')");
             eprintln!("usage: mdweb new <page|post> <NAME> <SITE_PATH> [CATEGORY]");
@@ -275,4 +271,3 @@ fn cmd_new_one(name: &str, site: &Path, kind: &str, category: Option<&str>, samp
     println!("created {kind}: {}", target.display());
     0
 }
-

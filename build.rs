@@ -39,10 +39,14 @@ fn walk(base: &Path, dir: &Path, files: &mut Vec<(String, String)>) {
         if p.is_dir() {
             walk(base, &p, files);
         } else if p.is_file() {
-            let rel = p.strip_prefix(base).expect("strip").to_string_lossy().replace('\\', "/");
+            let rel = p
+                .strip_prefix(base)
+                .expect("strip")
+                .to_string_lossy()
+                .replace('\\', "/");
             // include_str! is relative to the file it appears in (OUT_DIR),
             // so embed absolute paths resolved from the package root.
-let abs = std::env::current_dir()
+            let abs = std::env::current_dir()
                 .expect("cwd")
                 .join(&p)
                 .to_string_lossy()

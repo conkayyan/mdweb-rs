@@ -89,10 +89,16 @@ fn home_content_resolves_per_language() {
 
     let en = site.home_value("en", 1);
     let en = en.as_map().expect("en map");
-    assert_eq!(en.get("content").and_then(|v| v.as_str()), Some("<p>English body</p>\n"));
+    assert_eq!(
+        en.get("content").and_then(|v| v.as_str()),
+        Some("<p>English body</p>\n")
+    );
     let zh = site.home_value("zh", 1);
     let zh = zh.as_map().expect("zh map");
-    assert_eq!(zh.get("content").and_then(|v| v.as_str()), Some("<p>中文内容</p>\n"));
+    assert_eq!(
+        zh.get("content").and_then(|v| v.as_str()),
+        Some("<p>中文内容</p>\n")
+    );
 }
 
 #[test]
@@ -109,8 +115,14 @@ fn render_context_exposes_t_and_current_lang_display_name() {
         "#,
     );
     let html = mdweb::render::render_home(&site, "zh", 1).expect("render");
-    assert!(html.contains("分类"), "Chinese label should appear in /zh/ home page");
-    assert!(html.contains("简体中文"), "current language display name should appear");
+    assert!(
+        html.contains("分类"),
+        "Chinese label should appear in /zh/ home page"
+    );
+    assert!(
+        html.contains("简体中文"),
+        "current language display name should appear"
+    );
 }
 
 #[test]
@@ -136,7 +148,10 @@ fn empty_theme_falls_back_to_embedded_default() {
     let html = mdweb::render::render_home(&site, "en", 1).expect("render");
     // No template/<name>/ dir exists, but the engine should still produce
     // a complete page from the embedded default theme (base.html shell).
-    assert!(html.contains("<main"), "embedded default theme should render main shell");
+    assert!(
+        html.contains("<main"),
+        "embedded default theme should render main shell"
+    );
 }
 
 #[test]
@@ -168,7 +183,10 @@ fn missing_custom_theme_falls_back_to_embedded() {
 
     let site = Site::build(&dir, None).expect("build");
     let html = mdweb::render::render_home(&site, "en", 1).expect("render");
-    assert!(html.contains("<main"), "embedded fallback should still render");
+    assert!(
+        html.contains("<main"),
+        "embedded fallback should still render"
+    );
 }
 
 #[test]
@@ -206,7 +224,10 @@ fn search_index_lists_articles_in_json() {
     let site = Site::build(&dir, None).expect("build");
     let json = mdweb::feed::search_index_json(&site);
     assert!(json.starts_with('[') && json.ends_with(']'));
-    assert!(json.contains("Hello world"), "article body should be indexed");
+    assert!(
+        json.contains("Hello world"),
+        "article body should be indexed"
+    );
     assert!(json.contains("\"rust\""), "tags should be present in index");
 }
 
@@ -301,16 +322,25 @@ fn search_page_lists_matching_articles() {
 
     let site = Site::build(&dir, None).expect("build");
     let html = mdweb::render::render_search(&site, "en", "sourdough").expect("render");
-    assert!(html.contains("Cooking bread"), "matching article should appear");
+    assert!(
+        html.contains("Cooking bread"),
+        "matching article should appear"
+    );
     // "Rust intro" still shows in the recent-nav sidebar; scope the check to
     // the search-result section so the test reflects actual filtering.
     assert!(
         !html.contains("search-result-title\">Rust intro"),
         "non-matching article should not appear in the result list"
     );
-    assert!(html.contains("<form"), "search page should expose a search form");
+    assert!(
+        html.contains("<form"),
+        "search page should expose a search form"
+    );
     assert!(html.contains("name=\"q\""), "form should post q parameter");
-    assert!(html.contains(">sourdough<"), "current query should be in summary");
+    assert!(
+        html.contains(">sourdough<"),
+        "current query should be in summary"
+    );
 
     let empty = mdweb::render::render_search(&site, "en", "no-such-thing").expect("render");
     assert!(empty.contains("No matching posts"));
@@ -367,18 +397,18 @@ fn categories_only_include_posts_subfolders() {
         "content/pages/about.md",
         "---\ntitle: About\n---\nbody\n",
     );
-    write(
-        &dir,
-        "content/notes/tip.md",
-        "---\ntitle: Tip\n---\nbody\n",
-    );
+    write(&dir, "content/notes/tip.md", "---\ntitle: Tip\n---\nbody\n");
     let site = Site::build(&dir, None).expect("build");
     // Top-level category must be `posts`, not `pages` or `notes`.
     let slugs: Vec<&str> = site.tree.iter().map(|c| c.slug.as_str()).collect();
     assert_eq!(slugs, vec!["posts"], "non-posts sections leak into tree");
     // Nested subcategories are preserved (web → frontend).
     let posts = &site.tree[0];
-    let web = posts.children.iter().find(|c| c.slug == "web").expect("web");
+    let web = posts
+        .children
+        .iter()
+        .find(|c| c.slug == "web")
+        .expect("web");
     let child_slugs: Vec<&str> = web.children.iter().map(|c| c.slug.as_str()).collect();
     assert_eq!(child_slugs, vec!["frontend"], "intro lives two dirs down");
 }
@@ -408,10 +438,21 @@ fn home_feed_excludes_pages_and_notes() {
     let arts = home.get("articles").and_then(|v| v.as_arr()).expect("arr");
     let titles: Vec<String> = arts
         .iter()
-        .filter_map(|v| v.as_map().and_then(|m| m.get("title")).and_then(|t| t.as_str()).map(String::from))
+        .filter_map(|v| {
+            v.as_map()
+                .and_then(|m| m.get("title"))
+                .and_then(|t| t.as_str())
+                .map(String::from)
+        })
         .collect();
-    assert!(titles.contains(&"Hello".to_string()), "post appears on home");
-    assert!(!titles.contains(&"About".to_string()), "page leaks into home");
+    assert!(
+        titles.contains(&"Hello".to_string()),
+        "post appears on home"
+    );
+    assert!(
+        !titles.contains(&"About".to_string()),
+        "page leaks into home"
+    );
     assert!(!titles.contains(&"Tip".to_string()), "notes leak into home");
 }
 
@@ -454,12 +495,18 @@ fn pages_tree_is_recursive() {
     let docs_children = docs.get("children").and_then(|v| v.as_arr()).expect("ch");
     assert_eq!(docs_children.len(), 1, "one grandchild: guide");
     let guide = docs_children[0].as_map().expect("map");
-    assert_eq!(guide.get("title").and_then(|v| v.as_str()), Some("The Guide"));
+    assert_eq!(
+        guide.get("title").and_then(|v| v.as_str()),
+        Some("The Guide")
+    );
     let guide_children = guide.get("children").and_then(|v| v.as_arr()).expect("ch");
     assert_eq!(guide_children.len(), 1, "one great-grandchild: intro");
     let intro = guide_children[0].as_map().expect("map");
     assert_eq!(intro.get("title").and_then(|v| v.as_str()), Some("Intro"));
-    assert_eq!(intro.get("has_children").and_then(|v| v.as_bool()), Some(false));
+    assert_eq!(
+        intro.get("has_children").and_then(|v| v.as_bool()),
+        Some(false)
+    );
 }
 
 #[test]
@@ -499,7 +546,11 @@ fn page_section_renders_with_children_list() {
     let kids = m.get("children").and_then(|v| v.as_arr()).expect("kids");
     let titles: Vec<&str> = kids
         .iter()
-        .filter_map(|c| c.as_map().and_then(|m| m.get("title")).and_then(|t| t.as_str()))
+        .filter_map(|c| {
+            c.as_map()
+                .and_then(|m| m.get("title"))
+                .and_then(|t| t.as_str())
+        })
         .collect();
     assert!(titles.contains(&"Intro"), "leaf page lists itself");
     // And the rendering call succeeds.
@@ -528,9 +579,18 @@ fn article_to_value_exposes_lang_field() {
         "---\ntitle: 你好\n---\nbody\n",
     );
     let site = Site::build(&dir, None).expect("build");
-    let en = site.articles.iter().find(|a| a.slug == "hello" && a.lang == "en").expect("en");
+    let en = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "hello" && a.lang == "en")
+        .expect("en");
     let v = en.to_value();
-    assert_eq!(v.as_map().and_then(|m| m.get("lang")).and_then(|l| l.as_str()), Some("en"));
+    assert_eq!(
+        v.as_map()
+            .and_then(|m| m.get("lang"))
+            .and_then(|l| l.as_str()),
+        Some("en")
+    );
 }
 
 #[test]
@@ -538,14 +598,26 @@ fn breadcrumbs_render_above_posts_and_pages() {
     // `posts/web/frontend/react.md` → posts > web > frontend > title (no home)
     // `pages/docs/guide/intro.md` → home > pages > docs > guide > title
     let dir = tempdir("crumbs");
-    write(&dir, "site.toml", r#"title = "My Blog"
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "My Blog"
 languages = ["en", "zh"]
 
 [i18n.zh]
-breadcrumb_home = "首页""#);
+breadcrumb_home = "首页""#,
+    );
     write(&dir, "content/_index.md", "---\n---\nbody\n");
-    write(&dir, "content/posts/_index.md", "---\ntitle: Posts\n---\nbody\n");
-    write(&dir, "content/posts/web/_index.md", "---\ntitle: Web\n---\nbody\n");
+    write(
+        &dir,
+        "content/posts/_index.md",
+        "---\ntitle: Posts\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/posts/web/_index.md",
+        "---\ntitle: Web\n---\nbody\n",
+    );
     write(
         &dir,
         "content/posts/web/frontend/_index.md",
@@ -577,7 +649,11 @@ breadcrumb_home = "首页""#);
         "---\ntitle: Pages\n---\nbody\n",
     );
     let site = Site::build(&dir, None).expect("build");
-    let post = site.articles.iter().find(|a| a.slug == "react").expect("post");
+    let post = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "react")
+        .expect("post");
     let html = mdweb::render::render_article(&site, "en", post).expect("render post");
     assert!(html.contains("class=\"breadcrumb\""));
     // Articles drop the leading home crumb; the trail starts at "Posts".
@@ -589,29 +665,62 @@ breadcrumb_home = "首页""#);
     // The current item is rendered as a <span> not an <a>, so no link.
     let last_span_start = html.rfind("class=\"breadcrumb\"").unwrap_or(0);
     let last_block = &html[last_span_start..];
-    assert!(last_block.contains("<span>A React Note</span>"), "current item is a non-link span");
+    assert!(
+        last_block.contains("<span>A React Note</span>"),
+        "current item is a non-link span"
+    );
 
-    let page = site.articles.iter().find(|a| a.slug == "intro").expect("page");
+    let page = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "intro")
+        .expect("page");
     let page_html = mdweb::render::render_article(&site, "en", page).expect("render page");
     // The `pages/` container is a transparent sibling of `posts/`: its
     // segment is dropped from the trail, so users see Index › docs › guide
     // instead of Index › pages › docs › guide.
-    assert!(!page_html.contains("href=\"/pages/\">Pages"), "pages/ container hidden");
+    assert!(
+        !page_html.contains("href=\"/pages/\">Pages"),
+        "pages/ container hidden"
+    );
     assert!(page_html.contains("href=\"/pages/docs/\">Docs"));
     assert!(page_html.contains("href=\"/pages/docs/guide/\">Guide"));
     assert!(page_html.contains("<span>Intro</span>"));
 
     // ZH variant: home title is per-language, ancestor titles come from
     // the `_index.<lang>.md` frontmatter.
-    write(&dir, "content/pages/docs/_index.zh.md", "---\ntitle: 文档\n---\nbody\n");
-    write(&dir, "content/pages/docs/guide/_index.zh.md", "---\ntitle: 指南\n---\nbody\n");
-    write(&dir, "content/pages/docs/guide/intro.zh.md", "---\ntitle: 简介\n---\nbody\n");
-    write(&dir, "content/pages/_index.zh.md", "---\ntitle: 页面\n---\nbody\n");
+    write(
+        &dir,
+        "content/pages/docs/_index.zh.md",
+        "---\ntitle: 文档\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/docs/guide/_index.zh.md",
+        "---\ntitle: 指南\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/docs/guide/intro.zh.md",
+        "---\ntitle: 简介\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/_index.zh.md",
+        "---\ntitle: 页面\n---\nbody\n",
+    );
     let site_zh = Site::build(&dir, None).expect("build zh");
-    let intro_zh = site_zh.articles.iter().find(|a| a.slug == "intro" && a.lang == "zh").expect("intro zh");
+    let intro_zh = site_zh
+        .articles
+        .iter()
+        .find(|a| a.slug == "intro" && a.lang == "zh")
+        .expect("intro zh");
     let html_zh = mdweb::render::render_article(&site_zh, "zh", intro_zh).expect("render zh");
     assert!(html_zh.contains("href=\"/zh/\">首页"), "home is /zh/首页");
-    assert!(!html_zh.contains("href=\"/zh/pages/\">页面"), "pages/ container hidden in zh too");
+    assert!(
+        !html_zh.contains("href=\"/zh/pages/\">页面"),
+        "pages/ container hidden in zh too"
+    );
     assert!(html_zh.contains("href=\"/zh/pages/docs/\">文档"));
     assert!(html_zh.contains("href=\"/zh/pages/docs/guide/\">指南"));
     assert!(html_zh.contains("<span>简介</span>"));
@@ -622,16 +731,29 @@ fn listing_pagination_slices_and_pagers_appear() {
     // 7 posts under `posts/`, default `home_limit` = 5 → 2 pages. Page 1
     // holds the newest 5; page 2 holds the 2 oldest.
     let dir = tempdir("paging");
-    write(&dir, "site.toml", r#"title = "X"
-home_limit = 5"#);
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+home_limit = 5"#,
+    );
     write(&dir, "content/_index.md", "---\n---\nbody\n");
     let titles_p1 = ["P01", "P02", "P03", "P04", "P05"];
-    let dates_p1 = ["2026-08-01", "2026-08-02", "2026-08-03", "2026-08-04", "2026-08-05"];
+    let dates_p1 = [
+        "2026-08-01",
+        "2026-08-02",
+        "2026-08-03",
+        "2026-08-04",
+        "2026-08-05",
+    ];
     for (i, t) in titles_p1.iter().enumerate() {
         write(
             &dir,
             &format!("content/posts/p{:02}.md", i + 1),
-            &format!("---\ntitle: \"{t}\"\ndate: \"{}\"\n---\nbody\n", dates_p1[i]),
+            &format!(
+                "---\ntitle: \"{t}\"\ndate: \"{}\"\n---\nbody\n",
+                dates_p1[i]
+            ),
         );
     }
     let titles_p2 = ["P06", "P07"];
@@ -640,7 +762,10 @@ home_limit = 5"#);
         write(
             &dir,
             &format!("content/posts/p{:02}.md", i + 6),
-            &format!("---\ntitle: \"{t}\"\ndate: \"{}\"\n---\nbody\n", dates_p2[i]),
+            &format!(
+                "---\ntitle: \"{t}\"\ndate: \"{}\"\n---\nbody\n",
+                dates_p2[i]
+            ),
         );
     }
     let site = Site::build(&dir, None).expect("build");
@@ -699,22 +824,24 @@ fn directory_drives_template_selection() {
         "content/posts/post.md",
         "---\ntitle: P\ndate: 2026-08-01\n---\nbody\n",
     );
-    write(
-        &dir,
-        "content/pages/leaf.md",
-        "---\ntitle: L\n---\nbody\n",
-    );
+    write(&dir, "content/pages/leaf.md", "---\ntitle: L\n---\nbody\n");
     let site = Site::build(&dir, None).expect("build");
     let post_html = mdweb::render::render_article(
         &site,
         "en",
-        site.articles.iter().find(|a| a.slug == "post").expect("post"),
+        site.articles
+            .iter()
+            .find(|a| a.slug == "post")
+            .expect("post"),
     )
     .expect("post render");
     let page_html = mdweb::render::render_article(
         &site,
         "en",
-        site.articles.iter().find(|a| a.slug == "leaf").expect("leaf"),
+        site.articles
+            .iter()
+            .find(|a| a.slug == "leaf")
+            .expect("leaf"),
     )
     .expect("page render");
     // Different templates → different DOM. The article template emits the
@@ -741,39 +868,53 @@ fn reading_minutes_estimates_cjk_and_words() {
         "content/posts/long.md",
         &format!("---\ntitle: L\n---\n\n{cjk}\n\n{words}\n"),
     );
-    write(
-        &dir,
-        "content/posts/short.md",
-        "---\ntitle: S\n---\n\nhi\n",
-    );
-    write(
-        &dir,
-        "content/posts/empty.md",
-        "---\ntitle: E\n---\n\n",
-    );
+    write(&dir, "content/posts/short.md", "---\ntitle: S\n---\n\nhi\n");
+    write(&dir, "content/posts/empty.md", "---\ntitle: E\n---\n\n");
     let site = Site::build(&dir, None).expect("build");
-    let long = site.articles.iter().find(|a| a.slug == "long").expect("long");
-    let short = site.articles.iter().find(|a| a.slug == "short").expect("short");
-    let empty = site.articles.iter().find(|a| a.slug == "empty").expect("empty");
+    let long = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "long")
+        .expect("long");
+    let short = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "short")
+        .expect("short");
+    let empty = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "empty")
+        .expect("empty");
     assert_eq!(long.reading_minutes(), 5, "600 CJK + 600 words → 5 min");
     assert_eq!(long.reading_seconds(), 300, "5 min in seconds");
-    assert_eq!(short.reading_minutes(), 0, "sub-minute content has 0 minutes");
-    assert_eq!(short.reading_seconds(), 1, "sub-minute content is finer-grained…");
+    assert_eq!(
+        short.reading_minutes(),
+        0,
+        "sub-minute content has 0 minutes"
+    );
+    assert_eq!(
+        short.reading_seconds(),
+        1,
+        "sub-minute content is finer-grained…"
+    );
     assert_eq!(empty.reading_minutes(), 0, "empty content reports 0");
     // to_value surfaces both counts.
     let v = short.to_value();
-    assert!(v
-        .as_map()
-        .and_then(|m| m.get("reading_minutes"))
-        .and_then(|x| x.as_int())
-        .unwrap_or(-1)
-        == 0);
-    assert!(v
-        .as_map()
-        .and_then(|m| m.get("reading_seconds"))
-        .and_then(|x| x.as_int())
-        .unwrap_or(-1)
-        == 1);
+    assert!(
+        v.as_map()
+            .and_then(|m| m.get("reading_minutes"))
+            .and_then(|x| x.as_int())
+            .unwrap_or(-1)
+            == 0
+    );
+    assert!(
+        v.as_map()
+            .and_then(|m| m.get("reading_seconds"))
+            .and_then(|x| x.as_int())
+            .unwrap_or(-1)
+            == 1
+    );
     // Long posts render "N min read"; short ones fall back to "N sec read".
     let long_html = mdweb::render::render_article(&site, "en", long).expect("render long");
     assert!(
@@ -794,9 +935,16 @@ fn reading_minutes_estimates_cjk_and_words() {
         "---\ntitle: About\n---\n\nSome content here for the page.\n",
     );
     let site2 = Site::build(&page_dir, None).expect("build page");
-    let about = site2.articles.iter().find(|a| a.slug == "about").expect("about");
+    let about = site2
+        .articles
+        .iter()
+        .find(|a| a.slug == "about")
+        .expect("about");
     let html = mdweb::render::render_article(&site2, "en", about).expect("render page");
-    assert!(html.contains("reading-time"), "pages surface reading-time block");
+    assert!(
+        html.contains("reading-time"),
+        "pages surface reading-time block"
+    );
     assert!(
         html.contains("sec read"),
         "rendered output uses the i18n reading_time_seconds label"
@@ -819,9 +967,18 @@ show_sitemap = true"#,
     assert!(site_on.config.show_rss);
     assert!(site_on.config.show_sitemap);
     let html_on = mdweb::render::render_home(&site_on, "en", 1).expect("render on");
-    assert!(html_on.contains("footer-links"), "footer-links block visible when on");
-    assert!(html_on.contains("<a href=\"/rss.xml\""), "RSS footer link visible when on");
-    assert!(html_on.contains("<a href=\"/sitemap.xml\""), "sitemap footer link visible when on");
+    assert!(
+        html_on.contains("footer-links"),
+        "footer-links block visible when on"
+    );
+    assert!(
+        html_on.contains("<a href=\"/rss.xml\""),
+        "RSS footer link visible when on"
+    );
+    assert!(
+        html_on.contains("<a href=\"/sitemap.xml\""),
+        "sitemap footer link visible when on"
+    );
 
     let dir_off = tempdir("toggleoff");
     write(
@@ -836,9 +993,18 @@ show_sitemap = false"#,
     assert!(!site_off.config.show_rss);
     assert!(!site_off.config.show_sitemap);
     let html_off = mdweb::render::render_home(&site_off, "en", 1).expect("render off");
-    assert!(!html_off.contains("footer-links"), "footer-links block hidden when both off");
-    assert!(!html_off.contains("<a href=\"/rss.xml\""), "RSS footer link hidden when off");
-    assert!(!html_off.contains("<a href=\"/sitemap.xml\""), "sitemap footer link hidden when off");
+    assert!(
+        !html_off.contains("footer-links"),
+        "footer-links block hidden when both off"
+    );
+    assert!(
+        !html_off.contains("<a href=\"/rss.xml\""),
+        "RSS footer link hidden when off"
+    );
+    assert!(
+        !html_off.contains("<a href=\"/sitemap.xml\""),
+        "sitemap footer link hidden when off"
+    );
 
     // Default = both on when unset.
     let cfg: Config = Default::default();
@@ -875,11 +1041,15 @@ fn sidebar_drops_rss_link() {
         "RSS must not appear as a sidebar link (footer-only now)"
     );
 }
-    #[test]
+#[test]
 fn tag_cloud_toggle_and_clickable_article_tags() {
     let dir = tempdir("tags");
-    write(&dir, "site.toml", r#"title = "X"
-show_tag_cloud = true"#);
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+show_tag_cloud = true"#,
+    );
     write(&dir, "content/_index.md", "---\n---\nbody\n");
     write(
         &dir,
@@ -891,8 +1061,14 @@ show_tag_cloud = true"#);
 
     // Sidebar cloud renders tags as links (enabled by default / explicitly).
     let html = mdweb::render::render_home(&site, "en", 1).expect("render");
-    assert!(html.contains("tag-cloud-nav"), "tag cloud widget present when enabled");
-    assert!(html.contains("href=\"/tags/rust/\""), "cloud tag links to its page");
+    assert!(
+        html.contains("tag-cloud-nav"),
+        "tag cloud widget present when enabled"
+    );
+    assert!(
+        html.contains("href=\"/tags/rust/\""),
+        "cloud tag links to its page"
+    );
     assert!(
         html.contains("href=\"/tags/my%20tag/\""),
         "tag names with spaces are percent-encoded"
@@ -903,9 +1079,16 @@ show_tag_cloud = true"#);
     );
 
     // Article tags are clickable links to their tag pages.
-    let post = site.articles.iter().find(|a| a.slug == "hello").expect("post");
+    let post = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "hello")
+        .expect("post");
     let article = mdweb::render::render_article(&site, "en", post).expect("article");
-    assert!(article.contains("href=\"/tags/rust/\""), "article tag links to its page");
+    assert!(
+        article.contains("href=\"/tags/rust/\""),
+        "article tag links to its page"
+    );
     assert!(
         article.contains("href=\"/tags/my%20tag/\""),
         "spaced tag in an article is encoded too"
@@ -913,8 +1096,12 @@ show_tag_cloud = true"#);
 
     // show_tag_cloud = false hides the sidebar widget but keeps page tags.
     let dir_off = tempdir("tags-off");
-    write(&dir_off, "site.toml", r#"title = "X"
-show_tag_cloud = false"#);
+    write(
+        &dir_off,
+        "site.toml",
+        r#"title = "X"
+show_tag_cloud = false"#,
+    );
     write(&dir_off, "content/_index.md", "---\n---\nbody\n");
     write(
         &dir_off,
@@ -924,14 +1111,21 @@ show_tag_cloud = false"#);
     let site_off = Site::build(&dir_off, None).expect("build off");
     assert!(!site_off.config.show_tag_cloud);
     let off = mdweb::render::render_home(&site_off, "en", 1).expect("render off");
-    assert!(!off.contains("tag-cloud-nav"), "cloud hidden when show_tag_cloud=false");
+    assert!(
+        !off.contains("tag-cloud-nav"),
+        "cloud hidden when show_tag_cloud=false"
+    );
 }
 
 #[test]
 fn tag_cloud_limit_truncates_sorted_by_count() {
     let dir = tempdir("cloudlimit");
-    write(&dir, "site.toml", r#"title = "X"
-tag_cloud_limit = 2"#);
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+tag_cloud_limit = 2"#,
+    );
     write(&dir, "content/_index.md", "---\n---\nbody\n");
     write(
         &dir,
@@ -954,7 +1148,10 @@ tag_cloud_limit = 2"#);
     assert_eq!(site.config.tag_cloud_limit, 2);
 
     let html = mdweb::render::render_home(&site, "en", 1).expect("render");
-    assert!(html.contains(">(2)</span>"), "only tags from the limited cloud shown");
+    assert!(
+        html.contains(">(2)</span>"),
+        "only tags from the limited cloud shown"
+    );
 
     // Sorted by count desc (b first), a/c tie-break by name, c cut off.
     let cloud = html
@@ -967,7 +1164,10 @@ tag_cloud_limit = 2"#);
     let pos_b = cloud.find("tags/b/\"").expect("b in cloud");
     let pos_a = cloud.find("tags/a/\"").expect("a in cloud");
     assert!(pos_b < pos_a, "b (count 2) sorts before a (count 1)");
-    assert!(!cloud.contains("tags/c/\""), "c truncated by tag_cloud_limit");
+    assert!(
+        !cloud.contains("tags/c/\""),
+        "c truncated by tag_cloud_limit"
+    );
     assert!(
         cloud.contains(">b<span class=\"tag-count\">(2)</span>"),
         "top tag shows its count"
@@ -976,14 +1176,21 @@ tag_cloud_limit = 2"#);
     // The /tags/ index is *not* limited and shows every tag with a count.
     let idx = mdweb::render::render_tags_index(&site, "en").expect("tags index");
     assert!(idx.contains("href=\"/tags/c/\""), "index shows all tags");
-    assert!(idx.contains("b<span class=\"tag-count\">(2)</span>"), "index counts per tag");
+    assert!(
+        idx.contains("b<span class=\"tag-count\">(2)</span>"),
+        "index counts per tag"
+    );
 }
 
 #[test]
 fn tags_index_page_lists_all_tags() {
     let dir = tempdir("tagsindex");
-    write(&dir, "site.toml", r#"title = "X"
-languages = ["en", "zh"]"#);
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+languages = ["en", "zh"]"#,
+    );
     write(&dir, "content/_index.md", "---\n---\nbody\n");
     write(
         &dir,
@@ -1009,24 +1216,46 @@ languages = ["en", "zh"]"#);
 
     // /tags/ lists every tag in the current language, linked + counted.
     let html = mdweb::render::render_tags_index(&site, "en").expect("tags index");
-    assert!(html.contains("class=\"breadcrumb\""), "index has breadcrumbs");
-    assert!(html.contains("href=\"/\">Index"), "breadcrumb starts at home");
-    assert!(html.contains("<span>Tags</span>"), "current crumb is a span");
+    assert!(
+        html.contains("class=\"breadcrumb\""),
+        "index has breadcrumbs"
+    );
+    assert!(
+        html.contains("href=\"/\">Index"),
+        "breadcrumb starts at home"
+    );
+    assert!(
+        html.contains("<span>Tags</span>"),
+        "current crumb is a span"
+    );
     assert!(html.contains("href=\"/tags/rust/\""), "rust tag link");
-    assert!(html.contains("href=\"/tags/my%20tag/\""), "encoded spaced tag");
+    assert!(
+        html.contains("href=\"/tags/my%20tag/\""),
+        "encoded spaced tag"
+    );
     assert!(html.contains(">rust<span"), "rust tag shows its count");
 
     // /zh/tags/ is language-scoped: only tags used by zh articles appear.
     let zh_html = mdweb::render::render_tags_index(&site, "zh").expect("zh tags index");
-    assert!(zh_html.contains("href=\"/zh/tags/rust/\""), "zh tags link into /zh/tags/");
-    assert!(!zh_html.contains("href=\"/tags/"), "unprefixed en tag URLs must not leak into zh");
+    assert!(
+        zh_html.contains("href=\"/zh/tags/rust/\""),
+        "zh tags link into /zh/tags/"
+    );
+    assert!(
+        !zh_html.contains("href=\"/tags/"),
+        "unprefixed en tag URLs must not leak into zh"
+    );
 }
 
 #[test]
 fn tag_page_lists_matching_articles_with_pagination() {
     let dir = tempdir("tagpage");
-    write(&dir, "site.toml", r#"title = "X"
-tags_limit = 2"#);
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+tags_limit = 2"#,
+    );
     write(&dir, "content/_index.md", "---\n---\nbody\n");
     for i in 1..=5 {
         write(
@@ -1044,14 +1273,26 @@ tags_limit = 2"#);
     assert_eq!(site.config.tags_limit, 2, "configured tags_limit wins");
 
     let p1 = mdweb::render::render_tag(&site, "en", "rust", 1).expect("tag p1");
-    assert!(p1.contains("class=\"breadcrumb\""), "tag page has breadcrumbs");
-    assert!(p1.contains("href=\"/tags/\""), "Tags crumb points at the index");
+    assert!(
+        p1.contains("class=\"breadcrumb\""),
+        "tag page has breadcrumbs"
+    );
+    assert!(
+        p1.contains("href=\"/tags/\""),
+        "Tags crumb points at the index"
+    );
     assert!(p1.contains(">P5<"), "newest article on page 1");
-    assert!(!p1.contains("card-title\"><a href=\"/posts/p3/\">P3</a>"), "page 1 holds 2 of 5");
+    assert!(
+        !p1.contains("card-title\"><a href=\"/posts/p3/\">P3</a>"),
+        "page 1 holds 2 of 5"
+    );
     assert!(p1.contains("pagination-next"), "page 1 shows next link");
 
     let p3 = mdweb::render::render_tag(&site, "en", "rust", 3).expect("tag p3");
-    assert!(p3.contains("card-title\"><a href=\"/posts/p1/\">P1</a>"), "page 3 shows the oldest");
+    assert!(
+        p3.contains("card-title\"><a href=\"/posts/p1/\">P1</a>"),
+        "page 3 shows the oldest"
+    );
     assert!(p3.contains("pagination-prev"), "page 3 shows prev link");
 
     // Unknown tag renders as a 404 (Err) rather than an empty page.
@@ -1061,7 +1302,10 @@ tags_limit = 2"#);
     let food = mdweb::render::render_tag(&site, "en", "food", 1).expect("food");
     assert!(food.contains("card-title\"><a href=\"/posts/food/\">Food</a>"));
     assert!(!food.contains("card-title\"><a href=\"/posts/p1/\">P1</a>"));
-    assert!(!food.contains("pagination-next"), "single match has no pager");
+    assert!(
+        !food.contains("pagination-next"),
+        "single match has no pager"
+    );
 }
 
 #[test]
@@ -1069,8 +1313,16 @@ fn category_page_shows_breadcrumbs() {
     let dir = tempdir("catcrumbs");
     write(&dir, "site.toml", r#"title = "X""#);
     write(&dir, "content/_index.md", "---\n---\nbody\n");
-    write(&dir, "content/posts/_index.md", "---\ntitle: Posts\n---\nbody\n");
-    write(&dir, "content/posts/web/_index.md", "---\ntitle: Web\n---\nbody\n");
+    write(
+        &dir,
+        "content/posts/_index.md",
+        "---\ntitle: Posts\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/posts/web/_index.md",
+        "---\ntitle: Web\n---\nbody\n",
+    );
     write(
         &dir,
         "content/posts/web/intro.md",
@@ -1078,18 +1330,44 @@ fn category_page_shows_breadcrumbs() {
     );
     let site = Site::build(&dir, None).expect("build");
 
-    let posts = site.tree.iter().find(|c| c.slug == "posts").expect("posts cat");
+    let posts = site
+        .tree
+        .iter()
+        .find(|c| c.slug == "posts")
+        .expect("posts cat");
     let html = mdweb::render::render_category(&site, "en", posts, 1).expect("render posts");
-    assert!(html.contains("class=\"breadcrumb\""), "category list has breadcrumbs");
-    assert!(!html.contains("href=\"/\">Index"), "posts crumbs drop the home node");
-    assert!(!html.contains("href=\"/posts/\">Posts"), "terminal crumb is not a self-link");
-    assert!(html.contains("<span>Posts</span>"), "current item is a non-link span");
+    assert!(
+        html.contains("class=\"breadcrumb\""),
+        "category list has breadcrumbs"
+    );
+    assert!(
+        !html.contains("href=\"/\">Index"),
+        "posts crumbs drop the home node"
+    );
+    assert!(
+        !html.contains("href=\"/posts/\">Posts"),
+        "terminal crumb is not a self-link"
+    );
+    assert!(
+        html.contains("<span>Posts</span>"),
+        "current item is a non-link span"
+    );
 
-    let web = posts.children.iter().find(|c| c.slug == "web").expect("web cat");
+    let web = posts
+        .children
+        .iter()
+        .find(|c| c.slug == "web")
+        .expect("web cat");
     let html2 = mdweb::render::render_category(&site, "en", web, 1).expect("render web");
     assert!(html2.contains("href=\"/posts/\">Posts"), "ancestor crumb");
-    assert!(!html2.contains("href=\"/posts/web/\">Web"), "terminal crumb is not a self-link");
-    assert!(html2.contains("<span>Web</span>"), "current category is a span");
+    assert!(
+        !html2.contains("href=\"/posts/web/\">Web"),
+        "terminal crumb is not a self-link"
+    );
+    assert!(
+        html2.contains("<span>Web</span>"),
+        "current category is a span"
+    );
 }
 
 #[test]
@@ -1099,16 +1377,8 @@ fn root_level_md_files_become_root_pages() {
     // recent posts list nor in any category — it's a page, not a post.
     let dir = tempdir("rootpg");
     write(&dir, "site.toml", r#"title = "X""#);
-    write(
-        &dir,
-        "content/about.md",
-        "---\ntitle: About\n---\nbody\n",
-    );
-    write(
-        &dir,
-        "content/about.zh.md",
-        "---\ntitle: 关于\n---\nbody\n",
-    );
+    write(&dir, "content/about.md", "---\ntitle: About\n---\nbody\n");
+    write(&dir, "content/about.zh.md", "---\ntitle: 关于\n---\nbody\n");
     write(
         &dir,
         "content/posts/hello.md",
@@ -1175,21 +1445,37 @@ fn image_paths_are_rewritten_and_resolvable() {
         ),
     );
     let site = Site::build(&dir, None).expect("build");
-    let post = site.articles.iter().find(|a| a.slug == "post").expect("post");
+    let post = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "post")
+        .expect("post");
     let html = &post.content;
 
-    assert!(html.contains("src=\"/posts/guide/hero.svg\""), "same-dir image");
-    assert!(html.contains("src=\"/pages/logo.svg\""), "cross-dir via ../");
+    assert!(
+        html.contains("src=\"/posts/guide/hero.svg\""),
+        "same-dir image"
+    );
+    assert!(
+        html.contains("src=\"/pages/logo.svg\""),
+        "cross-dir via ../"
+    );
     assert!(
         html.contains("<img src=\"/posts/guide/hero.svg\" width=\"160\">"),
         "raw HTML img is rewritten and keeps its other attributes"
     );
-    assert!(html.contains("src=\"/static/x.png\""), "absolute path untouched");
+    assert!(
+        html.contains("src=\"/static/x.png\""),
+        "absolute path untouched"
+    );
     assert!(
         html.contains("src=\"https://example.com/_image/x.png\""),
         "external URL untouched"
     );
-    assert!(html.contains("src=\"../other/x.png\""), "no _image segment: untouched");
+    assert!(
+        html.contains("src=\"../other/x.png\""),
+        "no _image segment: untouched"
+    );
     assert!(
         html.contains("&lt;img src=\"_image/hero.svg\"&gt;"),
         "an <img> shown as a code example stays verbatim"
@@ -1209,7 +1495,10 @@ fn file_routes_reject_traversal_outside_the_doc_root() {
     write(&dir, "content/pages/_image/a.svg", "<svg/>");
     let site = Site::build(&dir, None).expect("build");
 
-    assert!(site.resolve_file("site.toml").is_some(), "in-tree file still served");
+    assert!(
+        site.resolve_file("site.toml").is_some(),
+        "in-tree file still served"
+    );
     assert!(site.resolve_file("../../../etc/passwd").is_none());
     assert!(site.resolve_file("content/../../etc/passwd").is_none());
     assert!(site.resolve_file("/etc/passwd").is_none());
@@ -1353,8 +1642,14 @@ static = "assets"
 
     // Language-prefixed pages inherit the same renames.
     let zh = mdweb::render::render_home(&site, "zh", 1).expect("render zh");
-    assert!(zh.contains("href=\"/zh/feed.xml\""), "zh RSS link is language-prefixed");
-    assert!(zh.contains("action=\"/zh/find\""), "zh search action is language-prefixed");
+    assert!(
+        zh.contains("href=\"/zh/feed.xml\""),
+        "zh RSS link is language-prefixed"
+    );
+    assert!(
+        zh.contains("action=\"/zh/find\""),
+        "zh search action is language-prefixed"
+    );
 
     // Tag links reflect the configured tags route in both languages.
     let en_tag = site.config.tag_url("en", "rust");
@@ -1366,7 +1661,10 @@ static = "assets"
     let article = mdweb::render::render_article(
         &site,
         "en",
-        site.articles.iter().find(|a| a.slug == "hello").expect("hello"),
+        site.articles
+            .iter()
+            .find(|a| a.slug == "hello")
+            .expect("hello"),
     )
     .expect("render article");
     assert!(
@@ -1389,12 +1687,12 @@ pages = "docs"
 "#,
     );
     write(&dir, "content/_index.md", "---\n---\nhome\n");
+    write(&dir, "content/pages/_image/logo.svg", "<svg/>");
     write(
         &dir,
-        "content/pages/_image/logo.svg",
-        "<svg/>",
+        "content/pages/about.md",
+        "---\ntitle: About\n---\nbody\n",
     );
-    write(&dir, "content/pages/about.md", "---\ntitle: About\n---\nbody\n");
     write(
         &dir,
         "content/posts/guide/hello.md",
@@ -1413,7 +1711,10 @@ pages = "docs"
         .iter()
         .find(|a| a.slug == "hello")
         .expect("hello post");
-    assert_eq!(hello.url, "/blog/guide/hello/", "post URL uses the posts route");
+    assert_eq!(
+        hello.url, "/blog/guide/hello/",
+        "post URL uses the posts route"
+    );
     let about = site
         .articles
         .iter()
@@ -1426,20 +1727,50 @@ pages = "docs"
         hello.content.contains("src=\"/docs/logo.svg\""),
         "image URL mirrors the pages route"
     );
-    assert!(site.resolve_image("docs/logo.svg").is_some(), "server inverts prefix back to disk");
+    assert!(
+        site.resolve_image("docs/logo.svg").is_some(),
+        "server inverts prefix back to disk"
+    );
 
     // The home feed still only surfaces posts, via the new URL.
     let html = mdweb::render::render_home(&site, "en", 1).expect("render");
-    assert!(html.contains("/blog/guide/hello/"), "home feed links through the posts route");
-    assert!(!html.contains("/posts/guide/hello/"), "old posts prefix gone");
+    assert!(
+        html.contains("/blog/guide/hello/"),
+        "home feed links through the posts route"
+    );
+    assert!(
+        !html.contains("/posts/guide/hello/"),
+        "old posts prefix gone"
+    );
 
     // Category landings and the sitemap follow the renamed prefix.
-    let posts_root = site.tree.iter().find(|c| c.slug == "posts").expect("posts root");
-    let cat = posts_root.children.iter().find(|c| c.slug == "guide").expect("guide cat");
-    assert_eq!(cat.urls.get("en").map(|s| s.as_str()), Some("/blog/guide/"), "category URL uses the posts route");
+    let posts_root = site
+        .tree
+        .iter()
+        .find(|c| c.slug == "posts")
+        .expect("posts root");
+    let cat = posts_root
+        .children
+        .iter()
+        .find(|c| c.slug == "guide")
+        .expect("guide cat");
+    assert_eq!(
+        cat.urls.get("en").map(|s| s.as_str()),
+        Some("/blog/guide/"),
+        "category URL uses the posts route"
+    );
     let sitemap = mdweb::feed::sitemap_xml(&site);
-    assert!(sitemap.contains("/blog/guide/hello/"), "sitemap uses the posts route");
-    assert!(sitemap.contains("/docs/about/"), "sitemap uses the pages route");
+    assert!(
+        sitemap.contains("/blog/guide/hello/"),
+        "sitemap uses the posts route"
+    );
+    assert!(
+        sitemap.contains("/docs/about/"),
+        "sitemap uses the pages route"
+    );
     let rss = mdweb::feed::rss_xml(&site, "en", 10).expect("rss");
-    assert!(rss.contains("/blog/guide/hello/"), "RSS uses the posts route");
+    assert!(
+        rss.contains("/blog/guide/hello/"),
+        "RSS uses the posts route"
+    );
 }

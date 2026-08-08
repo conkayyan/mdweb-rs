@@ -1,13 +1,12 @@
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use crate::config::Config;
+use crate::config::{Config, PAGES_DIR, POSTS_DIR};
 use crate::image_path;
 use crate::markdown;
 use crate::parse::parse_frontmatter;
-use crate::render::tree_has_active;
 use crate::template::Engine;
-use crate::value::Value;
+use crate::value::{opt_str, Value};
 
 /// Embedded default theme files.
 pub mod theme_files {
@@ -40,13 +39,9 @@ pub(crate) fn percent_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.as_bytes() {
         match *b {
-            b'A'..=b'Z'
-            | b'a'..=b'z'
-            | b'0'..=b'9'
-            | b'-'
-            | b'_'
-            | b'.'
-            | b'~' => out.push(*b as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*b as char)
+            }
             _ => out.push_str(&format!("%{b:02X}")),
         }
     }
@@ -101,23 +96,16 @@ impl Article {
     fn reading_content_counts(&self) -> (usize, usize) {
         let mut cjk: usize = 0;
         let mut other = String::new();
-        let mut in_tag = false;
-        for c in self.content.chars() {
-            match c {
-                '<' => in_tag = true,
-                '>' => in_tag = false,
-                _ if !in_tag => {
-                    let cp = c as u32;
-                    if (0x4E00..=0x9FFF).contains(&cp)        // CJK Unified Ideographs
-                        || (0x3040..=0x309F).contains(&cp)    // Hiragana
-                        || (0x30A0..=0x30FF).contains(&cp)    // Katakana
-                    {
-                        cjk += 1;
-                    } else {
-                        other.push(c);
-                    }
-                }
-                _ => {}
+        for c in strip_html(&self.content).chars() {
+            let cp = c as u32;
+            if (0x4E00..=0x9FFF).contains(&cp)        // CJK Unified Ideographs
+                || (0x3040..=0x309F).contains(&cp)    // Hiragana
+                || (0x30A0..=0x30FF).contains(&cp)
+            // Katakana
+            {
+                cjk += 1;
+            } else {
+                other.push(c);
             }
         }
         (cjk, other.split_whitespace().count())
@@ -200,13 +188,6 @@ impl Article {
     }
 }
 
-fn opt_str(s: Option<&str>) -> Value {
-    match s {
-        Some(v) => Value::str(v),
-        None => Value::Null,
-    }
-}
-
 fn opt_link(l: Option<&(String, String)>) -> Value {
     match l {
         Some((t, u)) => Value::Map(BTreeMap::from([
@@ -233,7 +214,7 @@ impl Category {
     /// Serialise a category for navigation listings (sidebar tree, subcategory
     /// list, etc.). The `title` is resolved in the caller's language; URLs in
     /// other languages are reachable from each subcategory's own landing page.
-    fn nav_value(&self, lang: &str, config: &Config, _default_lang: &str) -> Value {
+    fn nav_value(&self, lang: &str) -> Value {
         let title = self
             .titles
             .get(lang)
@@ -244,7 +225,6 @@ impl Category {
             .get(lang)
             .cloned()
             .unwrap_or_else(|| "#".to_string());
-        let _ = config; // kept for future extension without churn
         Value::Map(BTreeMap::from([
             ("title".to_string(), Value::str(&title)),
             ("url".to_string(), Value::str(&url)),
@@ -256,7 +236,6 @@ struct RawArticle {
     path: Vec<String>,
     slug: String,
     lang: String,
-    _file: PathBuf,
     fm: BTreeMap<String, Value>,
     html: String,
     mtime: Option<i64>,
@@ -312,7 +291,7 @@ fn paginate<T>(items: Vec<T>, page: usize, limit: usize) -> (Vec<T>, Pagination)
             },
         );
     }
-    let total_pages = (total + limit - 1) / limit;
+    let total_pages = total.div_ceil(limit);
     let page = page.max(1).min(total_pages);
     let start = (page - 1) * limit;
     let end = (start + limit).min(total);
@@ -348,10 +327,7 @@ fn pagination_value(p: &Pagination) -> Value {
 }
 
 impl Site {
-    pub fn build(
-        doc_root: &Path,
-        template_override: Option<PathBuf>,
-    ) -> Result<Site, String> {
+    pub fn build(doc_root: &Path, template_override: Option<PathBuf>) -> Result<Site, String> {
         let doc_root = doc_root
             .canonicalize()
             .unwrap_or_else(|_| doc_root.to_path_buf());
@@ -389,7 +365,8 @@ impl Site {
                 };
                 let stem = fname.strip_suffix(".md").unwrap_or(&fname).to_string();
                 let (base, lang) = parse_name(&stem, &languages, &default_lang);
-                let html = image_path::rewrite_img_srcs(&markdown::render(&body), &dir, &config.routes);
+                let html =
+                    image_path::rewrite_img_srcs(&markdown::render(&body), &dir, &config.routes);
                 let mtime = std::fs::metadata(&abs)
                     .ok()
                     .and_then(|m| m.modified().ok())
@@ -409,7 +386,6 @@ impl Site {
                         path: split_dir(&dir),
                         slug: base,
                         lang,
-                        _file: abs,
                         fm,
                         html,
                         mtime,
@@ -448,10 +424,10 @@ impl Site {
         // they have their own navigation surface.
         let posts_paths: HashSet<Vec<String>> = all_paths
             .iter()
-            .filter(|p| p.first().map(|s| s.as_str()) == Some("posts"))
+            .filter(|p| p.first().map(|s| s.as_str()) == Some(POSTS_DIR))
             .cloned()
             .collect();
-        let tree = build_tree(&posts_paths, &indices, &config, &default_lang);
+        let tree = build_tree(&posts_paths, &indices, &config);
 
         let mut groups: BTreeMap<String, Vec<&RawArticle>> = BTreeMap::new();
         for ra in &raws {
@@ -474,17 +450,11 @@ impl Site {
                             ),
                             (
                                 "url".to_string(),
-                                Value::str(&url_for(
-                                    &config,
-                                    &default_lang,
-                                    &o.path,
-                                    Some(&o.slug),
-                                    &o.lang,
-                                )),
+                                Value::str(url_for(&config, &o.path, Some(&o.slug), &o.lang)),
                             ),
                             (
                                 "display_name".to_string(),
-                                Value::str(&config.display_name_for(&o.lang)),
+                                Value::str(config.display_name_for(&o.lang)),
                             ),
                         ]))
                     })
@@ -530,7 +500,7 @@ impl Site {
                     slug: ra.slug.clone(),
                     path: ra.path.clone(),
                     lang: ra.lang.clone(),
-                    url: url_for(&config, &default_lang, &ra.path, Some(&ra.slug), &ra.lang),
+                    url: url_for(&config, &ra.path, Some(&ra.slug), &ra.lang),
                     title,
                     date,
                     date_iso,
@@ -600,11 +570,7 @@ impl Site {
                         count,
                     })
                     .collect();
-                vec.sort_by(|a, b| {
-                    b.count
-                        .cmp(&a.count)
-                        .then_with(|| a.name.cmp(&b.name))
-                });
+                vec.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.name.cmp(&b.name)));
                 (lang, vec)
             })
             .collect();
@@ -636,9 +602,7 @@ impl Site {
             // Only blog posts surface on the home feed: pages (anything not
             // under `posts/`) belong in the pages tree, not the home stream.
             .filter(|a| {
-                a.lang == lang
-                    && !a.draft
-                    && a.path.first().map(|s| s.as_str()) == Some("posts")
+                a.lang == lang && !a.draft && a.path.first().map(|s| s.as_str()) == Some(POSTS_DIR)
             })
             .map(|a| a.to_value())
             .collect();
@@ -646,13 +610,12 @@ impl Site {
             std::cmp::Reverse(a.path("sort_ts").and_then(|v| v.as_int()).unwrap_or(0))
         });
         let total = arts.len();
-        let (arts, pagination) =
-            paginate(arts, page, self.config.home_limit);
+        let (arts, pagination) = paginate(arts, page, self.config.home_limit);
         let content = self
             .home_content
             .get(lang)
             .or_else(|| self.home_content.get(&self.default_lang))
-            .map(|s| Value::str(s))
+            .map(Value::str)
             .unwrap_or(Value::Null);
         Value::Map(BTreeMap::from([
             ("content".to_string(), content),
@@ -673,13 +636,17 @@ impl Site {
             std::cmp::Reverse(a.path("sort_ts").and_then(|v| v.as_int()).unwrap_or(0))
         });
         let total = arts.len();
-        let (arts, pagination) =
-            paginate(arts, page, self.config.category_limit);
-        let children: Vec<Value> = cat.children.iter().map(|c| c.nav_value(lang, &self.config, &self.default_lang)).collect();
+        let (arts, pagination) = paginate(arts, page, self.config.category_limit);
+        let children: Vec<Value> = cat.children.iter().map(|c| c.nav_value(lang)).collect();
         Value::Map(BTreeMap::from([
             (
                 "title".to_string(),
-                Value::str(cat.titles.get(lang).cloned().unwrap_or_else(|| cat.slug.clone())),
+                Value::str(
+                    cat.titles
+                        .get(lang)
+                        .cloned()
+                        .unwrap_or_else(|| cat.slug.clone()),
+                ),
             ),
             ("slug".to_string(), Value::str(&cat.slug)),
             (
@@ -699,32 +666,6 @@ impl Site {
             ("pagination".to_string(), pagination_value(&pagination)),
             ("total".to_string(), Value::int(total as i64)),
         ]))
-    }
-
-    pub fn category_tree_value(&self, cats: &[Category], lang: &str, current_url: &str) -> Value {
-        let mut out = Vec::new();
-        for c in cats {
-            let children_val = self.category_tree_value(&c.children, lang, current_url);
-            let url = c.urls.get(lang).cloned().unwrap_or_else(|| "#".to_string());
-            let active = url == current_url;
-            let descendant_active = active || tree_has_active(&children_val);
-            let m = BTreeMap::from([
-                (
-                    "title".to_string(),
-                    Value::str(c.titles.get(lang).cloned().unwrap_or_else(|| c.slug.clone())),
-                ),
-                ("url".to_string(), Value::str(&url)),
-                ("active".to_string(), Value::Bool(active)),
-                (
-                    "descendant_active".to_string(),
-                    Value::Bool(descendant_active),
-                ),
-                ("has_children".to_string(), Value::Bool(!c.children.is_empty())),
-                ("children".to_string(), children_val),
-            ]);
-            out.push(Value::Map(m));
-        }
-        Value::Arr(out)
     }
 
     /// The tag cloud for a language: `[{name, url, count}, …]` sorted by
@@ -759,9 +700,7 @@ impl Site {
         let mut arts: Vec<Value> = self
             .articles
             .iter()
-            .filter(|a| {
-                a.lang == lang && !a.draft && a.tags.iter().any(|t| t == name)
-            })
+            .filter(|a| a.lang == lang && !a.draft && a.tags.iter().any(|t| t == name))
             .map(|a| a.to_value())
             .collect();
         arts.sort_by_key(|a| {
@@ -786,12 +725,15 @@ impl Site {
         vec![
             Value::Map(BTreeMap::from([
                 ("title".to_string(), Value::str(&home_label)),
-                ("url".to_string(), Value::str(&self.config.lang_prefix(lang))),
+                ("url".to_string(), Value::str(self.config.lang_prefix(lang))),
                 ("is_current".to_string(), Value::Bool(false)),
             ])),
             Value::Map(BTreeMap::from([
                 ("title".to_string(), Value::str(&tags_label)),
-                ("url".to_string(), Value::str(&self.config.tag_index_url(lang))),
+                (
+                    "url".to_string(),
+                    Value::str(self.config.tag_index_url(lang)),
+                ),
                 ("is_current".to_string(), Value::Bool(false)),
             ])),
             Value::Map(BTreeMap::from([
@@ -808,8 +750,11 @@ impl Site {
         let tags = self.tag_cloud_value(lang);
         let total = tags.as_arr().map(|a| a.len()).unwrap_or(0);
         Value::Map(BTreeMap::from([
-            ("title".to_string(), Value::str(&self.config.t("tags", lang))),
-            ("url".to_string(), Value::str(&self.config.tag_index_url(lang))),
+            ("title".to_string(), Value::str(self.config.t("tags", lang))),
+            (
+                "url".to_string(),
+                Value::str(self.config.tag_index_url(lang)),
+            ),
             ("tags".to_string(), tags),
             ("total".to_string(), Value::int(total as i64)),
         ]))
@@ -845,10 +790,7 @@ impl Site {
         let pages: Vec<&Article> = self
             .articles
             .iter()
-            .filter(|a| {
-                a.lang == lang
-                    && a.path.first().map(|s| s.as_str()) != Some("posts")
-            })
+            .filter(|a| a.lang == lang && a.path.first().map(|s| s.as_str()) != Some(POSTS_DIR))
             .collect();
 
         // 2. Collect every directory prefix that any page lives under.
@@ -861,11 +803,7 @@ impl Site {
         }
 
         // 3. Top-level entries are the longest path-segments that have length 1.
-        let tops: Vec<Vec<String>> = all_dirs
-            .iter()
-            .filter(|p| p.len() == 1)
-            .cloned()
-            .collect();
+        let tops: Vec<Vec<String>> = all_dirs.iter().filter(|p| p.len() == 1).cloned().collect();
 
         let mut out = Vec::new();
         for top in &tops {
@@ -875,7 +813,6 @@ impl Site {
                 &pages,
                 &self.indices,
                 &self.config,
-                &self.default_lang,
                 lang,
                 current_url,
             ));
@@ -900,16 +837,13 @@ impl Site {
     /// Index › pages.
     pub fn breadcrumbs(&self, path: &[String], lang: &str, current_title: &str) -> Vec<Value> {
         let mut items: Vec<Value> = Vec::new();
-        if path.first().map(|s| s.as_str()) != Some("posts") {
+        if path.first().map(|s| s.as_str()) != Some(POSTS_DIR) {
             // A fixed "Index" / "首页" label rather than the site title (which
             // can be long). i18n key: `breadcrumb_home`.
             let home_label = self.config.t("breadcrumb_home", lang);
             items.push(Value::Map(BTreeMap::from([
                 ("title".to_string(), Value::str(&home_label)),
-                (
-                    "url".to_string(),
-                    Value::str(&self.config.lang_prefix(lang)),
-                ),
+                ("url".to_string(), Value::str(self.config.lang_prefix(lang))),
                 ("is_current".to_string(), Value::Bool(false)),
             ])));
         }
@@ -919,12 +853,12 @@ impl Site {
         // `pages/[…]` (e.g. `pages/about.md` whose path is just `["pages"]`)
         // therefore drop the Pages level entirely; the current title then
         // becomes the only post-home crumb.
-        let skip_pages = path.first().map(|s| s.as_str()) == Some("pages");
+        let skip_pages = path.first().map(|s| s.as_str()) == Some(PAGES_DIR);
         let mut acc: Vec<String> = Vec::new();
         for (i, seg) in path.iter().enumerate() {
             acc.push(seg.clone());
             let title = self.breadcrumb_title(&acc, lang);
-            let url = url_for(&self.config, &self.default_lang, &acc, None, lang);
+            let url = url_for(&self.config, &acc, None, lang);
             if skip_pages && i == 0 {
                 continue;
             }
@@ -1009,11 +943,7 @@ impl Site {
         let entry = entry
             .iter()
             .find(|v| v.path("lang").and_then(|l| l.as_str()) == Some(lang))
-            .or_else(|| {
-                self.indices
-                    .get(&key)
-                    .and_then(|v| v.first())
-            })?;
+            .or_else(|| self.indices.get(&key).and_then(|v| v.first()))?;
         let fm = entry
             .path("fields")
             .and_then(|f| f.as_map().cloned())
@@ -1046,9 +976,7 @@ impl Site {
             .keys()
             .filter_map(|k| {
                 let parts = split_dir(k);
-                if parts.len() == dir_path.len() + 1
-                    && parts[..dir_path.len()] == dir_path[..]
-                {
+                if parts.len() == dir_path.len() + 1 && parts[..dir_path.len()] == dir_path[..] {
                     Some(parts)
                 } else {
                     None
@@ -1071,10 +999,8 @@ impl Site {
                 .and_then(|m| m.get("title"))
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
-                .unwrap_or_else(|| {
-                    sub.last().cloned().unwrap_or_else(|| "Section".to_string())
-                });
-            let url = url_for(&self.config, &self.default_lang, sub, None, lang);
+                .unwrap_or_else(|| sub.last().cloned().unwrap_or_else(|| "Section".to_string()));
+            let url = url_for(&self.config, sub, None, lang);
             children.push(Value::Map(BTreeMap::from([
                 ("title".to_string(), Value::str(&sub_title)),
                 ("url".to_string(), Value::str(&url)),
@@ -1088,7 +1014,7 @@ impl Site {
             .filter(|a| {
                 a.lang == lang
                     && a.path == dir_path
-                    && a.path.first().map(|s| s.as_str()) != Some("posts")
+                    && a.path.first().map(|s| s.as_str()) != Some(POSTS_DIR)
             })
             .collect();
         leafs.sort_by(|a, b| a.title.cmp(&b.title));
@@ -1101,9 +1027,8 @@ impl Site {
         }
 
         let total = children.len();
-        let (children, pagination) =
-            paginate(children, page, self.config.pages_limit);
-        let url = url_for(&self.config, &self.default_lang, dir_path, None, lang);
+        let (children, pagination) = paginate(children, page, self.config.pages_limit);
+        let url = url_for(&self.config, dir_path, None, lang);
         Some(Value::Map(BTreeMap::from([
             ("title".to_string(), Value::str(&title)),
             ("url".to_string(), Value::str(&url)),
@@ -1138,6 +1063,42 @@ impl Site {
     }
 }
 
+/// Build the category navigation tree value for a language:
+/// `[{title, url, active, descendant_active, has_children, children}, …]`.
+pub(crate) fn category_tree_value(cats: &[Category], lang: &str, current_url: &str) -> Value {
+    let mut out = Vec::new();
+    for c in cats {
+        let children_val = category_tree_value(&c.children, lang, current_url);
+        let url = c.urls.get(lang).cloned().unwrap_or_else(|| "#".to_string());
+        let active = url == current_url;
+        let descendant_active = active || tree_has_active(&children_val);
+        let m = BTreeMap::from([
+            (
+                "title".to_string(),
+                Value::str(
+                    c.titles
+                        .get(lang)
+                        .cloned()
+                        .unwrap_or_else(|| c.slug.clone()),
+                ),
+            ),
+            ("url".to_string(), Value::str(&url)),
+            ("active".to_string(), Value::Bool(active)),
+            (
+                "descendant_active".to_string(),
+                Value::Bool(descendant_active),
+            ),
+            (
+                "has_children".to_string(),
+                Value::Bool(!c.children.is_empty()),
+            ),
+            ("children".to_string(), children_val),
+        ]);
+        out.push(Value::Map(m));
+    }
+    Value::Arr(out)
+}
+
 fn load_engine(
     _config: &Config,
     doc_root: &Path,
@@ -1162,9 +1123,7 @@ fn load_engine(
             load_embedded(&mut engine)?;
             true
         } else {
-            eprintln!(
-                "warning: template/{theme_name} not found; using the built-in default"
-            );
+            eprintln!("warning: template/{theme_name} not found; using the built-in default");
             load_embedded(&mut engine)?;
             true
         }
@@ -1184,12 +1143,27 @@ fn load_embedded(engine: &mut Engine) -> Result<(), String> {
         ("tag.html", theme_files::TAG.to_string()),
         ("tags.html", theme_files::TAGS.to_string()),
         ("404.html", theme_files::NOT_FOUND.to_string()),
-        ("layout/header.html", theme_files::PARTIAL_HEADER.to_string()),
-        ("layout/footer.html", theme_files::PARTIAL_FOOTER.to_string()),
+        (
+            "layout/header.html",
+            theme_files::PARTIAL_HEADER.to_string(),
+        ),
+        (
+            "layout/footer.html",
+            theme_files::PARTIAL_FOOTER.to_string(),
+        ),
         ("layout/side.html", theme_files::PARTIAL_SIDE.to_string()),
-        ("layout/inject.html", theme_files::PARTIAL_INJECT.to_string()),
-        ("layout/_cat_node.html", theme_files::PARTIAL_CAT_NODE.to_string()),
-        ("layout/_nav_node.html", theme_files::PARTIAL_NAV_NODE.to_string()),
+        (
+            "layout/inject.html",
+            theme_files::PARTIAL_INJECT.to_string(),
+        ),
+        (
+            "layout/_cat_node.html",
+            theme_files::PARTIAL_CAT_NODE.to_string(),
+        ),
+        (
+            "layout/_nav_node.html",
+            theme_files::PARTIAL_NAV_NODE.to_string(),
+        ),
         ("page_section.html", theme_files::PAGE_SECTION.to_string()),
     ])?;
     Ok(())
@@ -1234,11 +1208,7 @@ fn walk_doc(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) {
     for e in rd.flatten() {
         let p = e.path();
         let name = e.file_name().to_string_lossy().to_string();
-        if name.starts_with('.')
-            || name == "template"
-            || name == "static"
-            || name == "samples"
-        {
+        if name.starts_with('.') || name == "template" || name == "static" || name == "samples" {
             continue;
         }
         if p.is_dir() {
@@ -1329,7 +1299,6 @@ fn build_pages_node(
     pages: &[&Article],
     indices: &BTreeMap<String, Vec<Value>>,
     config: &Config,
-    default_lang: &str,
     lang: &str,
     current_url: &str,
 ) -> Value {
@@ -1351,7 +1320,7 @@ fn build_pages_node(
         .map(|s| s.to_string())
         .unwrap_or_else(|| path.last().cloned().unwrap_or_default());
 
-    let url = url_for(config, default_lang, path, None, lang);
+    let url = url_for(config, path, None, lang);
 
     // Children: subdirectories (sorted by name) + leaf articles at this dir.
     let mut children_vals: Vec<Value> = Vec::new();
@@ -1367,22 +1336,21 @@ fn build_pages_node(
             pages,
             indices,
             config,
-            default_lang,
             lang,
             current_url,
         ));
     }
-    let mut leaves: Vec<&&Article> = pages
-        .iter()
-        .filter(|p| p.path == path)
-        .collect();
+    let mut leaves: Vec<&&Article> = pages.iter().filter(|p| p.path == path).collect();
     leaves.sort_by(|a, b| a.title.cmp(&b.title));
     for art in leaves {
         children_vals.push(Value::Map(BTreeMap::from([
             ("title".to_string(), Value::str(&art.title)),
             ("url".to_string(), Value::str(&art.url)),
             ("active".to_string(), Value::Bool(art.url == current_url)),
-            ("descendant_active".to_string(), Value::Bool(art.url == current_url)),
+            (
+                "descendant_active".to_string(),
+                Value::Bool(art.url == current_url),
+            ),
             ("has_children".to_string(), Value::Bool(false)),
             ("children".to_string(), Value::Arr(vec![])),
             ("is_section".to_string(), Value::Bool(false)),
@@ -1409,8 +1377,14 @@ fn build_pages_node(
         ("title".to_string(), Value::str(&title)),
         ("url".to_string(), Value::str(&url)),
         ("active".to_string(), Value::Bool(active)),
-        ("descendant_active".to_string(), Value::Bool(descendant_active)),
-        ("has_children".to_string(), Value::Bool(!children_vals.is_empty())),
+        (
+            "descendant_active".to_string(),
+            Value::Bool(descendant_active),
+        ),
+        (
+            "has_children".to_string(),
+            Value::Bool(!children_vals.is_empty()),
+        ),
         ("children".to_string(), Value::Arr(children_vals)),
         ("is_section".to_string(), Value::Bool(true)),
     ]))
@@ -1420,13 +1394,7 @@ fn starts_with(hay: &[String], needle: &[String]) -> bool {
     hay.len() >= needle.len() && hay[..needle.len()] == needle[..]
 }
 
-fn url_for(
-    config: &Config,
-    _default: &str,
-    path: &[String],
-    slug: Option<&String>,
-    lang: &str,
-) -> String {
+fn url_for(config: &Config, path: &[String], slug: Option<&String>, lang: &str) -> String {
     let mut pieces: Vec<String> = path.to_vec();
     if let Some(s) = slug {
         pieces.push(s.clone());
@@ -1511,8 +1479,8 @@ fn is_leap(y: i32) -> bool {
     (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
 }
 
-fn compute_navigation(articles: &mut Vec<Article>) {
-    let old = articles.clone();
+fn compute_navigation(articles: &mut [Article]) {
+    let old = articles.to_vec();
     let mut groups: BTreeMap<(String, String), Vec<usize>> = BTreeMap::new();
     for (i, a) in old.iter().enumerate() {
         groups
@@ -1537,7 +1505,7 @@ fn compute_navigation(articles: &mut Vec<Article>) {
 }
 
 fn make_summary(html: &str) -> String {
-    let txt = strip_tags(html);
+    let txt = strip_html(html);
     let words: Vec<&str> = txt.split_whitespace().collect();
     let total: usize = words.iter().map(|w| w.chars().count()).sum();
     if total <= 240 {
@@ -1556,8 +1524,11 @@ fn make_summary(html: &str) -> String {
     out.trim().to_string() + "…"
 }
 
-fn strip_tags(s: &str) -> String {
-    let mut out = String::new();
+/// Strip HTML tags from a markdown-rendered string, leaving the text content.
+/// Shared by the summary builder, the reading-time counter and feed/search
+/// text extraction.
+pub(crate) fn strip_html(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
     let mut in_tag = false;
     for c in s.chars() {
         match c {
@@ -1570,20 +1541,36 @@ fn strip_tags(s: &str) -> String {
     out
 }
 
+/// True if any node in a category/pages tree value (as built by the
+/// `*_tree_value` builders) is active. Used to decide whether a nav branch
+/// should auto-expand.
+pub(crate) fn tree_has_active(v: &Value) -> bool {
+    if let Value::Arr(items) = v {
+        for item in items {
+            if let Value::Map(m) = item {
+                if matches!(m.get("active"), Some(Value::Bool(true))) {
+                    return true;
+                }
+                if let Some(children) = m.get("children") {
+                    if tree_has_active(children) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
 fn build_tree(
     all_paths: &HashSet<Vec<String>>,
     indices: &BTreeMap<String, Vec<Value>>,
     config: &Config,
-    default_lang: &str,
 ) -> Vec<Category> {
-    let mut tops: Vec<Vec<String>> = all_paths
-        .iter()
-        .filter(|p| p.len() == 1)
-        .cloned()
-        .collect();
+    let mut tops: Vec<Vec<String>> = all_paths.iter().filter(|p| p.len() == 1).cloned().collect();
     tops.sort();
     tops.iter()
-        .map(|p| build_node(p, all_paths, indices, config, default_lang))
+        .map(|p| build_node(p, all_paths, indices, config))
         .collect()
 }
 
@@ -1592,7 +1579,6 @@ fn build_node(
     all_paths: &HashSet<Vec<String>>,
     indices: &BTreeMap<String, Vec<Value>>,
     config: &Config,
-    default_lang: &str,
 ) -> Category {
     let slug = path.last().cloned().unwrap_or_default();
     let key = path.join("/");
@@ -1603,9 +1589,10 @@ fn build_node(
     let langs = config.resolved_languages();
     for lang in &langs {
         if let Some(items) = indices.get(&key) {
-            if let Some(it) = items.iter().find(|v| {
-                v.path("lang").and_then(|l| l.as_str()) == Some(lang.as_str())
-            }) {
+            if let Some(it) = items
+                .iter()
+                .find(|v| v.path("lang").and_then(|l| l.as_str()) == Some(lang.as_str()))
+            {
                 let fm = it
                     .path("fields")
                     .and_then(|f| f.as_map().cloned())
@@ -1621,10 +1608,7 @@ fn build_node(
                 }
             }
         }
-        urls.insert(
-            lang.clone(),
-            url_for(config, default_lang, path, None, lang),
-        );
+        urls.insert(lang.clone(), url_for(config, path, None, lang));
     }
     let mut child_paths: Vec<Vec<String>> = all_paths
         .iter()
@@ -1634,7 +1618,7 @@ fn build_node(
     child_paths.sort();
     let children = child_paths
         .iter()
-        .map(|c| build_node(c, all_paths, indices, config, default_lang))
+        .map(|c| build_node(c, all_paths, indices, config))
         .collect();
     Category {
         slug,
@@ -1646,4 +1630,3 @@ fn build_node(
         children,
     }
 }
-

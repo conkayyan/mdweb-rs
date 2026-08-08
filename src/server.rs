@@ -3,6 +3,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::config::POSTS_DIR;
 use crate::content::{theme_files, Category, Site};
 use crate::feed;
 use crate::image_path;
@@ -124,21 +125,36 @@ struct Response {
 
 const HTML: &str = "text/html; charset=utf-8";
 
-/// Detect the request language from a URL path: the first segment matches a
-/// known language code → that language; otherwise → site default.
-fn detect_lang_from_path(site: &Arc<Site>, path: &str) -> String {
-    let clean = path.trim_matches('/');
-    let segs: Vec<&str> = clean.split('/').filter(|s| !s.is_empty()).collect();
+/// Split a request path into its segments, ignoring empty ones.
+fn path_segments(path: &str) -> Vec<&str> {
+    path.split('/').filter(|s| !s.is_empty()).collect()
+}
+
+/// Split path segments into `(language, remaining)` using the first-segment
+/// language convention: the first segment is the language code when it matches
+/// a configured language, otherwise the site default and the whole path.
+fn split_lang<'a>(site: &Site, segs: &[&'a str]) -> (String, Vec<&'a str>) {
     match segs.first() {
-        Some(first) if site.languages.iter().any(|l| l == first) => first.to_string(),
-        _ => site.default_lang.clone(),
+        Some(first) if site.languages.iter().any(|l| l == first) => {
+            if segs.len() == 1 {
+                (first.to_string(), Vec::new())
+            } else {
+                (first.to_string(), segs[1..].to_vec())
+            }
+        }
+        _ => (site.default_lang.clone(), segs.to_vec()),
     }
+}
+
+/// Detect the request language from a URL path so the 404 page renders in the
+/// caller's tongue instead of always falling back to the site default.
+fn detect_lang_from_path(site: &Site, path: &str) -> String {
+    split_lang(site, &path_segments(path)).0
 }
 
 /// Route a request path and return the response (body + content-type).
 fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> {
-    let clean = path.trim_matches('/');
-    let segs: Vec<&str> = clean.split('/').filter(|s| !s.is_empty()).collect();
+    let segs = path_segments(path);
     let routes = &site.config.routes;
 
     // Static assets: doc `template/<theme>/static/<rel>` then embedded theme
@@ -180,16 +196,7 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
     let rss_request = segs.last().copied() == Some(routes.rss.as_str());
 
     // Determine language (explicit prefix, or default for unprefixed paths).
-    let (lang, rest): (String, Vec<&str>) = match segs.first() {
-        Some(first) if site.languages.iter().any(|l| l == first) => {
-            if segs.len() == 1 {
-                (first.to_string(), Vec::new())
-            } else {
-                (first.to_string(), segs[1..].to_vec())
-            }
-        }
-        _ => (site.default_lang.clone(), segs.clone()),
-    };
+    let (lang, rest): (String, Vec<&str>) = split_lang(site, &segs);
 
     // ?page=N applies to home, category, and page-section listings.
     let page = parse_form_query(query, "page")
@@ -208,8 +215,7 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
     // RSS feed: must come before category/article resolution so it isn't
     // swallowed by a category whose slug happens to be the configured rss name.
     if rss_request && rest == [routes.rss.as_str()] {
-        let body = feed::rss_xml(site, &lang, 50)
-            .map_err(|e| format!("rss: {e}"))?;
+        let body = feed::rss_xml(site, &lang, 50).map_err(|e| format!("rss: {e}"))?;
         return Ok(Response {
             body: body.into_bytes(),
             content_type: "application/rss+xml; charset=utf-8",
@@ -306,7 +312,11 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
 fn serve_static(site: &Arc<Site>, rel: &str) -> Option<Vec<u8>> {
     // Files live in `template/<theme>/static/` on disk regardless of the
     // configured URL prefix; only the route changes.
-    let theme = if site.theme.is_empty() { "default" } else { site.theme.as_str() };
+    let theme = if site.theme.is_empty() {
+        "default"
+    } else {
+        site.theme.as_str()
+    };
     let dir = site.doc_root.join("template").join(theme).join("static");
     // `contained` rejects `..`, `.`, empty and absolute segments and, after
     // canonicalizing both paths, refuses anything that resolves outside
@@ -363,9 +373,7 @@ fn find_section(site: &Site, rest: &[String]) -> Option<Vec<String>> {
     }
     let dir: Vec<String> = rest.to_vec();
     let key = dir.join("/");
-    if site.indices.contains_key(&key)
-        && dir.first().map(|s| s.as_str()) != Some("posts")
-    {
+    if site.indices.contains_key(&key) && dir.first().map(|s| s.as_str()) != Some(POSTS_DIR) {
         Some(dir)
     } else {
         None

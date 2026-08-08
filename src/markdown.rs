@@ -2,7 +2,6 @@
 /// subset typically used in blog articles: headings, paragraphs, fenced code,
 /// blockquote, ordered/unordered (nested) lists, HR, and inline emphasis,
 /// code, links/images and strikethrough. Raw HTML passes through unchanged.
-
 pub fn render(source: &str) -> String {
     let lines: Vec<String> = source.lines().map(|l| l.trim_end().to_string()).collect();
     render_lines(&lines)
@@ -44,10 +43,7 @@ fn render_lines(lines: &[String]) -> String {
         // headings
         if let Some(level) = heading_level(line) {
             let text = line.trim_start_matches('#').trim();
-            out.push_str(&format!(
-                "<h{level}>{}</h{level}>\n",
-                inline(text)
-            ));
+            out.push_str(&format!("<h{level}>{}</h{level}>\n", inline(text)));
             i += 1;
             continue;
         }
@@ -119,7 +115,11 @@ fn trimmed_word(s: &str) -> String {
 }
 
 fn render_item(lines: &[String]) -> String {
-    let non_empty: Vec<&str> = lines.iter().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+    let non_empty: Vec<&str> = lines
+        .iter()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect();
     if non_empty.len() <= 1 {
         let text = non_empty.join(" ");
         return inline(&text);
@@ -129,13 +129,9 @@ fn render_item(lines: &[String]) -> String {
 
 fn fence_info(line: &str) -> Option<String> {
     let t = line.trim_start();
-    if let Some(r) = t.strip_prefix("```") {
-        Some(r.trim().to_string())
-    } else if let Some(r) = t.strip_prefix("~~~") {
-        Some(r.trim().to_string())
-    } else {
-        None
-    }
+    t.strip_prefix("```")
+        .or_else(|| t.strip_prefix("~~~"))
+        .map(|r| r.trim().to_string())
 }
 
 fn is_hr(line: &str) -> bool {
@@ -172,7 +168,7 @@ fn list_marker(line: &str) -> Option<bool> {
         return Some(false);
     }
     if let Some(d0) = t.chars().next().map(|c| c.is_ascii_digit()) {
-        if d0 && t.find(|c| c == '.' || c == ')').is_some() {
+        if d0 && t.find(['.', ')']).is_some() {
             return Some(true);
         }
     }
@@ -182,12 +178,14 @@ fn list_marker(line: &str) -> Option<bool> {
 fn marker_body(line: &str, ordered: bool) -> String {
     let t = line.trim_start();
     if ordered {
-        if let Some(idx) = t.find(|c| c == '.' || c == ')') {
+        if let Some(idx) = t.find(['.', ')']) {
             return t[idx + 1..].trim_start().to_string();
         }
         t.to_string()
     } else {
-        t.trim_start_matches(['-', '*', '+']).trim_start().to_string()
+        t.trim_start_matches(['-', '*', '+'])
+            .trim_start()
+            .to_string()
     }
 }
 
@@ -324,7 +322,7 @@ fn inline(s: &str) -> String {
                         rest = &t[cl + 1..];
                     }
                     None => {
-                        out.push_str("`");
+                        out.push('`');
                         out.push_str(t);
                         break;
                     }

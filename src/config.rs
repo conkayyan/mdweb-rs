@@ -38,7 +38,10 @@ pub(crate) const I18N_DEFAULTS: &[(&str, &str)] = &[
     ("prev_page", "< Previous"),
     ("next_page", "Next >"),
     ("not_found", "Not Found"),
-    ("not_found_desc", "The page you're looking for doesn't exist."),
+    (
+        "not_found_desc",
+        "The page you're looking for doesn't exist.",
+    ),
     ("back_home", "Back home"),
     ("search", "Search"),
     ("search_placeholder", "Search…"),
@@ -53,6 +56,11 @@ fn builtin_default(key: &str) -> Option<&'static str> {
         .find(|(k, _)| *k == key)
         .map(|(_, v)| *v)
 }
+
+/// On-disk container directory names under `content/`. Single source of truth
+/// for the "under `posts/` is an article, otherwise it's a page" checks.
+pub const POSTS_DIR: &str = "posts";
+pub const PAGES_DIR: &str = "pages";
 
 /// Route rules for well-known, non-content URL paths. Each field is the URL
 /// slug (path segment or file name) for a built-in route; configuring one
@@ -109,8 +117,8 @@ impl Routes {
     /// touched.
     pub fn prefix_url(&self, seg: &str) -> String {
         match seg {
-            "posts" => self.posts.clone(),
-            "pages" => self.pages.clone(),
+            POSTS_DIR => self.posts.clone(),
+            PAGES_DIR => self.pages.clone(),
             other => other.to_string(),
         }
     }
@@ -119,9 +127,9 @@ impl Routes {
     /// container directory name.
     pub fn prefix_disk(&self, seg: &str) -> String {
         if seg == self.posts {
-            "posts".to_string()
+            POSTS_DIR.to_string()
         } else if seg == self.pages {
-            "pages".to_string()
+            PAGES_DIR.to_string()
         } else {
             seg.to_string()
         }
@@ -483,12 +491,8 @@ impl Config {
             Value::map()
         };
         if let Some(am) = m.get("analytics").and_then(|v| v.as_map()) {
-            cfg.analytics.google = am
-                .get("google")
-                .and_then(AnalyticsProvider::from_value);
-            cfg.analytics.baidu = am
-                .get("baidu")
-                .and_then(AnalyticsProvider::from_value);
+            cfg.analytics.google = am.get("google").and_then(AnalyticsProvider::from_value);
+            cfg.analytics.baidu = am.get("baidu").and_then(AnalyticsProvider::from_value);
         }
         if let Some(sm) = m.get("security").and_then(|v| v.as_map()) {
             if let Some(b) = sm.get("enabled").and_then(|v| v.as_bool()) {
@@ -538,7 +542,10 @@ impl Config {
                 cfg.langs.insert(
                     code.clone(),
                     LangMeta {
-                        title: mm.get("title").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                        title: mm
+                            .get("title")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
                         display_name: mm
                             .get("display_name")
                             .and_then(|v| v.as_str())
@@ -864,7 +871,10 @@ id = "G-1\\\");alert(1);//"
             !s.contains("G-1\");alert(1);//"),
             "raw quote must be escaped inside the JS string: {s}"
         );
-        assert!(s.contains("\\\""), "double quote must be backslash-escaped: {s}");
+        assert!(
+            s.contains("\\\""),
+            "double quote must be backslash-escaped: {s}"
+        );
         assert_eq!(s.matches("\";alert(1)").count(), 0, "no breakout: {s}");
     }
 
