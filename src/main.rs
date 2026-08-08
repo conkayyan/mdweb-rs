@@ -43,17 +43,18 @@ fn print_help() {
 
 USAGE:
     mdweb create <PATH>
-    mdweb new    <TYPE> <NAME> <SITE_PATH>
+    mdweb new    <TYPE> <NAME> <SITE_PATH> [CATEGORY]
     mdweb run    [PATH] [--host HOST] [--port PORT] [--template DIR]
 
 COMMANDS:
     create <PATH>             Scaffold a demo site (docs + template + samples) at PATH.
     new <TYPE> <NAME> <PATH>  Create a new page or post in an existing site.
-                              TYPE = page | post.
-                              If PATH is the site root (has site.toml), post
-                              defaults to content/posts/, page defaults to
-                              content/pages/. Otherwise the file is placed at
-                              PATH/NAME.md. NAME may contain '/' for sub-directories.
+                              TYPE = page | post. If PATH is the site root (has
+                              site.toml), posts go to content/posts/<CATEGORY>/
+                              and pages to content/pages/. A CATEGORY argument or a
+                              `CATEGORY/NAME` name is required for posts, since each
+                              post belongs in a category directory. Otherwise the
+                              file is placed directly at PATH/NAME.md.
     run                       Serve a doc directory as a realtime web blog. PATH
                               defaults to the current directory. Loads theme =
                               <name> from template/<name>/ unless --template DIR
@@ -171,15 +172,16 @@ fn cmd_create(args: &[String]) -> i32 {
     0
 }
 
-/// `mdweb new <TYPE> <NAME> <SITE_PATH>` — create a new page or post.
+/// `mdweb new <TYPE> <NAME> <SITE_PATH> [CATEGORY]` — create a new page or post.
 fn cmd_new(args: &[String]) -> i32 {
     if args.len() < 3 {
-        eprintln!("usage: mdweb new <page|post> <NAME> <SITE_PATH>");
+        eprintln!("usage: mdweb new <page|post> <NAME> <SITE_PATH> [CATEGORY]");
         return 1;
     }
     let kind = args[0].as_str();
     let name = args[1].trim();
     let site = PathBuf::from(&args[2]);
+    let category = args.get(3).map(|s| s.trim()).filter(|s| !s.is_empty());
 
     if name.is_empty() {
         eprintln!("error: NAME must not be empty");
@@ -196,7 +198,7 @@ fn cmd_new(args: &[String]) -> i32 {
     match kind {
         "page" => {
             match mdweb::site::get("samples/page.md") {
-                Some(sample) => cmd_new_one(name, &site, "page", sample),
+                Some(sample) => cmd_new_one(name, &site, "page", category, sample),
                 None => {
                     eprintln!("error: embedded sample page missing");
                     1
@@ -205,7 +207,7 @@ fn cmd_new(args: &[String]) -> i32 {
         }
         "post" => {
             match mdweb::site::get("samples/post.md") {
-                Some(sample) => cmd_new_one(name, &site, "post", sample),
+                Some(sample) => cmd_new_one(name, &site, "post", category, sample),
                 None => {
                     eprintln!("error: embedded sample post missing");
                     1
@@ -214,36 +216,54 @@ fn cmd_new(args: &[String]) -> i32 {
         }
         other => {
             eprintln!("error: unknown type '{other}' (expected 'page' or 'post')");
-            eprintln!("usage: mdweb new <page|post> <NAME> <SITE_PATH>");
+            eprintln!("usage: mdweb new <page|post> <NAME> <SITE_PATH> [CATEGORY]");
             1
         }
     }
 }
 
 /// Resolve the destination file path for `new`. When `<SITE_PATH>` is the site
-/// root (has `site.toml`), posts default to `content/posts/` and pages default
-/// to `content/pages/`. Otherwise the file is placed directly at
+/// root (has `site.toml`), pages default to `content/pages/`. Posts must live
+/// in a category: `content/posts/<CATEGORY>/<NAME>.md` — posts are aggregated
+/// by directory, so a bare `content/posts/<NAME>.md` would have no category
+/// page. A `CATEGORY` argument or a `CATEGORY/NAME` path provides it. If the
+/// path is not a site root, the file is placed directly at
 /// `<SITE_PATH>/<NAME>.md` (the user has already chosen the destination).
-fn target_path(site: &Path, kind: &str, name: &str) -> PathBuf {
+fn target_path(site: &Path, kind: &str, name: &str, category: Option<&str>) -> PathBuf {
     let file_name = if name.ends_with(".md") {
         name.to_string()
     } else {
         format!("{name}.md")
     };
-    let prefix = match kind {
-        "post" if site.join("site.toml").is_file() => "content/posts",
-        "page" if site.join("site.toml").is_file() => "content/pages",
-        _ => "",
-    };
-    if prefix.is_empty() {
-        site.join(file_name)
-    } else {
-        site.join(prefix).join(file_name)
+    match (kind, site.join("site.toml").is_file()) {
+        ("post", true) => {
+            if let Some(cat) = category {
+                if cat.contains('/') || cat.contains('\\') {
+                    eprintln!("error: CATEGORY must be a single directory name: {cat}");
+                    return PathBuf::new();
+                }
+                site.join("content").join("posts").join(cat).join(file_name)
+            } else if name.split('/').count() > 1 {
+                // name already carries a category: <category>/<name>
+                site.join("content").join("posts").join(file_name)
+            } else {
+                eprintln!("error: a post must live in a category. Use a CATEGORY");
+                eprintln!("argument, or a `CATEGORY/NAME` name, e.g.:");
+                eprintln!("  mdweb new post hello ./site guide");
+                eprintln!("  mdweb new post guide/hello ./site");
+                PathBuf::new()
+            }
+        }
+        ("page", true) => site.join("content").join("pages").join(file_name),
+        _ => site.join(file_name),
     }
 }
 
-fn cmd_new_one(name: &str, site: &Path, kind: &str, sample: &str) -> i32 {
-    let target = target_path(site, kind, name);
+fn cmd_new_one(name: &str, site: &Path, kind: &str, category: Option<&str>, sample: &str) -> i32 {
+    let target = target_path(site, kind, name, category);
+    if target.as_path().as_os_str().is_empty() {
+        return 1;
+    }
     if target.exists() {
         eprintln!("error: file already exists: {}", target.display());
         return 1;

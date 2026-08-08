@@ -69,17 +69,20 @@ mdweb <VERSION> - a static blog engine written in pure Rust.
 
 USAGE:
     mdweb create <PATH>
-    mdweb new    <TYPE> <NAME> <SITE_PATH>
+    mdweb new    <TYPE> <NAME> <SITE_PATH> [CATEGORY]
     mdweb run    [PATH] [--host HOST] [--port PORT] [--template DIR]
 
 COMMANDS:
     create <PATH>              Scaffold a demo site (docs + template + samples) at PATH.
     new <TYPE> <NAME> <PATH>   Create a new page or post in an existing site.
                                TYPE = page | post.
-                               If PATH is the site root (has site.toml), post
-                               defaults to content/posts/, page defaults to
-                               content/pages/. Otherwise the file is placed at
-                               PATH/NAME.md. NAME may contain '/' for sub-directories.
+                               If PATH is the site root (has site.toml), pages
+                               land in content/pages/, posts in
+                               content/posts/<CATEGORY>/. Posts are aggregated by
+                               directory, so a bare content/posts/<NAME>.md has no
+                               category page — pass a CATEGORY argument or a
+                               `CATEGORY/NAME` name. Otherwise the file is placed
+                               directly at PATH/NAME.md.
     run                        Serve a doc directory as a realtime web blog. PATH
                                defaults to the current directory. Uses the system
                                default template unless --template DIR or
@@ -104,23 +107,25 @@ to the site (or a sub-directory within it).
 mdweb create ./my-blog
 mdweb run ./my-blog
 
-# 2. add a post (PATH is the site root → file lands in content/posts/)
-mdweb new post hello-world ./my-blog
-# → ./my-blog/content/posts/hello-world.md
+# 2. add a post inside a category (posts are grouped by directory)
+mdweb new post hello-world ./my-blog guide
+# → ./my-blog/content/posts/guide/hello-world.md
+mdweb new post guide/hello-world ./my-blog    # equivalent
+# → ./my-blog/content/posts/guide/hello-world.md
 
 # 3. add a page (PATH is the site root → file lands in content/pages/)
 mdweb new page about ./my-blog
 # → ./my-blog/content/pages/about.md
 
-# 4. add a post inside an existing category
-mdweb new post my-post ./my-blog/content/posts/web
+# 4. add a post inside an existing category directory
+mdweb new post my-post ./my-blog/web
 # → ./my-blog/content/posts/web/my-post.md
 
 # 5. add a page inside a sub-directory (parent is auto-created)
 mdweb new page contact ./my-blog/content/pages/info
 # → ./my-blog/content/pages/info/contact.md
 
-# 6. NAME may contain '/' for sub-directories
+# 6. NAME may contain '/' for deeper sub-directories
 mdweb new post tips/shortcuts ./my-blog
 # → ./my-blog/content/posts/tips/shortcuts.md
 ```
@@ -128,6 +133,9 @@ mdweb new post tips/shortcuts ./my-blog
 Notes:
 
 - The `.md` extension is added automatically if you omit it.
+- A post at the site root needs a CATEGORY (or a `CATEGORY/NAME` name):
+  without one the command fails, because the engine indexes posts from
+  their directory.
 - If the target file already exists, the command fails without overwriting.
 - The content is taken from `samples/page.md` or `samples/post.md` (both
   included by `mdweb create`). Each sample is a complete, commented
@@ -150,10 +158,12 @@ my-blog/
 │   ├── pages/             # pages → /pages/<slug>/; not in the chronological feed
 │   │   ├── _index.md
 │   │   └── about.md
-│   └── posts/             # posts → /posts/<slug>/; appear in feeds and listings
+│   └── posts/             # posts → /posts/<category>/<slug>/
 │       ├── _index.md      # category page for /posts/
-│       ├── hello-world.md
-│       ├── hello-world.zh.md
+│       ├── guide/         # a category; posts live in a sub-directory
+│       │   ├── _index.md
+│       │   ├── hello-world.md
+│       │   └── hello-world.zh.md
 │       └── web/           # nested sub-categories
 │           ├── _index.md
 │           └── frontend/
@@ -181,8 +191,11 @@ my-blog/
 Notes:
 
 - `content/` is a transparent container — its name does not appear in URLs.
-  `{{ a.url }}` → `/posts/hello-world/`, and
+  `{{ a.url }}` → `/posts/guide/hello-world/`, and
   `content/_index.md` is served at `/`.
+- Posts must sit in a category sub-directory: `posts/guide/hello-world.md`
+  becomes `/posts/guide/hello-world/`. A bare `posts/hello-world.md` has no
+  category page, so it is not listed anywhere.
 - `content/_index.md` is the home page; only `_index.md` and `_index.<lang>.md`
   are accepted at the top of `content/`. Other top-level files are ignored.
 - `_index.md` in a sub-directory becomes that category's index page.
@@ -433,8 +446,8 @@ Per-template:
 
 ## Multi-language URLs
 
-The default language is served at unprefixed paths (`/posts/hello-world/`); other
-languages get a prefix (`/zh/posts/hello-world/`). The language switcher uses
+The default language is served at unprefixed paths (`/posts/guide/hello-world/`); other
+languages get a prefix (`/zh/posts/guide/hello-world/`). The language switcher uses
 `languages[].url`.
 
 **Breaking changes (v0.2.0):** `languages[].title` (which confusingly returned the

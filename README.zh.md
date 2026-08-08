@@ -68,17 +68,18 @@ mdweb <VERSION> - 一个用纯 Rust 编写的静态博客引擎。
 
 USAGE:
     mdweb create <PATH>
-    mdweb new    <TYPE> <NAME> <SITE_PATH>
+    mdweb new    <TYPE> <NAME> <SITE_PATH> [CATEGORY]
     mdweb run    [PATH] [--host HOST] [--port PORT] [--template DIR]
 
 COMMANDS:
     create <PATH>              在 PATH 处搭建演示站点（docs + template + samples）。
     new <TYPE> <NAME> <PATH>   在已有站点中创建单个 page 或 post。
                                TYPE = page | post。
-                               若 PATH 是站点根（含 site.toml），post 默认落到
-                               content/posts/，page 默认落到 content/pages/；
-                               否则文件直接放在 PATH/NAME.md。
-                               NAME 中可包含 '/'，用于在子目录中创建文件。
+                               若 PATH 是站点根（含 site.toml），page 默认落到
+                               content/pages/，post 落到 content/posts/<CATEGORY>/。
+                               文章按目录聚合，直接放在 content/posts/ 下没有分类
+                               页面；需要传入 CATEGORY 参数或使用 `CATEGORY/NAME`
+                               形式的名称。否则文件直接放在 PATH/NAME.md。
     run                        将一个 doc 目录以实时博客形式启动。PATH 默认
                                为当前目录。除非传入 --template DIR 或在
                                site.toml 中设置 [theme]，否则使用系统默认模板。
@@ -101,23 +102,25 @@ OPTIONS:
 mdweb create ./my-blog
 mdweb run ./my-blog
 
-# 2. 新增一篇文章（PATH 是站点根，文件落在 content/posts/）
-mdweb new post hello-world ./my-blog
-# → ./my-blog/content/posts/hello-world.md
+# 2. 在分类下新增一篇文章（PATH 是站点根，文件落在 content/posts/<CATEGORY>/）
+mdweb new post hello-world ./my-blog guide
+# → ./my-blog/content/posts/guide/hello-world.md
+mdweb new post guide/hello-world ./my-blog    # 等价写法
+# → ./my-blog/content/posts/guide/hello-world.md
 
 # 3. 新增一个页面（PATH 是站点根，文件落在 content/pages/）
 mdweb new page about ./my-blog
 # → ./my-blog/content/pages/about.md
 
-# 4. 在已有分类下新增文章
-mdweb new post my-post ./my-blog/content/posts/web
+# 4. 在已有分类目录下新增文章
+mdweb new post my-post ./my-blog/web
 # → ./my-blog/content/posts/web/my-post.md
 
 # 5. 在子目录中新增页面（父目录会自动创建）
 mdweb new page contact ./my-blog/content/pages/info
 # → ./my-blog/content/pages/info/contact.md
 
-# 6. NAME 中可包含 '/' 表示子目录
+# 6. NAME 中可包含 '/' 表示更深的子目录
 mdweb new post tips/shortcuts ./my-blog
 # → ./my-blog/content/posts/tips/shortcuts.md
 ```
@@ -125,6 +128,9 @@ mdweb new post tips/shortcuts ./my-blog
 说明：
 
 - 不写 `.md` 后缀会自动补上。
+- 在站点根新增 post 时必须提供分类（CATEGORY 参数或 `CATEGORY/NAME`
+  名称）：因为文章按目录聚合，直接放在 `content/posts/` 下没有分类页面，
+  不会被任何列表收录。
 - 目标文件已存在时直接报错，不会覆盖。
 - 文件内容来自 `samples/page.md` 与 `samples/post.md`（由 `mdweb create`
   写入）。两份样例都是带注释的完整 reference，复制后修改 frontmatter 与
@@ -146,10 +152,12 @@ my-blog/
 │   ├── pages/             # 页面 → /pages/<slug>/；不进时间线
 │   │   ├── _index.md
 │   │   └── about.md
-│   └── posts/             # 文章 → /posts/<slug>/；出现在列表与 Feed 中
+│   └── posts/             # 文章 → /posts/<category>/<slug>/
 │       ├── _index.md      # /posts/ 分类页
-│       ├── hello-world.md
-│       ├── hello-world.zh.md
+│       ├── guide/         # 一个分类；文章都放在子目录里
+│       │   ├── _index.md
+│       │   ├── hello-world.md
+│       │   └── hello-world.zh.md
 │       └── web/           # 多级子分类
 │           ├── _index.md
 │           └── frontend/
@@ -177,8 +185,12 @@ my-blog/
 说明：
 
 - `content/` 是透明容器，不出现在 URL 中。
-  `/content/posts/hello-world.md` 对外的访问路径是 `/posts/hello-world/`；
+  `/content/posts/guide/hello-world.md` 对外的访问路径是
+  `/posts/guide/hello-world/`；
   `content/_index.md` 对外是 `/`。
+- 文章必须放在分类子目录下：`posts/guide/hello-world.md` 会变成
+  `/posts/guide/hello-world/`。直接放在 `posts/` 下的
+  `posts/hello-world.md` 没有分类页面，不会被任何列表收录。
 - `content/_index.md` 是首页；`content/` 顶层只接受 `_index.md` 与
   `_index.<lang>.md`，其他顶层文件会被忽略。
 - 目录下的 `_index.md` 即该分类的索引页。
