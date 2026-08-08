@@ -76,12 +76,16 @@ fn handle(mut stream: TcpStream, site: &Arc<Site>) -> std::io::Result<()> {
         .to_string();
     let path = percent_decode(path_part);
 
+    // Detect the request's language so the 404 page renders in the
+    // caller's tongue instead of always falling back to the site default.
+    let lang = detect_lang_from_path(site, &path);
+
     match route(site, &path, &query) {
         Ok(resp) => {
             respond(&mut stream, 200, "OK", resp.content_type, &resp.body)?;
         }
         Err(_) => {
-            let html = render::render_not_found(site, &site.default_lang)
+            let html = render::render_not_found(site, &lang)
                 .unwrap_or_else(|_| "<h1>404 Not Found</h1>".to_string());
             respond(
                 &mut stream,
@@ -102,6 +106,17 @@ struct Response {
 }
 
 const HTML: &str = "text/html; charset=utf-8";
+
+/// Detect the request language from a URL path: the first segment matches a
+/// known language code → that language; otherwise → site default.
+fn detect_lang_from_path(site: &Arc<Site>, path: &str) -> String {
+    let clean = path.trim_matches('/');
+    let segs: Vec<&str> = clean.split('/').filter(|s| !s.is_empty()).collect();
+    match segs.first() {
+        Some(first) if site.languages.iter().any(|l| l == first) => first.to_string(),
+        _ => site.default_lang.clone(),
+    }
+}
 
 /// Route a request path and return the response (body + content-type).
 fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> {
