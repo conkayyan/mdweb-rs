@@ -242,6 +242,37 @@ body {
 
 保持在 `/static/` 命名空间内——`../` 会跳出静态目录，导致 404。
 
+## 文档图片
+
+属于某一篇文档、而非属于主题的图片，就放在文档旁边的 `_image/` 目录里。
+`content/` 下的任意目录都可以有一个：
+
+```
+content/posts/guide/
+├── _image/
+│   └── hero.svg        → /posts/guide/hero.svg
+├── _index.md
+└── embedding-images.md
+```
+
+用普通的**相对文件路径**引用，这样在编辑器的 markdown 预览和站点上都能正常显示
+——生成 URL 时 `_image` 这一段会被去掉：
+
+```markdown
+![横幅](_image/hero.svg)                 → <img src="/posts/guide/hero.svg">
+![Logo](../../pages/_image/logo.svg)     → <img src="/pages/logo.svg">
+<img src="_image/hero.svg" width="160">  → 原始 HTML 同样会被改写
+```
+
+规则：
+
+- 图片必须**直接**放在 `_image/` 里；需要分子目录时，给子目录自己建一个 `_image/`。
+- `../` 可以跨目录，但必须留在 `content/` 之内。爬出去的路径原样保留，最终 404。
+- 绝对路径（`/static/…`）、外链（`https://…`）、`data:` URL，以及任何不含
+  `_image` 段的相对路径，都原样保留。
+- 图片与语言无关：`/posts/guide/hero.svg` 和 `/zh/posts/guide/hero.svg` 是同一个文件。
+- 文件名里避免空格以及 `?`、`#`。
+
 ## 配置（`site.toml`）
 
 ```toml

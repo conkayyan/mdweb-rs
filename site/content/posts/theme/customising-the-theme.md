@@ -26,3 +26,7 @@ Files under `template/default/static/` are served at
 ```
 
 In markdown use the same prefix: `![Alt](/static/hero.png)`.
+
+That prefix is for theme-wide artwork. Images belonging to a single
+document go in an `_image/` folder beside it — see
+[Embedding images](/posts/guide/embedding-images/).

@@ -1,6 +1,7 @@
 pub mod config;
 pub mod content;
 pub mod feed;
+pub mod image_path;
 pub mod markdown;
 pub mod parse;
 pub mod render;

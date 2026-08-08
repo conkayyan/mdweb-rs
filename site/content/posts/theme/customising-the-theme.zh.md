@@ -26,3 +26,6 @@ tags: ["tutorial", "theme"]
 ```
 
 在 markdown 中使用同样的前缀：`![替代文字](/static/hero.png)`。
+
+这个前缀用于全站素材。只属于某一篇文档的图片，放在它旁边的 `_image/`
+目录里——见[插入图片](/zh/posts/guide/embedding-images/)。

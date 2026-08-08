@@ -233,8 +233,19 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
         });
     }
 
-    // Raw files under the doc tree (images, markdown source, ...).
+    // Images: `/pages/a.png` is served from `content/pages/_image/a.png`.
+    // Comes after the content matchers so a document always wins a tie.
     let rel = rest.join("/");
+    if let Some(p) = site.resolve_image(&rel) {
+        if let Ok(data) = std::fs::read(&p) {
+            return Ok(Response {
+                body: data,
+                content_type: content_type(&rel),
+            });
+        }
+    }
+
+    // Raw files under the doc tree (images, markdown source, ...).
     if let Some(p) = site.resolve_file(&rel) {
         if let Ok(data) = std::fs::read(&p) {
             return Ok(Response {
@@ -389,9 +400,16 @@ fn content_type(path: &str) -> &'static str {
         "xml" => "application/xml",
         "svg" => "image/svg+xml",
         "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
+        "apng" => "image/apng",
+        "jpg" | "jpeg" | "jfif" => "image/jpeg",
         "gif" => "image/gif",
         "webp" => "image/webp",
+        "avif" => "image/avif",
+        "heic" => "image/heic",
+        "heif" => "image/heif",
+        "jxl" => "image/jxl",
+        "bmp" => "image/bmp",
+        "tif" | "tiff" => "image/tiff",
         "ico" => "image/x-icon",
         "woff" => "font/woff",
         "woff2" => "font/woff2",

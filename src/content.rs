@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;
+use crate::image_path;
 use crate::markdown;
 use crate::parse::parse_frontmatter;
 use crate::render::tree_has_active;
@@ -388,7 +389,7 @@ impl Site {
                 };
                 let stem = fname.strip_suffix(".md").unwrap_or(&fname).to_string();
                 let (base, lang) = parse_name(&stem, &languages, &default_lang);
-                let html = markdown::render(&body);
+                let html = image_path::rewrite_img_srcs(&markdown::render(&body), &dir);
                 let mtime = std::fs::metadata(&abs)
                     .ok()
                     .and_then(|m| m.modified().ok())
@@ -1079,12 +1080,16 @@ impl Site {
 
     /// Raw file under the doc root at a URL-relative path.
     pub fn resolve_file(&self, rel: &str) -> Option<PathBuf> {
-        let p = self.doc_root.join(rel);
-        if p.is_file() {
-            Some(p)
-        } else {
-            None
-        }
+        image_path::contained(&self.doc_root, rel)
+    }
+
+    /// Image at a URL-relative path, served from the `_image/` directory the
+    /// URL was built from: `/pages/a.png` → `content/pages/_image/a.png`.
+    pub fn resolve_image(&self, rel: &str) -> Option<PathBuf> {
+        let (dir, file) = rel.rsplit_once('/').unwrap_or(("", rel));
+        let parts = ["content", dir, image_path::DIR, file];
+        let under: Vec<&str> = parts.into_iter().filter(|s| !s.is_empty()).collect();
+        image_path::contained(&self.doc_root, &under.join("/"))
     }
 }
 

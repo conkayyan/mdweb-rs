@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" width="320" height="120" role="img" aria-label="mdweb">
+  <rect width="320" height="120" rx="10" fill="#1f2933"/>
+  <rect x="16" y="16" width="288" height="88" rx="6" fill="none" stroke="#4c9aff" stroke-width="2"/>
+  <text x="160" y="62" fill="#e6edf3" font-family="monospace" font-size="30" text-anchor="middle">mdweb</text>
+  <text x="160" y="88" fill="#8b98a5" font-family="monospace" font-size="13" text-anchor="middle">_image/hero.svg</text>
+</svg>

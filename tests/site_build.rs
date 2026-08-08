@@ -1148,3 +1148,68 @@ fn root_level_md_files_become_root_pages() {
     let arr = tree.as_arr().expect("arr");
     assert!(arr.is_empty(), "no page section exists for an empty path");
 }
+#[test]
+fn image_paths_are_rewritten_and_resolvable() {
+    // Images live in an `_image/` dir beside the document. Markdown keeps a
+    // relative filesystem path (so local preview works) and the rendered HTML
+    // gets a site URL with the `_image` segment dropped.
+    let dir = tempdir("img");
+    write(&dir, "site.toml", r#"title = "X""#);
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    write(&dir, "content/pages/_image/logo.svg", "<svg/>");
+    write(&dir, "content/posts/guide/_image/hero.svg", "<svg/>");
+    write(
+        &dir,
+        "content/posts/guide/post.md",
+        concat!(
+            "---\ntitle: P\ndate: 2026-08-06\n---\n",
+            "![H](_image/hero.svg)\n\n",
+            "![L](../../pages/_image/logo.svg)\n\n",
+            "<img src=\"_image/hero.svg\" width=\"160\">\n\n",
+            "![S](/static/x.png)\n\n",
+            "![E](https://example.com/_image/x.png)\n\n",
+            "![N](../other/x.png)\n\n",
+            "```html\n<img src=\"_image/hero.svg\">\n```\n",
+        ),
+    );
+    let site = Site::build(&dir, None).expect("build");
+    let post = site.articles.iter().find(|a| a.slug == "post").expect("post");
+    let html = &post.content;
+
+    assert!(html.contains("src=\"/posts/guide/hero.svg\""), "same-dir image");
+    assert!(html.contains("src=\"/pages/logo.svg\""), "cross-dir via ../");
+    assert!(
+        html.contains("<img src=\"/posts/guide/hero.svg\" width=\"160\">"),
+        "raw HTML img is rewritten and keeps its other attributes"
+    );
+    assert!(html.contains("src=\"/static/x.png\""), "absolute path untouched");
+    assert!(
+        html.contains("src=\"https://example.com/_image/x.png\""),
+        "external URL untouched"
+    );
+    assert!(html.contains("src=\"../other/x.png\""), "no _image segment: untouched");
+    assert!(
+        html.contains("&lt;img src=\"_image/hero.svg\"&gt;"),
+        "an <img> shown as a code example stays verbatim"
+    );
+
+    // The server can invert the mapping back to disk.
+    assert!(site.resolve_image("posts/guide/hero.svg").is_some());
+    assert!(site.resolve_image("pages/logo.svg").is_some());
+    assert!(site.resolve_image("pages/missing.svg").is_none());
+}
+
+#[test]
+fn file_routes_reject_traversal_outside_the_doc_root() {
+    let dir = tempdir("traversal");
+    write(&dir, "site.toml", r#"title = "X""#);
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    write(&dir, "content/pages/_image/a.svg", "<svg/>");
+    let site = Site::build(&dir, None).expect("build");
+
+    assert!(site.resolve_file("site.toml").is_some(), "in-tree file still served");
+    assert!(site.resolve_file("../../../etc/passwd").is_none());
+    assert!(site.resolve_file("content/../../etc/passwd").is_none());
+    assert!(site.resolve_file("/etc/passwd").is_none());
+    assert!(site.resolve_image("../../../etc/passwd").is_none());
+}

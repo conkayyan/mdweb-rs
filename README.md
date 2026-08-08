@@ -250,6 +250,41 @@ body {
 Stick to paths that stay within `/static/` — `../` will leave the static
 namespace and 404.
 
+## Document images
+
+Assets that belong to one document rather than to the theme live beside it,
+in an `_image/` directory. Any directory under `content/` may have one:
+
+```
+content/posts/guide/
+├── _image/
+│   └── hero.svg        → /posts/guide/hero.svg
+├── _index.md
+└── embedding-images.md
+```
+
+Reference them with an ordinary **relative filesystem path**, so the file
+resolves both in your editor's markdown preview and on the site — the
+`_image` segment is dropped when the URL is generated:
+
+```markdown
+![Banner](_image/hero.svg)              → <img src="/posts/guide/hero.svg">
+![Logo](../../pages/_image/logo.svg)    → <img src="/pages/logo.svg">
+<img src="_image/hero.svg" width="160"> → raw HTML is rewritten too
+```
+
+Rules:
+
+- The file must sit **directly** inside `_image/`; for sub-folders, give the
+  sub-folder its own `_image/`.
+- `../` may cross directories but must stay inside `content/`. Paths that
+  climb out are left untouched and will 404.
+- Absolute (`/static/…`), external (`https://…`) and `data:` URLs, and any
+  relative path without an `_image` segment, are passed through unchanged.
+- Images are language-neutral: `/posts/guide/hero.svg` and
+  `/zh/posts/guide/hero.svg` serve the same file.
+- Avoid spaces and `?` or `#` in filenames.
+
 ## Configuration (`site.toml`)
 
 ```toml
