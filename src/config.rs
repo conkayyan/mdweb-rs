@@ -22,7 +22,6 @@ pub(crate) const I18N_DEFAULTS: &[(&str, &str)] = &[
     ("categories", "Categories"),
     ("pages", "Pages"),
     ("subpages", "Pages in this section"),
-    ("subcategories", "Subcategories"),
     ("recent_posts", "Recent Posts"),
     ("tags", "Tags"),
     ("tag_list", "Posts tagged"),

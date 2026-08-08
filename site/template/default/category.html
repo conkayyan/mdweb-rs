@@ -24,12 +24,6 @@
   </article>
   {% endfor %}
   {% endif %}
-  {% if category.children %}
-  <h3>{{ t.subcategories | default(value="Subcategories") }}</h3>
-  <ul class="subcats">
-    {% for ch in category.children %}<li><a href="{{ ch.url }}">{{ ch.title }}</a></li>{% endfor %}
-  </ul>
-  {% endif %}
   {% if category.pagination.show_pagination %}
   <nav class="pagination" aria-label="Pagination">
     {% if category.pagination.has_prev %}<a class="pagination-prev" href="?page={{ category.pagination.prev_page }}" rel="prev" aria-label="{{ t.prev_page }}">&lt;</a>{% endif %}
