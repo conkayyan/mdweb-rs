@@ -918,11 +918,32 @@ impl Site {
                 ("is_current".to_string(), Value::Bool(false)),
             ])));
         }
-        items.push(Value::Map(BTreeMap::from([
-            ("title".to_string(), Value::str(current_title)),
-            ("url".to_string(), Value::Null),
-            ("is_current".to_string(), Value::Bool(true)),
-        ])));
+        // If the path is itself the current page (a category or section
+        // landing — not an article parent directory), the last path-derived
+        // item already carries the page's title and URL. Promote it to the
+        // current slot instead of appending a duplicate. Detected by title
+        // equality with `current_title`; the project rule forbids article
+        // titles from matching their category, so a match means the path is
+        // terminal.
+        let last_is_current = items
+            .last()
+            .and_then(Value::as_map)
+            .and_then(|m| m.get("title"))
+            .and_then(Value::as_str)
+            .map(|t| t == current_title)
+            .unwrap_or(false);
+        if last_is_current {
+            if let Some(Value::Map(m)) = items.last_mut() {
+                m.insert("url".to_string(), Value::Null);
+                m.insert("is_current".to_string(), Value::Bool(true));
+            }
+        } else {
+            items.push(Value::Map(BTreeMap::from([
+                ("title".to_string(), Value::str(current_title)),
+                ("url".to_string(), Value::Null),
+                ("is_current".to_string(), Value::Bool(true)),
+            ])));
+        }
         items
     }
 

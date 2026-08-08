@@ -1080,13 +1080,13 @@ fn category_page_shows_breadcrumbs() {
     let html = mdweb::render::render_category(&site, "en", posts, 1).expect("render posts");
     assert!(html.contains("class=\"breadcrumb\""), "category list has breadcrumbs");
     assert!(!html.contains("href=\"/\">Index"), "posts crumbs drop the home node");
-    assert!(html.contains("href=\"/posts/\">Posts"), "crumb names the category");
+    assert!(!html.contains("href=\"/posts/\">Posts"), "terminal crumb is not a self-link");
     assert!(html.contains("<span>Posts</span>"), "current item is a non-link span");
 
     let web = posts.children.iter().find(|c| c.slug == "web").expect("web cat");
     let html2 = mdweb::render::render_category(&site, "en", web, 1).expect("render web");
     assert!(html2.contains("href=\"/posts/\">Posts"), "ancestor crumb");
-    assert!(html2.contains("href=\"/posts/web/\">Web"), "parent crumb");
+    assert!(!html2.contains("href=\"/posts/web/\">Web"), "terminal crumb is not a self-link");
     assert!(html2.contains("<span>Web</span>"), "current category is a span");
 }
 

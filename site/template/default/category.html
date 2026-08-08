@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ category.title }} · {{ title }}{% endblock title %}
 {% block content %}
-<h1 class="page-title">{{ category.title }}</h1>
 <nav class="breadcrumb" aria-label="Breadcrumb">
   {% for item in breadcrumbs %}
     {% if item.url %}<a href="{{ item.url }}">{{ item.title }}</a>{% else %}<span>{{ item.title }}</span>{% endif %}
