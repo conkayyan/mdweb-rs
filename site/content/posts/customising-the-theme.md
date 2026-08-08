@@ -10,3 +10,19 @@ single `layout/header.html` is enough to recolour the navigation.
 
 Slots available: `header`, `footer`, `side`, `inject`. Use
 `inject.html` to add analytics snippets before `</head>`.
+
+## Images
+
+Files under `template/default/static/` are served at
+`/static/<path>`. Reference them from your own CSS or content:
+
+```css
+/* static/hero.png is served at /static/hero.png */
+.hero {
+  background-image: url("/static/hero.png");
+  background-size: cover;
+  min-height: 240px;
+}
+```
+
+In markdown use the same prefix: `![Alt](/static/hero.png)`.

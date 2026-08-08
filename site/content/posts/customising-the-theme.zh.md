@@ -10,3 +10,19 @@ tags: ["tutorial", "theme"]
 
 可用插槽：`header`、`footer`、`side`、`inject`。用 `inject.html`
 在 `</head>` 之前注入统计脚本。
+
+## 图片
+
+`template/default/static/` 下的文件会在 `/static/<路径>` 提供。
+可在自己的 CSS 或正文中引用：
+
+```css
+/* static/hero.png 会以 /static/hero.png 提供 */
+.hero {
+  background-image: url("/static/hero.png");
+  background-size: cover;
+  min-height: 240px;
+}
+```
+
+在 markdown 中使用同样的前缀：`![替代文字](/static/hero.png)`。
