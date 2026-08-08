@@ -1250,7 +1250,7 @@ id = "G-TESTID42"
     assert!(site.config.analytics.is_enabled());
     let html = mdweb::render::render_home(&site, "en", 1).expect("render");
     assert!(html.contains("googletagmanager.com/gtag/js?id=G-TESTID42"));
-    assert!(html.contains("gtag('config', 'G-TESTID42')"));
+    assert!(html.contains("gtag('config', \"G-TESTID42\");"));
     // The snippet must live inside <head> alongside the user-editable inject slot.
     let head_end = html.find("</head>").expect("has </head>");
     let snippet_at = html.find("googletagmanager.com").expect("snippet present");

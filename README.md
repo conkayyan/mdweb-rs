@@ -457,6 +457,23 @@ and category URLs, page-section landings, breadcrumbs, navigation, image URLs,
 the RSS feed and the sitemap — follows the new prefix (`posts = "blog"` turns
 `content/posts/guide/hello.md` into `/blog/guide/hello/`).
 
+### Security headers
+
+Every response carries `X-Content-Type-Options: nosniff`,
+`X-Frame-Options: SAMEORIGIN` and `Referrer-Policy: no-referrer`, plus a
+`Content-Security-Policy` balanced for the default themes and the built-in
+analytics snippets. All of this is configurable under `[security]`:
+
+```toml
+[security]
+enabled = false                        # turn off all extra headers
+csp = "default-src 'self'"             # full policy override; "" omits the header
+```
+
+`enabled` defaults to `true`. Set `csp` to replace the built-in policy with
+your own (for example to allow a self-hosted analytics origin); an empty value
+sends no `Content-Security-Policy` header at all.
+
 ## Tag pages
 
 Every document's frontmatter `tags` feeds a per-language tag index. The sidebar

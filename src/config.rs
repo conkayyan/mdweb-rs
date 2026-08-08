@@ -168,6 +168,8 @@ pub struct Config {
     pub analytics: AnalyticsConfig,
     /// Route rules for well-known, non-content URLs.
     pub routes: Routes,
+    /// Response header hardening.
+    pub security: SecurityConfig,
     pub extra: Value,
 }
 
@@ -179,6 +181,46 @@ pub struct AnalyticsConfig {
     pub google: Option<AnalyticsProvider>,
     /// Baidu Tongji — site id like the long hash from the bm.supported panel.
     pub baidu: Option<AnalyticsProvider>,
+}
+
+/// Default Content-Security-Policy. Balanced to keep the built-in themes and
+/// the injected analytics snippets working while still blocking framing,
+/// mixed http: resources, form-targeting and non-self script loading beyond
+/// https: origins. `'unsafe-inline'` is unavoidable because markdown and the
+/// theme partials are raw HTML by design.
+const DEFAULT_CSP: &str = "default-src 'self'; base-uri 'self'; form-action 'self'; \
+frame-ancestors 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; \
+script-src 'self' 'unsafe-inline' https:; connect-src 'self' https:; font-src 'self' data:";
+
+/// Response header hardening, configured under the optional `[security]`
+/// table in site.toml. `X-Content-Type-Options`, `X-Frame-Options` and
+/// `Referrer-Policy` are always sent unless `enabled = false`.
+#[derive(Debug, Clone)]
+pub struct SecurityConfig {
+    /// Master switch for the extra response headers (defaults to `true`).
+    pub enabled: bool,
+    /// Content-Security-Policy override. `None` uses `DEFAULT_CSP`; an empty
+    /// string omits the header entirely.
+    pub csp: Option<String>,
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        SecurityConfig {
+            enabled: true,
+            csp: None,
+        }
+    }
+}
+
+impl SecurityConfig {
+    /// The CSP value to send, or an empty string to omit the header.
+    pub fn csp_header(&self) -> String {
+        if !self.enabled {
+            return String::new();
+        }
+        self.csp.clone().unwrap_or_else(|| DEFAULT_CSP.to_string())
+    }
 }
 
 /// A single analytics provider entry. Currently the only field is the
@@ -226,18 +268,22 @@ impl AnalyticsConfig {
 /// Google Analytics 4 snippet. `id` is the measurement id (e.g. `G-XXXXXXX`).
 /// The async-loaded `gtag.js` pattern is Google's current recommendation.
 fn google_snippet(id: &str) -> String {
-    // The id is interpolated into a JS string literal that the browser will
-    // parse as JS, so an id containing `"` or `</script>` would be an
-    // injection vector. We escape both at build time.
-    let safe = html_attr_escape(id);
+    // The id is interpolated into an HTML attribute (`src=...?id=`) *and* a
+    // JS string literal that the browser will parse as JS. We escape for the
+    // HTML attribute (so `</script>` can't close the tag) and for a JS string
+    // literal separately (`js_string_escape` handles backslash, quote, `< > &`
+    // and newlines — a plain HTML escape would let a `'` or backslash break
+    // out of the JS string).
+    let attr_safe = html_attr_escape(id);
+    let js_safe = js_string_escape(id);
     format!(
         "<!-- Google Analytics (mdweb) -->\n\
-<script async src=\"https://www.googletagmanager.com/gtag/js?id={safe}\"></script>\n\
+<script async src=\"https://www.googletagmanager.com/gtag/js?id={attr_safe}\"></script>\n\
 <script>\n\
   window.dataLayer = window.dataLayer || [];\n\
   function gtag(){{dataLayer.push(arguments);}}\n\
   gtag('js', new Date());\n\
-  gtag('config', '{safe}');\n\
+  gtag('config', \"{js_safe}\");\n\
 </script>\n"
     )
 }
@@ -323,6 +369,7 @@ impl Default for Config {
             tag_cloud_limit: 0,
             analytics: AnalyticsConfig::default(),
             routes: Routes::default(),
+            security: SecurityConfig::default(),
             extra: Value::map(),
         }
     }
@@ -442,6 +489,14 @@ impl Config {
             cfg.analytics.baidu = am
                 .get("baidu")
                 .and_then(AnalyticsProvider::from_value);
+        }
+        if let Some(sm) = m.get("security").and_then(|v| v.as_map()) {
+            if let Some(b) = sm.get("enabled").and_then(|v| v.as_bool()) {
+                cfg.security.enabled = b;
+            }
+            if let Some(s) = sm.get("csp").and_then(|v| v.as_str()) {
+                cfg.security.csp = Some(s.to_string());
+            }
         }
         if let Some(rm) = m.get("routes").and_then(|v| v.as_map()) {
             // Each value is a URL slug; trim stray whitespace and slashes so
@@ -795,6 +850,25 @@ id = "</script><script>alert(1)</script>"
     }
 
     #[test]
+    fn analytics_id_cannot_break_out_of_js_string() {
+        // A single quote or backslash must not close the surrounding JS
+        // string literal in `gtag('config', "…)");`.
+        let cfg = parse(
+            r#"
+[analytics.google]
+id = "G-1\\\");alert(1);//"
+"#,
+        );
+        let s = cfg.analytics.snippets();
+        assert!(
+            !s.contains("G-1\");alert(1);//"),
+            "raw quote must be escaped inside the JS string: {s}"
+        );
+        assert!(s.contains("\\\""), "double quote must be backslash-escaped: {s}");
+        assert_eq!(s.matches("\";alert(1)").count(), 0, "no breakout: {s}");
+    }
+
+    #[test]
     fn routes_default_to_classic_layout() {
         let cfg = parse(r#"title = "X""#);
         assert_eq!(cfg.routes.search, "search");
@@ -876,5 +950,38 @@ sitemap = "//site.xml"
         assert_eq!(cfg.routes.rss, "rss.xml");
         assert_eq!(cfg.routes.sitemap, "site.xml");
         assert_eq!(cfg.tag_index_url("en"), "/topics/");
+    }
+
+    #[test]
+    fn security_defaults_to_default_csp() {
+        let cfg = parse(r#"title = "X""#);
+        assert!(cfg.security.enabled);
+        let csp = cfg.security.csp_header();
+        assert!(csp.contains("default-src 'self'"), "{csp}");
+        assert!(csp.contains("frame-ancestors 'self'"), "{csp}");
+        assert!(!csp.is_empty());
+    }
+
+    #[test]
+    fn security_csp_can_be_overridden() {
+        let cfg = parse(
+            r#"
+[security]
+csp = "default-src 'none'"
+"#,
+        );
+        assert_eq!(cfg.security.csp_header(), "default-src 'none'");
+    }
+
+    #[test]
+    fn security_headers_can_be_disabled() {
+        let cfg = parse(
+            r#"
+[security]
+enabled = false
+"#,
+        );
+        assert!(!cfg.security.enabled);
+        assert_eq!(cfg.security.csp_header(), "");
     }
 }

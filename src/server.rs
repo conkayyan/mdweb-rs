@@ -1,9 +1,11 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::content::{theme_files, Category, Site};
 use crate::feed;
+use crate::image_path;
 use crate::render;
 
 /// Run the web server until the process is killed / interrupted.
@@ -33,6 +35,11 @@ pub fn serve(site: Site, host: &str, port: u16) -> Result<(), String> {
 }
 
 fn handle(mut stream: TcpStream, site: &Arc<Site>) -> std::io::Result<()> {
+    // Bound how long a connection may sit idle while we are still reading the
+    // request head (or writing the response) so slowloris-style connections
+    // can't hold a thread open indefinitely.
+    stream.set_read_timeout(Some(Duration::from_secs(30)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(30)))?;
     // Read the request head.
     let mut buf = Vec::new();
     let mut tmp = [0u8; 4096];
@@ -52,14 +59,23 @@ fn handle(mut stream: TcpStream, site: &Arc<Site>) -> std::io::Result<()> {
     let head = String::from_utf8_lossy(&buf).to_string();
     let request_line = head.lines().next().unwrap_or("GET / HTTP/1.1");
     let parts: Vec<&str> = request_line.split_whitespace().collect();
+    let csp = site.config.security.csp_header();
     if parts.len() < 2 {
-        let _ = respond(&mut stream, 400, "Bad Request", "text/plain; charset=utf-8", b"bad request");
+        let _ = respond(
+            &mut stream,
+            &csp,
+            400,
+            "Bad Request",
+            "text/plain; charset=utf-8",
+            b"bad request",
+        );
         return Ok(());
     }
     let method = parts[0];
     if method != "GET" && method != "HEAD" {
         let _ = respond(
             &mut stream,
+            &csp,
             405,
             "Method Not Allowed",
             "text/plain; charset=utf-8",
@@ -82,13 +98,14 @@ fn handle(mut stream: TcpStream, site: &Arc<Site>) -> std::io::Result<()> {
 
     match route(site, &path, &query) {
         Ok(resp) => {
-            respond(&mut stream, 200, "OK", resp.content_type, &resp.body)?;
+            respond(&mut stream, &csp, 200, "OK", resp.content_type, &resp.body)?;
         }
         Err(_) => {
             let html = render::render_not_found(site, &lang)
                 .unwrap_or_else(|_| "<h1>404 Not Found</h1>".to_string());
             respond(
                 &mut stream,
+                &csp,
                 404,
                 "Not Found",
                 "text/html; charset=utf-8",
@@ -290,9 +307,16 @@ fn serve_static(site: &Arc<Site>, rel: &str) -> Option<Vec<u8>> {
     // Files live in `template/<theme>/static/` on disk regardless of the
     // configured URL prefix; only the route changes.
     let theme = if site.theme.is_empty() { "default" } else { site.theme.as_str() };
-    let p = site.doc_root.join("template").join(theme).join("static").join(rel);
-    if let Ok(data) = std::fs::read(&p) {
-        return Some(data);
+    let dir = site.doc_root.join("template").join(theme).join("static");
+    // `contained` rejects `..`, `.`, empty and absolute segments and, after
+    // canonicalizing both paths, refuses anything that resolves outside
+    // `dir` — so `/static/../../../site.toml` cannot escape the static
+    // directory. (None just means "not on disk under `dir`"; the embedded
+    // style.css fallback below still applies.)
+    if let Some(p) = image_path::contained(&dir, rel) {
+        if let Ok(data) = std::fs::read(&p) {
+            return Some(data);
+        }
     }
     if site.engine_embedded && rel == "style.css" {
         return Some(theme_files::STYLE.as_bytes().to_vec());
@@ -400,13 +424,19 @@ fn parse_form_query(query: &str, key: &str) -> String {
 
 fn respond(
     stream: &mut TcpStream,
+    csp: &str,
     status: u16,
     reason: &str,
     ctype: &str,
     body: &[u8],
 ) -> std::io::Result<()> {
+    let csp_line = if csp.is_empty() {
+        String::new()
+    } else {
+        format!("Content-Security-Policy: {csp}\r\n")
+    };
     let head = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nConnection: close\r\nServer: mdweb\r\n\r\n",
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nConnection: close\r\nServer: mdweb\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: SAMEORIGIN\r\nReferrer-Policy: no-referrer\r\n{csp_line}\r\n",
         body.len(),
     );
     stream.write_all(head.as_bytes())?;

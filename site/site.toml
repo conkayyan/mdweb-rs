@@ -48,6 +48,16 @@ tag_cloud_limit = 0   # max tags in the sidebar cloud; 0 = show all
 # [analytics.baidu]
 # id = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 
+# Security response headers — on by default. Every response carries
+# `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`,
+# `Referrer-Policy: no-referrer` and a Content-Security-Policy tuned for the
+# default themes + analytics. `enabled = false` turns them all off; `csp`
+# replaces the built-in policy (empty string omits the CSP header entirely).
+#
+# [security]
+# enabled = true
+# csp = "default-src 'self'; frame-ancestors 'self'"
+
 [lang.en]
 title = "My Blog"
 display_name = "English"

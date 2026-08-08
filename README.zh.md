@@ -432,6 +432,21 @@ pages        = "pages"         # 页面容器：         content/pages/... → /
 导航、图片 URL、RSS 与站点地图——都跟随新前缀（例如 `posts = "blog"` 会把
 `content/posts/guide/hello.md` 变成 `/blog/guide/hello/`）。
 
+### 安全响应头（`[security]`）
+
+每个响应都会带 `X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`
+与 `Referrer-Policy: no-referrer`，外加一条针对默认主题与内置统计脚本调优过的
+`Content-Security-Policy`。以上均可通过 `[security]` 表自定义：
+
+```toml
+[security]
+enabled = false            # 关闭所有附加响应头
+csp = "default-src 'self'" # 自定义完整策略；空值则不发送 CSP 头
+```
+
+`enabled` 默认 `true`。设置 `csp` 可替换内置策略（例如放行自建的统计域名）；
+设为空字符串则完全不发送 CSP 头。
+
 ## 标签页面
 
 每篇文档 frontmatter 里的 `tags` 会生成每种语言的标签云。侧边栏显示一个**标签云**（每个标签按其被多少篇文档使用加权），在 `site.toml` 中设置
