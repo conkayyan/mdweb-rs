@@ -48,6 +48,7 @@ pub(crate) const I18N_DEFAULTS: &[(&str, &str)] = &[
     ("search_no_results", "No matching posts."),
     ("rss", "RSS Feed"),
     ("sitemap", "Sitemap"),
+    ("menu", "Menu"),
 ];
 
 fn builtin_default(key: &str) -> Option<&'static str> {

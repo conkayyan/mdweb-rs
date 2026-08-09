@@ -88,6 +88,7 @@ body {
   padding: 6px 12px;
   border-radius: 6px;
   font-size: .92rem;
+  white-space: nowrap;
   transition: color .15s ease, background-color .15s ease;
 }
 /* Reset UA defaults so <button class="nav-link"> matches <a class="nav-link">. */
@@ -229,6 +230,9 @@ button.nav-link {
   color: #fff;
 }
 
+/* Hamburger toggle: hidden on desktop, shown on mobile. */
+.nav-toggle, .nav-toggle-btn { display: none; }
+
 .langs {
   display: inline-flex;
   gap: 2px;
@@ -255,16 +259,103 @@ button.nav-link {
     gap: 10px;
     row-gap: 8px;
   }
-  .primary-nav {
-    order: 3;
-    flex-basis: 100%;
-    justify-content: flex-start;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+
+  /* Mobile nav collapses into a hamburger button; the primary-nav only
+     appears as an off-canvas panel when the button is clicked. */
+  .nav-toggle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
   }
-  .primary-nav::-webkit-scrollbar { display: none; }
-  .langs { margin-left: auto; }
+  .nav-toggle-btn {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 40px;
+    height: 40px;
+    margin-left: auto;
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .nav-toggle-btn .bar {
+    width: 18px;
+    height: 2px;
+    background: #fff;
+    border-radius: 2px;
+    transition: transform .2s ease, opacity .2s ease;
+  }
+  .nav-toggle-btn:hover { background: rgba(255,255,255,.06); }
+  .nav-toggle:checked ~ .nav-toggle-btn .bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .nav-toggle:checked ~ .nav-toggle-btn .bar:nth-child(2) { opacity: 0; }
+  .nav-toggle:checked ~ .nav-toggle-btn .bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  .primary-nav { display: none; }
+
+  #nav-toggle:checked ~ .primary-nav {
+    display: flex;
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 10px;
+    right: 10px;
+    z-index: 60;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 10px;
+    background: #0f172a;
+    border-radius: 10px;
+    box-shadow: 0 14px 30px rgba(0,0,0,.32);
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Inside the panel the dropdowns expand downward in normal flow instead of
+     flying out to the side (left: 100%), so multi-level trees stack down the
+     screen and are never clipped by a scroller. */
+  #nav-toggle:checked ~ .primary-nav .dropdown,
+  #nav-toggle:checked ~ .primary-nav .dropdown-sub {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    transform: none;
+    box-shadow: none;
+    border-radius: 0;
+    border-top: 1px solid rgba(255,255,255,.08);
+    display: none;
+    transition: none;
+  }
+  #nav-toggle:checked ~ .primary-nav .nav-item:hover > .dropdown,
+  #nav-toggle:checked ~ .primary-nav .nav-item:focus-within > .dropdown,
+  #nav-toggle:checked ~ .primary-nav .dropdown-item.has-sub:hover > .dropdown-sub,
+  #nav-toggle:checked ~ .primary-nav .dropdown-item.has-sub:focus-within > .dropdown-sub {
+    display: block;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+  }
+  #nav-toggle:checked ~ .primary-nav .dropdown-sub {
+    width: auto;
+    margin-left: 14px;
+    border-left: 2px solid rgba(255,255,255,.08);
+    border-top: 0;
+    border-radius: 0 6px 6px 6px;
+  }
+  #nav-toggle:checked ~ .primary-nav .nav-item .nav-link {
+    width: 100%;
+    text-align: left;
+  }
+  #nav-toggle:checked ~ .primary-nav .nav-link,
+  #nav-toggle:checked ~ .primary-nav .dropdown a { white-space: normal; }
+
+  .langs { margin-left: 0; }
 }
 
 .layout {

@@ -1,9 +1,15 @@
 <header class="site-header">
   <div class="container header-inner">
+    <input type="checkbox" id="nav-toggle" class="nav-toggle">
     <a class="brand" href="{{ home_url }}">
       <span class="brand-mark" aria-hidden="true">M</span>
       <span class="brand-name">{{ title }}</span>
     </a>
+    <label class="nav-toggle-btn" for="nav-toggle" aria-label="{{ t.menu }}">
+      <span class="bar" aria-hidden="true"></span>
+      <span class="bar" aria-hidden="true"></span>
+      <span class="bar" aria-hidden="true"></span>
+    </label>
     <nav class="primary-nav" aria-label="Primary">
       <a class="nav-link{% if home_active %} is-active{% endif %}" href="{{ home_url }}">{{ t.home }}</a>
       {% if categories %}
