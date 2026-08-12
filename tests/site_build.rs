@@ -1344,12 +1344,21 @@ fn category_page_shows_breadcrumbs() {
         !html.contains("href=\"/\">Index"),
         "posts crumbs drop the home node"
     );
+    // Scope the "no self-link" check to the breadcrumb nav, not the whole
+    // page: the top-level header nav legitimately renders a `Posts` link to
+    // `/posts/` and would otherwise trigger a false positive here.
+    let breadcrumb_start = html.find("class=\"breadcrumb\"").expect("breadcrumb found");
+    let breadcrumb_end = html[breadcrumb_start..]
+        .find("</nav>")
+        .map(|i| breadcrumb_start + i)
+        .expect("breadcrumb closes");
+    let breadcrumb = &html[breadcrumb_start..breadcrumb_end];
     assert!(
-        !html.contains("href=\"/posts/\">Posts"),
+        !breadcrumb.contains("href=\"/posts/\""),
         "terminal crumb is not a self-link"
     );
     assert!(
-        html.contains("<span>Posts</span>"),
+        breadcrumb.contains("<span>Posts</span>"),
         "current item is a non-link span"
     );
 

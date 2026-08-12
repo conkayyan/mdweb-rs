@@ -20,6 +20,10 @@ pub(crate) const I18N_DEFAULTS: &[(&str, &str)] = &[
     ("home", "Home"),
     ("breadcrumb_home", "Index"),
     ("categories", "Categories"),
+    // Label for the top-level "All Posts" nav button (links to /posts/).
+    // Scoped separately from `categories` because that key still drives the
+    // sidebar category-tree heading, which legitimately says "Categories".
+    ("nav_all_posts", "All Posts"),
     ("pages", "Pages"),
     ("subpages", "Pages in this section"),
     ("recent_posts", "Recent Posts"),
@@ -635,6 +639,13 @@ impl Config {
             .get(lang)
             .and_then(|m| m.display_name.clone())
             .unwrap_or_else(|| lang.to_string())
+    }
+
+    /// URL of the per-language posts index: `/posts/` for the default
+    /// language, `/<code>/posts/` otherwise. Follows the configured
+    /// `routes.posts` so a `routes.posts = "blog"` rewrite is respected.
+    pub fn posts_index_url(&self, lang: &str) -> String {
+        format!("{}{}/", self.lang_prefix(lang), self.routes.posts)
     }
 
     /// URL prefix for a language's tag listings: `/tags/` for the default

@@ -1,5 +1,5 @@
 ---
-title: "Posts"
+title: "All Posts"
 summary: "All articles go here."
 ---
 

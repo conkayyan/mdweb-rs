@@ -14,7 +14,7 @@
       <a class="nav-link{% if home_active %} is-active{% endif %}" href="{{ home_url }}">{{ t.home }}</a>
       {% if categories %}
       <div class="nav-item">
-        <button type="button" class="nav-link has-caret{% if categories_active %} is-active{% endif %}" aria-haspopup="true">{{ t.categories }}</button>
+        <a class="nav-link has-caret{% if categories_active %} is-active{% endif %}" href="{{ categories_url }}">{{ t.nav_all_posts }}</a>
         <ul class="dropdown">
           {% for c in categories %}
           {% include "layout/_nav_node.html" %}
@@ -31,7 +31,7 @@
       {% for s in page_sections %}
         {% if s.has_children %}
         <div class="nav-item">
-          <button type="button" class="nav-link has-caret{% if s.descendant_active %} is-active{% endif %}" aria-haspopup="true">{{ s.title }}</button>
+          <a class="nav-link has-caret{% if s.descendant_active %} is-active{% endif %}" href="{{ s.url }}">{{ s.title }}</a>
           <ul class="dropdown">
             {% for c in s.children %}
               {% include "layout/_nav_node.html" %}

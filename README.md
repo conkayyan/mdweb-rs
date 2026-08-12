@@ -421,7 +421,7 @@ no_posts     = "暂无文章。"
 Available keys: `home`, `categories`, `recent_posts`, `friend_links`, `no_posts`,
 `tags`, `tag_list`, `read_in`, `published`, `updated`, `author`,
 `reading_time`, `reading_time_seconds`, `prev`, `next`,
-`not_found`, `not_found_desc`, `menu`. Missing keys fall back to English, then to a
+`not_found`, `not_found_desc`, `menu`, `nav_all_posts`. Missing keys fall back to English, then to a
 built-in default, then to the key string itself.
 
 ### Routes

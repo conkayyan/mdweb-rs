@@ -83,6 +83,11 @@ body {
   gap: 2px;
   flex-wrap: wrap;
   min-width: 0;
+  /* No explicit align-items: keep the default `stretch` so the row's
+     cross-axis height is shared between bare `.nav-link` items and the
+     `.nav-item` wrappers around dropdown triggers. Centering per item
+     instead of stretching makes items with different intrinsic heights
+     appear at different vertical offsets — the visible "stair-step" bug. */
 }
 .nav-link {
   color: #cbd5e1;
@@ -91,6 +96,13 @@ body {
   border-radius: 6px;
   font-size: .92rem;
   white-space: nowrap;
+  /* Use flex on the link itself so the caret (`.has-caret::after`) and
+     the text label share one line, vertically centered. Avoids the old
+     `vertical-align: 2px` magic number that drifted when an item was
+     rendered as `<button>` vs `<a>`. */
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
   transition: color .15s ease, background-color .15s ease;
 }
 /* Reset UA defaults so <button class="nav-link"> matches <a class="nav-link">. */
@@ -108,6 +120,9 @@ button.nav-link {
 
 .nav-item {
   position: relative;
+  /* Stay a plain wrapper — no `display: flex` here. Adding it would make
+     the wrapper's box different from a bare `.nav-link` and re-introduce
+     the staircase alignment between wrapped and unwrapped items. */
 }
 .has-caret::after {
   content: "";
@@ -115,7 +130,7 @@ button.nav-link {
   width: 0;
   height: 0;
   margin-left: 6px;
-  vertical-align: 2px;
+  /* vertical-align handled by the parent .nav-link's flex centering. */
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
   border-top: 4px solid currentColor;

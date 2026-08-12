@@ -34,8 +34,16 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
         Some(root) if root.slug == "posts" => &root.children,
         _ => &site.tree,
     };
+    let categories_url = config.posts_index_url(lang);
     let categories = category_tree_value(cats_root, lang, current_url);
-    let categories_active = tree_has_active(&categories);
+    // The nav button is "active" when either:
+    //   - the visitor is sitting on a category sub-page (some tree node is
+    //     `active`), or
+    //   - the visitor is sitting on the All Posts index itself. No category
+    //     node is `active` on that page (no sub-page selected), so without
+    //     this OR the highlight is missing whenever someone clicks the nav.
+    let categories_active =
+        tree_has_active(&categories) || current_url == categories_url;
     let pages = pages_value(&site.articles, lang, current_url);
     let pages_tree = site.pages_tree_value(lang, current_url);
     // Direct entries for the header nav. Each first-level child of
@@ -131,6 +139,10 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
         (
             "categories_active".to_string(),
             Value::Bool(categories_active),
+        ),
+        (
+            "categories_url".to_string(),
+            Value::str(&categories_url),
         ),
         ("pages".to_string(), pages),
         ("pages_tree".to_string(), pages_tree),
