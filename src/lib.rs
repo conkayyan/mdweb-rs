@@ -1,5 +1,8 @@
 pub mod config;
 pub mod content;
+pub mod diagram;
+pub mod drawing;
+pub mod emoji;
 pub mod feed;
 pub mod image_path;
 pub mod markdown;
@@ -8,4 +11,5 @@ pub mod render;
 pub mod server;
 pub mod site;
 pub mod template;
+pub mod tex;
 pub mod value;

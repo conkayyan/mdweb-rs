@@ -39,6 +39,10 @@ fn walk(base: &Path, dir: &Path, files: &mut Vec<(String, String)>) {
         if p.is_dir() {
             walk(base, &p, files);
         } else if p.is_file() {
+            if String::from_utf8(fs::read(&p).expect("read file for embedding")).is_err() {
+                // include_str! requires UTF-8, so skip binary files (fonts, images)
+                continue;
+            }
             let rel = p
                 .strip_prefix(base)
                 .expect("strip")

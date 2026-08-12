@@ -5,6 +5,8 @@
   --c-accent: #2563eb;
   --c-border: #e5e7eb;
   --c-code-bg: #f6f8fa;
+  --c-inline-code-bg: #eef1f5;
+  --c-inline-code-border: #d8dee6;
   --sidebar-w: 250px;
 }
 
@@ -744,12 +746,41 @@ a.tag-link:visited {
   overflow-x: auto;
 }
 .post-content code {
-  background: var(--c-code-bg);
+  background: var(--c-inline-code-bg);
+  border: 1px solid var(--c-inline-code-border);
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: 5px;
   font-size: .9em;
 }
-.post-content pre code { background: none; padding: 0; }
+.post-content pre code { background: none; border: none; padding: 0; }
+.post-content .math {
+  margin: 1.2em 0;
+  overflow-x: auto;
+  overflow-y: clip;
+  text-align: center;
+  line-height: 1.4;
+}
+.post-content .math svg {
+  display: inline-block;
+  max-width: 100%;
+  height: auto;
+}
+.post-content .drawing {
+  display: block;
+  margin: 1.2em auto;
+  text-align: center;
+  overflow-x: auto;
+}
+.post-content .drawing svg {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+}
+.post-content math {
+  font-family: "STIX Two Math", "Latin Modern Math", "Noto Sans Math",
+    "XITS Math", "DejaVu Sans", serif;
+}
 .post-content img { max-width: 100%; border-radius: 8px; }
 .post-content table { border-collapse: collapse; }
 .post-content th, .post-content td { border: 1px solid var(--c-border); padding: 6px 12px; }
