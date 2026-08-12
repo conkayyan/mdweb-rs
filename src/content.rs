@@ -1070,7 +1070,11 @@ pub(crate) fn category_tree_value(cats: &[Category], lang: &str, current_url: &s
     for c in cats {
         let children_val = category_tree_value(&c.children, lang, current_url);
         let url = c.urls.get(lang).cloned().unwrap_or_else(|| "#".to_string());
-        let active = url == current_url;
+        // Treat the category as active not only when the visitor is on the
+        // category page itself, but also when they are reading an article
+        // underneath it. The category URL ends in `/`, so a `starts_with`
+        // check is safe against `/posts/foo/` matching `/posts/foobar/`.
+        let active = current_url == url || current_url.starts_with(&url);
         let descendant_active = active || tree_has_active(&children_val);
         let m = BTreeMap::from([
             (

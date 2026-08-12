@@ -1380,6 +1380,67 @@ fn category_page_shows_breadcrumbs() {
 }
 
 #[test]
+fn article_page_highlights_all_posts_nav() {
+    // When viewing an article underneath `posts/`, the header nav's "All
+    // Posts" button must be marked active, and the article's parent
+    // category should be the one highlighted in the dropdown.
+    let dir = tempdir("articlenav");
+    write(&dir, "site.toml", r#"title = "X""#);
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    write(
+        &dir,
+        "content/posts/_index.md",
+        "---\ntitle: Posts\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/posts/web/_index.md",
+        "---\ntitle: Web\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/posts/web/intro.md",
+        "---\ntitle: Intro\n---\nbody\n",
+    );
+    let site = Site::build(&dir, None).expect("build");
+    let article = site
+        .articles
+        .iter()
+        .find(|a| a.url == "/posts/web/intro/")
+        .expect("article present");
+    let html = mdweb::render::render_article(&site, "en", article).expect("render article");
+
+    let header_start = html
+        .find("class=\"primary-nav\"")
+        .expect("primary nav present");
+    let header_end = html[header_start..]
+        .find("</nav>")
+        .map(|i| header_start + i)
+        .expect("primary nav closes");
+    let header = &html[header_start..header_end];
+    let all_posts_active = header
+        .contains("class=\"nav-link has-caret is-active\" href=\"/posts/\"")
+        || header.contains("href=\"/posts/\" class=\"nav-link has-caret is-active\"");
+    assert!(
+        all_posts_active,
+        "All Posts button is active on article page: {header}"
+    );
+    let web_active = header.contains("class=\"cat-link is-active\" href=\"/posts/web/\"")
+        || header.contains("href=\"/posts/web/\" class=\"cat-link is-active\"");
+    assert!(
+        web_active,
+        "parent category in the dropdown is active on article page: {header}"
+    );
+    // Exactly one category in the dropdown should be highlighted: the
+    // article's parent. Sibling categories must NOT light up.
+    assert_eq!(
+        header.matches("class=\"cat-link is-active\"").count(),
+        1,
+        "exactly one category in the dropdown is active: {header}"
+    );
+}
+
+#[test]
 fn root_level_md_files_become_root_pages() {
     // `content/about.md` (directly under content/) is a top-level page with
     // an empty path and a flat URL `/about/`. It must NOT appear in the
