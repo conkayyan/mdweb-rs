@@ -375,7 +375,9 @@ fn decode_numeric(s: &str) -> Option<(char, usize)> {
 }
 
 /// Decode a named entity at the start of `s` (looking for `&name;`), returning
-/// the decoded char and consumed length.
+/// the decoded char and consumed length. Entity names are stored *with* their
+/// terminating `;` (e.g. `"amp;"`), so the consumed length is the byte index
+/// where the matched name ends — the initial `&` plus `len - 1` name bytes.
 fn decode_named(s: &str) -> Option<(char, usize)> {
     if !s.starts_with('&') {
         return None;
@@ -385,7 +387,7 @@ fn decode_named(s: &str) -> Option<(char, usize)> {
         let cand = &s[1..len];
         if let Some((_, val)) = ENTITIES.iter().find(|(n, _)| *n == cand) {
             if let Some(c) = val.chars().next() {
-                return Some((c, len + 1));
+                return Some((c, len));
             }
         }
         if s.as_bytes()[len - 1] == b';' {
@@ -2092,6 +2094,7 @@ enum Block {
     DefList(Vec<(String, Vec<String>)>),
     Alert {
         kind: String,
+        title: Option<String>,
         inner: Vec<Block>,
     },
 }
@@ -2332,12 +2335,16 @@ impl<'a> BlockParser<'a> {
                 self.pos += 1;
             }
         }
-        if let Some(kind) = alert_kind(&inner) {
+        if let Some((kind, title)) = alert_kind(&inner) {
             if let Some(idx) = inner.iter().position(|l| !l.trim().is_empty()) {
                 inner[idx].clear();
             }
             let sub = BlockParser::new(&inner).parse_blocks();
-            return Block::Alert { kind, inner: sub };
+            return Block::Alert {
+                kind,
+                title,
+                inner: sub,
+            };
         }
         Block::Quote(BlockParser::new(&inner).parse_blocks())
     }
@@ -2899,8 +2906,12 @@ fn def_marker(l: &str) -> Option<&str> {
     None
 }
 
-/// GitHub-style admonition label at the top of a blockquote body.
-fn alert_kind(lines: &[String]) -> Option<String> {
+/// GitHub-style admonition label at the top of a blockquote body. The first
+/// non-blank line must start with `[!TYPE]`; an optional title may follow on
+/// the same line. Only the first `]` ends the marker, so a title may itself
+/// contain brackets. Unknown types are not recognised (rendered as a plain
+/// blockquote), matching GitHub.
+fn alert_kind(lines: &[String]) -> Option<(String, Option<String>)> {
     for l in lines {
         let t = l.trim();
         if t.is_empty() {
@@ -2909,15 +2920,59 @@ fn alert_kind(lines: &[String]) -> Option<String> {
         let rest = t.strip_prefix("[!")?;
         let end = rest.find(']')?;
         let kind = rest[..end].to_ascii_uppercase();
-        if matches!(
+        if !matches!(
             kind.as_str(),
             "NOTE" | "TIP" | "WARNING" | "IMPORTANT" | "CAUTION" | "INFO" | "SUCCESS" | "DANGER"
         ) {
-            return Some(kind);
+            return None;
         }
-        return None;
+        let after = rest[end + 1..].trim();
+        let title = if after.is_empty() {
+            None
+        } else {
+            Some(after.to_string())
+        };
+        return Some((kind, title));
     }
     None
+}
+
+/// Default, human-readable title for an alert kind when the source does not
+/// provide a custom one. Localised later by CSS/frontmatter if needed.
+fn default_alert_title(kind: &str) -> &'static str {
+    match kind {
+        "NOTE" => "Note",
+        "TIP" => "Tip",
+        "IMPORTANT" => "Important",
+        "WARNING" => "Warning",
+        "CAUTION" => "Caution",
+        "INFO" => "Info",
+        "SUCCESS" => "Success",
+        "DANGER" => "Danger",
+        _ => "Note",
+    }
+}
+
+/// Decorative inline SVG for an alert kind. Rendered with `currentColor` so it
+/// inherits the theme colour; hidden from screen readers via `aria-hidden`.
+fn alert_icon(kind: &str) -> &'static str {
+    match kind {
+        "TIP" => {
+            "<svg viewBox=\"0 0 16 16\" width=\"1em\" height=\"1em\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 1.5c-2.5 0-4.5 1.9-4.5 4.3 0 1.4.7 2.6 1.7 3.4l.5.4V11a1 1 0 0 0 1 1h1.6a1 1 0 0 0 1-1V9.6l.5-.4c1-.8 1.7-2 1.7-3.4 0-2.4-2-4.3-4.5-4.3zM8 0a6 6 0 0 1 6 6c0 2-1.1 3.7-2.7 4.7V12a2.5 2.5 0 0 1-2.5 2.5h-1.6A2.5 2.5 0 0 1 4.7 12v-1.3A6 6 0 0 1 8 0z\"/><rect x=\"7\" y=\"5\" width=\"2\" height=\"3\" rx=\"1\"/><rect x=\"7\" y=\"1\" width=\"2\" height=\"2\" rx=\"1\"/></svg>"
+        }
+        "WARNING" | "CAUTION" | "DANGER" => {
+            "<svg viewBox=\"0 0 16 16\" width=\"1em\" height=\"1em\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 1L15 14H1L8 1zm0 4a1 1 0 0 0-1 1v3a1 1 0 0 0 2 0V6a1 1 0 0 0-1-1zm0 6.5a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z\"/></svg>"
+        }
+        "IMPORTANT" => {
+            "<svg viewBox=\"0 0 16 16\" width=\"1em\" height=\"1em\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 3.5a1 1 0 0 1 1 1v4a1 1 0 0 1-2 0v-4a1 1 0 0 1 1-1zm0 8a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4z\"/></svg>"
+        }
+        "SUCCESS" => {
+            "<svg viewBox=\"0 0 16 16\" width=\"1em\" height=\"1em\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.8 5.6l-4.5 4.5a.8.8 0 0 1-1.1 0L4.2 8.1a.8.8 0 0 1 1.1-1.1l1.7 1.7 4-4a.8.8 0 0 1 1.1 1.1z\"/></svg>"
+        }
+        _ => {
+            "<svg viewBox=\"0 0 16 16\" width=\"1em\" height=\"1em\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 3.5a1 1 0 0 1 1 1v4a1 1 0 0 1-2 0v-4a1 1 0 0 1 1-1zm0 8a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4z\"/></svg>"
+        }
+    }
 }
 
 fn parse_atx(line: &str) -> Option<(usize, String)> {
@@ -3563,13 +3618,26 @@ fn block_to_html(
             }
             out.push_str("</dl>\n");
         }
-        Block::Alert { kind, inner } => {
+        Block::Alert { kind, title, inner } => {
             let cls = kind.to_ascii_lowercase();
-            out.push_str(&format!("<div class=\"admonition {cls}\">\n"));
-            out.push_str(&format!(
-                "<p class=\"admonition-title\"><strong>{}</strong></p>\n",
-                escape_html(kind)
-            ));
+            // Alerts that signal progress/severity get role="note"; warnings
+            // and dangers are live-ish and get role="alert". Icons are
+            // decorative and hidden from the accessibility tree.
+            let role = if matches!(kind.as_str(), "WARNING" | "CAUTION" | "DANGER") {
+                "role=\"alert\""
+            } else {
+                "role=\"note\""
+            };
+            out.push_str(&format!("<div class=\"admonition {cls}\" {role}>\n"));
+            out.push_str("<p class=\"admonition-title\">");
+            out.push_str(alert_icon(kind));
+            let label = title.as_deref().unwrap_or(default_alert_title(kind));
+            // The title is a short label: escape any HTML in it on output
+            // (unlike body content, where raw HTML pass-through is allowed by
+            // the renderer). `escape_html` first, then inline-render, so the
+            // raw text is inert while markdown emphasis/links still work.
+            out.push_str(&render_inline(&escape_html(label), refs, footnotes));
+            out.push_str("</p>\n");
             out.push_str(&blocks_to_html(inner, refs, footnotes));
             out.push_str("</div>\n");
         }
@@ -3957,6 +4025,84 @@ mod tests {
         assert!(h.contains("class=\"admonition warning\""));
         assert!(!h.contains("> [!NOTE]"));
         assert!(h.contains("careful"));
+    }
+
+    #[test]
+    fn alert_default_titles_and_roles() {
+        let h = render("> [!NOTE]\n> body");
+        // default title is human-readable, icon is decorative, role is set
+        assert!(h.contains("<p class=\"admonition-title\"><svg"));
+        assert!(h.contains("aria-hidden=\"true\">"));
+        assert!(h.contains("</svg>Note</p>"));
+        assert!(h.contains("class=\"admonition note\" role=\"note\""));
+
+        let w = render("> [!WARNING]\n> danger");
+        assert!(w.contains("</svg>Warning</p>"));
+        assert!(w.contains("class=\"admonition warning\" role=\"alert\""));
+    }
+
+    #[test]
+    fn alert_custom_title() {
+        let h = render("> [!TIP] Custom heading\n> body text");
+        assert!(h.contains("class=\"admonition tip\" role=\"note\""));
+        assert!(h.contains("<p class=\"admonition-title\"><svg"));
+        assert!(h.contains("</svg>Custom heading</p>"));
+        // the marker line (title included) must not leak into the body
+        assert!(!h.contains("[!TIP]"));
+        assert!(!h.contains("Custom heading\n"));
+        assert!(h.contains("<p>body text</p>"));
+    }
+
+    #[test]
+    fn alert_title_with_brackets() {
+        // only the first `]` closes the marker; the rest is the title
+        let h = render("> [!NOTE] foo [bar] baz\n> text");
+        assert!(h.contains("</svg>foo [bar] baz</p>"));
+        assert!(h.contains("<p>text</p>"));
+    }
+
+    #[test]
+    fn alert_case_insensitive_kind() {
+        let h = render("> [!note]\n> body");
+        assert!(h.contains("class=\"admonition note\""));
+        assert!(h.contains("</svg>Note</p>"));
+    }
+
+    #[test]
+    fn alert_nested_blockquote_is_quote_inside() {
+        // content after the marker line is normal blockquote content
+        let h = render("> [!NOTE]\n> > nested quote\n> tail");
+        assert!(h.contains("<blockquote>"));
+        assert!(h.contains("nested quote"));
+        assert!(h.contains("tail"));
+    }
+
+    #[test]
+    fn alert_unknown_type_is_plain_blockquote() {
+        // `[!FOO]` is not a recognised kind: GitHub renders it as a blockquote
+        let h = render("> [!FOO]\n> text");
+        assert!(!h.contains("admonition"));
+        assert!(h.contains("<blockquote>"));
+        assert!(h.contains("[!FOO]"));
+    }
+
+    #[test]
+    fn alert_escapes_title_and_body() {
+        // Raw HTML in the title is escaped; markdown in the title still works.
+        let h = render("> [!WARNING] <script>alert(1)</script>\n> **bold** body");
+        assert!(!h.contains("<script>alert(1)</script>"));
+        assert!(h.contains("&lt;script&gt;alert(1)&lt;/script&gt;</p>"));
+        assert!(h.contains("<strong>bold</strong>"));
+
+        // The body keeps the renderer's documented raw-HTML passthrough.
+        let b = render("> [!NOTE]\n> <img src=x onerror=alert(1)>");
+        assert!(b.contains("<img src=x onerror=alert(1)>"));
+    }
+
+    #[test]
+    fn alert_empty_title_falls_back_to_default() {
+        let h = render("> [!NOTE] \n> body");
+        assert!(h.contains("</svg>Note</p>"));
     }
 
     #[test]

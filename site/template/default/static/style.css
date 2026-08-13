@@ -754,6 +754,63 @@ a.tag-link:visited {
   color: #555;
   background: #f8fafc;
 }
+/* GitHub-style alerts (`> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, …).
+ * Per-type colours are exposed as CSS variables so hosts can retheme without
+ * forking the class set; all pairs meet WCAG AA contrast. */
+.post-content .admonition {
+  --admonition-bg: #f0f7ff;
+  --admonition-border: #c5e1ff;
+  --admonition-color: #0b66c3;
+  border: 1px solid var(--admonition-border);
+  border-left: 4px solid var(--admonition-color);
+  border-radius: 8px;
+  background: var(--admonition-bg);
+  padding: 10px 16px 12px;
+  margin: 0 0 1em;
+}
+.post-content .admonition.note {
+  --admonition-bg: #f0f7ff;
+  --admonition-border: #c5e1ff;
+  --admonition-color: #0b66c3;
+}
+.post-content .admonition.tip,
+.post-content .admonition.success {
+  --admonition-bg: #f2fdf3;
+  --admonition-border: #bfe6c6;
+  --admonition-color: #1a7f37;
+}
+.post-content .admonition.important,
+.post-content .admonition.info {
+  --admonition-bg: #f6f4ff;
+  --admonition-border: #d8ccff;
+  --admonition-color: #6f42c1;
+}
+.post-content .admonition.warning,
+.post-content .admonition.caution,
+.post-content .admonition.danger {
+  --admonition-bg: #fff7f0;
+  --admonition-border: #ffd7b5;
+  --admonition-color: #8a3b00;
+}
+.post-content .admonition-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-weight: 700;
+  color: var(--admonition-color);
+}
+.post-content .admonition-title svg {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+.post-content .admonition > *:last-child {
+  margin-bottom: 0;
+}
+.post-content .admonition > *:first-child {
+  margin-top: 0;
+}
 .post-content pre {
   background: var(--c-code-bg);
   padding: 14px 16px;

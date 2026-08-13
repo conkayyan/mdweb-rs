@@ -111,16 +111,34 @@ GFM pipe tables work as in any other renderer — no plugin, no extra fence:
 
 ## Admonitions
 
-GitHub-style alerts produce styled boxes:
+GitHub-style alerts produce styled boxes. The alert type is `[!NOTE]` /
+`[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]` (plus `[!INFO]`,
+`[!SUCCESS]` and `[!DANGER]`); a custom title may follow the marker on the
+same line:
 
 > [!NOTE]
 > Useful information that users should know, even when skimming.
 
-> [!TIP]
+> [!TIP] Good ideas
 > Better ideas to help you succeed.
+
+> [!IMPORTANT]
+> Key information users need to know to achieve their goal.
 
 > [!WARNING]
 > Urgent info that needs immediate user attention to avoid problems.
+
+> [!CAUTION]
+> Advises about risks or negative potential outcomes.
+
+> [!INFO]
+> Non-critical background details.
+
+> [!SUCCESS]
+> Confirms a successful outcome or result.
+
+> [!DANGER]
+> Reserved for critical, system-breaking consequences.
 
 ## Definition lists
 
