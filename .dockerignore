@@ -1,0 +1,36 @@
+# build artifacts
+target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# VCS + IDE
+.git/
+.gitignore
+.github/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# editor / OS junk
+.DS_Store
+Thumbs.db
+*~
+
+# dev scratch (not needed at build time)
+examples/
+examples_diag/
+tests/
+
+# docs (build.rs only reads site/)
+README.md
+README.zh.md
+
+# CI / packaging artifacts
+*.tar.gz
+*.zip
+dist/
+
+# CI never installed here; keep the build context minimal
+actionlint.yaml
+.github/dependabot.yml

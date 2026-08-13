@@ -64,6 +64,70 @@ mdweb run my-blog --port 8080
 # 3. 打开 http://127.0.0.1:8080/ ，然后开始编辑 Markdown 文件
 ```
 
+## 通过环境变量配置
+
+`run` 子命令会读取两个可选的环境变量。在容器 / 系统服务等不方便传
+命令行参数的场景下很有用：
+
+| 变量          | 等价的 CLI 参数 | 默认值      |
+| ------------- | --------------- | ----------- |
+| `MDWEB_HOST`  | `--host`        | `127.0.0.1` |
+| `MDWEB_PORT`  | `--port`        | `8080`      |
+
+优先级为 **CLI 参数 > 环境变量 > 默认值**，与大多数容器运行时的期望一致。
+下面这一行把服务绑定到所有网卡、监听 8080（典型的 Docker 场景）：
+
+```bash
+MDWEB_HOST=0.0.0.0 MDWEB_PORT=8080 mdweb run ./my-blog
+```
+
+## Docker 部署
+
+每次推送 tag 都会自动发布一份预构建镜像到 GitHub Container Registry。
+
+```bash
+# 用本地 ./site 目录（read-only 挂载进容器）：
+docker run -d --name mdweb -p 8080:8080 \
+  -v "$PWD/site:/app/site:ro" \
+  ghcr.io/conkayyan/mdweb:latest
+```
+
+或者用 docker-compose（单服务，参见 [`docker-compose.yaml`](docker-compose.yaml)）：
+
+```bash
+docker compose up -d
+# 打开 http://127.0.0.1:8080/
+```
+
+本地构建镜像：
+
+```bash
+docker build -t mdweb .
+docker run --rm -p 8080:8080 -v "$PWD/site:/app/site:ro" mdweb
+```
+
+容器同样支持 `MDWEB_HOST` / `MDWEB_PORT`（见上文
+[通过环境变量配置](#通过环境变量配置)）。附带的 `docker-compose.yaml`
+也显式设置这两个变量，便于在部署侧覆盖而不必重新构建镜像。
+
+## Releases / 二进制下载
+
+每次推送 tag 都会在 GitHub Release 上附带预构建的二进制：
+
+- [github.com/conkayyan/mdweb-rs/releases](https://github.com/conkayyan/mdweb-rs/releases)
+
+| 目标                                            | 压缩包                                                       |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| `x86_64-unknown-linux-gnu`（Linux x86_64）      | `mdweb-v<tag>-x86_64-unknown-linux-gnu.tar.gz`               |
+| `aarch64-unknown-linux-gnu`（Linux ARM64，树莓派、AWS Graviton 等） | `mdweb-v<tag>-aarch64-unknown-linux-gnu.tar.gz` |
+| `x86_64-apple-darwin`（Intel Mac）              | `mdweb-v<tag>-x86_64-apple-darwin.tar.gz`                    |
+| `aarch64-apple-darwin`（Apple Silicon Mac）     | `mdweb-v<tag>-aarch64-apple-darwin.tar.gz`                   |
+| `x86_64-pc-windows-msvc`（Windows x86_64）      | `mdweb-v<tag>-x86_64-pc-windows-msvc.zip`                    |
+| `aarch64-pc-windows-msvc`（Windows ARM64）      | `mdweb-v<tag>-aarch64-pc-windows-msvc.zip`                   |
+
+每个压缩包内含单个二进制（`mdweb` 或 `mdweb.exe`），并附带 SHA256 校验
+文件。下载后可执行 `sha256sum -c <archive>.sha256` 校验完整性。
+
 ## 命令行
 
 ```
@@ -88,9 +152,9 @@ COMMANDS:
                                site.toml 中设置 [theme]，否则使用系统默认模板。
 
 OPTIONS:
-    --host <H>      Bind host (default 127.0.0.1)
-    --port <P>      Port (default 8080)
-    --template <D>  Use a template directory instead of the default theme.
+    --host <H>      Bind host (默认 127.0.0.1，亦可由 $MDWEB_HOST 覆盖)
+    --port <P>      Port (默认 8080，亦可由 $MDWEB_PORT 覆盖)
+    --template <D>  使用指定模板目录，而非默认主题。
     -h, --help      Show this help.
     -V, --version   Show version.
 ```
@@ -555,3 +619,7 @@ meta:                    # 任意映射，模板中以 article.meta 访问
 标签，容易产生误解）已被替换为 `languages[].display_name`。布尔上下文键
 `is_zh` 已移除，请改用 `t.*` 键。`lang_meta` 映射与 `lang_active` 标志亦已
 移除——当前语言代码请用 `lang`，语言按钮标签请用 `current_lang_display_name`。
+
+## 许可证
+
+[MIT](LICENSE) — Copyright (c) 2026 conkayyan。

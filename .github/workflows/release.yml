@@ -1,0 +1,227 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# Never cancel a tag push mid-flight: the release artifact (image +
+# binaries) is hard to replay. For tag triggers this is effectively a
+# no-op since tags are immutable, but it documents intent.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # create / update GitHub Release
+  packages: write   # push to ghcr.io
+
+jobs:
+  # ---------- create GitHub Release (runs once, with auto notes) ----------
+  #
+  # Split from the matrix so `generate_release_notes: true` only fires
+  # once. softprops/action-gh-release logs a "Full Changelog: <URL>" line
+  # on every invocation that generates notes; running it 6× in parallel
+  # would print the same line 5–6 times in the run log.
+  release-notes:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create release (no assets yet)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: mdweb ${{ github.ref_name }}
+          generate_release_notes: true
+          # No `files:` here — the matrix uploads the assets. fail-on-
+          # unmatched disabled so an empty first call doesn't trip.
+          fail_on_unmatched_files: false
+
+  # ---------- cross-platform binaries → GitHub Release ----------
+  release:
+    name: Build & upload (${{ matrix.target }})
+    needs: release-notes
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux (Ubuntu runner builds natively + cross-compiles ARM64).
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: mdweb
+            archive: tar.gz
+            cross: 'false'
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            bin: mdweb
+            archive: tar.gz
+            cross: 'true'
+          # macOS — both arches natively (macos-latest is M1 by default).
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bin: mdweb
+            archive: tar.gz
+            cross: 'false'
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bin: mdweb
+            archive: tar.gz
+            cross: 'false'
+          # Windows — both arches natively (windows-latest supports ARM64).
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: mdweb.exe
+            archive: zip
+            cross: 'false'
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            bin: mdweb.exe
+            archive: zip
+            cross: 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Linux ARM64 cross-compile needs the GNU cross-toolchain AND the
+      # aarch64 C runtime (Scrt1.o / crti.o / crtn.o).  The toolchain
+      # package alone ships only the compiler; linking static-ish glibc
+      # startup objects requires libc6-dev-arm64-cross.  macOS / Windows
+      # ARM64 are built natively on their respective runners.
+      - name: Install Linux ARM64 cross linker
+        if: matrix.cross == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              gcc-aarch64-linux-gnu \
+              libc6-dev-arm64-cross
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: target
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (Unix)
+        if: matrix.archive == 'tar.gz'
+        working-directory: target/${{ matrix.target }}/release
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          TGT="${{ matrix.target }}"
+          BIN="${{ matrix.bin }}"
+          OUT="mdweb-${TAG}-${TGT}.tar.gz"
+          tar -czf "$OUT" "$BIN"
+          sha256sum "$OUT" | awk '{print $1"  "$2}' > "${OUT}.sha256"
+          ls -l "$OUT" "${OUT}.sha256"
+
+      - name: Package (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        working-directory: target/${{ matrix.target }}/release
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = '${{ github.ref_name }}'
+          $tgt = '${{ matrix.target }}'
+          $bin = '${{ matrix.bin }}'
+          $out = "mdweb-${tag}-${tgt}.zip"
+          Compress-Archive -Path $bin -DestinationPath $out
+          $hash = (Get-FileHash -Algorithm SHA256 -Path $out).Hash.ToLower()
+          "${hash}  ${out}" | Out-File -Encoding ascii "${out}.sha256"
+          Get-ChildItem $out, "${out}.sha256"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          # Don't regenerate notes here — release-notes job already did.
+          # Passing generate_release_notes: true would re-print the
+          # "Full Changelog" line 5 extra times.
+          fail_on_unmatched_files: true
+          files: |
+            target/${{ matrix.target }}/release/mdweb-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive }}
+            target/${{ matrix.target }}/release/mdweb-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive }}.sha256
+
+  # ---------- Docker image → GHCR ----------
+  docker:
+    name: Build & push Docker image
+    runs-on: ubuntu-latest
+    # Independent of the release job — both can fail or succeed separately.
+    needs: []
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/mdweb
+          tags: |
+            # Refresh :latest on tag push (avoid :latest getting stale).
+            # Use the GitHub Actions native expression rather than the
+            # Handlebars {{is_tag}} helper — the latter renders as an
+            # empty string in some v5 builds and triggers
+            # "Invalid value for enable attribute".
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+            # One general-purpose regex: strip the v prefix, keep the
+            # numeric segments (any count, any digit width) verbatim.
+            #   v1            -> 1
+            #   v1.0          -> 1.0
+            #   v1.11         -> 1.11
+            #   v1.11.1.1.001 -> 1.11.1.1.001
+            #   v1.0.0-rc.1   -> 1.0.0 (regex stops at the prefix boundary,
+            #                       so -rc.1 is dropped — add ?:-... to keep it)
+            type=match,pattern=v(\d+(?:\.\d+)*),group=1
+            # Always tag with a short SHA as a fallback (so workflow_dispatch
+            # and non-tag pushes still produce a usable image tag).
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # Equivalent to `docker build -t mdweb .`, but we push via
+          # buildx, so tags come from metadata-action's output.
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # amd64 + arm64 (a statically-linked Rust binary + bookworm-slim
+          # supports both; drop arm64 for faster local debugging).
+          platforms: linux/amd64,linux/arm64
+          # Use the GHA layer cache for speed (subsequent runs with
+          # unchanged dependencies are near-instant).
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

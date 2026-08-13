@@ -2,6 +2,8 @@
 name = "mdweb"
 version = "0.1.0"
 edition = "2021"
+authors = ["conkayyan"]
+license = "MIT"
 description = "Render a directory of Markdown into a live multi-language blog, in pure Rust, with no external dependencies."
 
 [dependencies]

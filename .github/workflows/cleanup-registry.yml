@@ -1,0 +1,379 @@
+name: Cleanup tags and GHCR versions
+
+on:
+  schedule:
+    # Every Saturday 03:00 UTC (cron uses UTC, 6 = Saturday)
+    - cron: "0 3 * * 6"
+  workflow_dispatch:   # allow manual trigger
+    inputs:
+      dry_run:
+        description: 'Dry run, do not actually delete (true/false)'
+        required: false
+        default: 'true'
+      debug:
+        description: 'Print sample version fields to diagnose whether .name is sha256'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write    # delete git tag references
+      packages: write   # delete GHCR package versions
+      actions: write    # read + delete workflow runs
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      OWNER: ${{ github.repository_owner }}
+      REPO: ${{ github.event.repository.name }}
+      PACKAGE: mdweb
+      PACKAGE_TYPE: container
+      IS_ORG: "false"
+      KEEP_TAGS: "5"
+      KEEP_RELEASES: "5"
+      KEEP_VERSIONS: "5"
+      KEEP_RUNS: "5"              # number of workflow runs to keep
+      DELETE_UNTAGGED: "true"
+      DRY_RUN: ${{ inputs.dry_run || 'true' }}
+      DEBUG: ${{ inputs.debug || 'false' }}
+
+    steps:
+      - name: Cleanup tags and GHCR versions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          log() { printf '\033[36m[cleanup]\033[0m %s\n' "$*"; }
+
+          # DRY_RUN wrapper: skip the real delete
+          maybe_delete() {
+            local path="$1"
+            if [[ "$DRY_RUN" == "true" ]]; then
+              log "  🔸 DRY-RUN skip: DELETE $path"
+              return 0
+            fi
+            out=$(gh api -X DELETE "$path" 2>&1) && rc=0 || rc=$?
+            if [[ $rc -eq 0 ]]; then
+              echo "  - $(basename "$path")"
+            else
+              reason=$(printf '%s' "$out" | jq -r '.message // empty' 2>/dev/null \
+                        || printf '%s' "$out" | head -c 200)
+              echo "  - $(basename "$path") (skipped: ${reason:-HTTP error (rc=$rc)})"
+            fi
+          }
+
+          if [[ "$IS_ORG" == "true" ]]; then
+            PKG_API="orgs/$OWNER/packages/$PACKAGE_TYPE/$PACKAGE"
+          else
+            PKG_API="users/$OWNER/packages/$PACKAGE_TYPE/$PACKAGE"
+          fi
+
+          ########################################
+          # 1) Clean up GitHub Releases (keep the latest KEEP_RELEASES).
+          #    Order: releases before tags. Deleting a release makes
+          #    GitHub auto-delete the corresponding lightweight tag;
+          #    deleting the tag first would either error with
+          #    "tag has release" or leave a dangling release.
+          ########################################
+          log "Fetching releases..."
+          # Grab id + tag_name in one call so we don't hit /tags/{tag}
+          # for every release.
+          mapfile -t RELEASE_LINES < <(
+            gh api "repos/$OWNER/$REPO/releases" --paginate \
+              -q '.[] | "\(.id)\t\(.tag_name)"' 2>/dev/null || true
+          )
+          if (( ${#RELEASE_LINES[@]} > KEEP_RELEASES )); then
+            DEL_LINES=("${RELEASE_LINES[@]:KEEP_RELEASES}")
+            log "Will delete ${#DEL_LINES[@]} old releases (keep latest $KEEP_RELEASES)"
+            for line in "${DEL_LINES[@]}"; do
+              rid=${line%%	*}    # tab-prefixed side is the id
+              rname=${line#*	}   # tab-suffixed side is tag_name
+              if [[ "$DRY_RUN" == "true" ]]; then
+                log "  🔸 DRY-RUN skip: DELETE release/$rname (id=$rid)"
+                continue
+              fi
+              out=$(gh api -X DELETE "repos/$OWNER/$REPO/releases/$rid" 2>&1) \
+                && rc=0 || rc=$?
+              if [[ $rc -eq 0 ]]; then
+                echo "  - $rname (id=$rid)"
+              else
+                reason=$(printf '%s' "$out" | jq -r '.message // empty' 2>/dev/null \
+                          || printf '%s' "$out" | head -c 200)
+                echo "  - $rname (id=$rid skipped: ${reason:-HTTP error (rc=$rc)})"
+              fi
+            done
+          else
+            log "release count ${#RELEASE_LINES[@]} <= $KEEP_RELEASES, nothing to clean"
+          fi
+
+          ########################################
+          # 2) Clean up git tags (keep the latest KEEP_TAGS).
+          ########################################
+          log "Fetching git tags..."
+          mapfile -t TAGS < <(
+            gh api "repos/$OWNER/$REPO/tags" --paginate -q '.[].name' 2>/dev/null || true
+          )
+          if (( ${#TAGS[@]} > KEEP_TAGS )); then
+            DEL_TAGS=("${TAGS[@]:KEEP_TAGS}")
+            log "Will delete ${#DEL_TAGS[@]} old tags (keep latest $KEEP_TAGS)"
+            for t in "${DEL_TAGS[@]}"; do
+              if [[ "$DRY_RUN" == "true" ]]; then
+                log "  🔸 DRY-RUN skip: DELETE tag/$t"
+                continue
+              fi
+              out=$(gh api -X DELETE "repos/$OWNER/$REPO/git/refs/tags/$t" 2>&1) \
+                && rc=0 || rc=$?
+              if [[ $rc -eq 0 ]]; then
+                echo "  - $t"
+              else
+                reason=$(printf '%s' "$out" | jq -r '.message // empty' 2>/dev/null \
+                          || printf '%s' "$out" | head -c 200)
+                echo "  - $t (skipped: ${reason:-HTTP error (rc=$rc)})"
+              fi
+            done
+          else
+            log "tag count ${#TAGS[@]} <= $KEEP_TAGS, nothing to clean"
+          fi
+
+          ########################################
+          # 3) Clean up GHCR package versions.
+          #
+          # Strategy:
+          #   - tagged (manifest list): keep the latest KEEP_VERSIONS
+          #   - untagged (platform image): only delete if NOT referenced
+          #     by any tag inside the KEEP_VERSIONS window. Otherwise
+          #     multi-arch images could end up with "tag pulls a dangling
+          #     manifest" after the untagged layer is gone.
+          ########################################
+          log "Fetching package version list: $PKG_API"
+          VERSIONS_JSON="$(gh api "$PKG_API/versions" --paginate 2>/dev/null || echo '[]')"
+
+          # DEBUG: print a few version samples so you can confirm the
+          # .name field is actually a sha256 digest (and not, say, a tag).
+          if [[ "$DEBUG" == "true" ]]; then
+            log "DEBUG: first 3 version field samples — name should start with 'sha256:'"
+            echo "$VERSIONS_JSON" \
+              | jq -r '.[0:3] | .[]? // empty
+                       | "  id=\(.id) name_head=\(.name[0:18] // "<null>") name_len=\(.name | length // 0) tags=\(.metadata.container.tags // [] | join(","))"' \
+              2>/dev/null || log "  ⚠️ jq parse failed"
+            log "DEBUG: first 5 PROTECTED_DIGESTS keys (used to verify .name matches)"
+            log "DEBUG: verbose mode on, see 3b/3c for details"
+          fi
+
+          # Helper: fetch a tag's manifest via the GHCR distribution API.
+          # We must obtain a ghcr.io bearer first — passing GITHUB_TOKEN
+          # as a raw Authorization: Bearer does NOT work; ghcr.io has
+          # its own auth handshake.
+          log "Fetching ghcr.io bearer token..."
+          GHCR_BEARER="$(curl -sS \
+            -u "$OWNER:$GH_TOKEN" \
+            "https://ghcr.io/token?service=ghcr.io&scope=repository:$OWNER/$PACKAGE:pull" \
+            2>/dev/null | jq -r .token 2>/dev/null || true)"
+          if [[ -n "$GHCR_BEARER" && "$GHCR_BEARER" != "null" ]]; then
+            log "  ✓ bearer token acquired (${#GHCR_BEARER} chars)"
+          else
+            log "  ⚠️ could not fetch bearer token — manifest lookups will all fail"
+          fi
+
+          fetch_tag_manifest() {
+            local tag="$1"
+            local body_file http
+            body_file="$(mktemp)"
+            http="$(curl -sS -o "$body_file" -w "%{http_code}" \
+              -H "Authorization: Bearer ${GHCR_BEARER:-no_token}" \
+              -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.manifest.v1+json" \
+              "https://ghcr.io/v2/$OWNER/$PACKAGE/manifests/$tag" 2>/dev/null)" || http="000"
+            if [[ "$http" != "200" ]]; then
+              log "    ⚠️ HTTP $http for tag=$tag (body: $(head -c 200 "$body_file" 2>/dev/null | tr '\n' ' '))"
+              rm -f "$body_file"
+              return 1
+            fi
+            cat "$body_file"
+            rm -f "$body_file"
+          }
+
+          # All tagged versions (sorted by created_at desc), TSV output:
+          # id<TAB>name<TAB>tags(csv)
+          mapfile -t TAGGED_LINES < <(
+            echo "$VERSIONS_JSON" \
+              | jq -r 'sort_by(.created_at) | reverse
+                       | .[] | select(.metadata.container.tags | length > 0)
+                       | [.id, .name, (.metadata.container.tags | join(","))] | @tsv'
+          )
+
+          # 3a) Build PROTECTED_DIGESTS = all digests reachable from
+          #     every currently-existing tag. This keeps 3b from
+          #     deleting a platform image that's still shared by another
+          #     tag's manifest list.
+          declare -A PROTECTED_DIGESTS=()
+          log "Building protected digests (all existing tags)..."
+          for (( i=0; i < ${#TAGGED_LINES[@]}; i++ )); do
+            line="${TAGGED_LINES[$i]}"
+            vid=$(printf '%s\n' "$line" | cut -f1)
+            vname=$(printf '%s\n' "$line" | cut -f2)
+            vtags=$(printf '%s\n' "$line" | cut -f3-)
+
+            # The version's own digest also needs protection (in case
+            # a single-arch image is referenced by another tag).
+            [[ -n "$vname" ]] && PROTECTED_DIGESTS["$vname"]=1
+
+            IFS=',' read -ra TAGS_ARR <<<"$vtags"
+            for tag in "${TAGS_ARR[@]}"; do
+              [[ -z "$tag" ]] && continue
+              log "  - resolving tag: $tag"
+              manifest=$(fetch_tag_manifest "$tag")
+              if [[ -z "$manifest" ]]; then
+                log "    ⚠️ tag=$tag returned empty response, skipping (see above)"
+                continue
+              fi
+              while IFS= read -r d; do
+                [[ -n "$d" ]] && PROTECTED_DIGESTS["$d"]=1
+              done < <(printf '%s\n' "$manifest" \
+                        | jq -r 'select(.manifests != null) | .manifests[]?.digest // empty' 2>/dev/null)
+            done
+          done
+          log "protected digests: ${#PROTECTED_DIGESTS[@]} total"
+
+          # 3b) Delete tagged versions beyond KEEP_VERSIONS (the manifest
+          #     list itself, not its platform images).
+          if (( ${#TAGGED_LINES[@]} > KEEP_VERSIONS )); then
+            DEL_IDS=("${TAGGED_LINES[@]:KEEP_VERSIONS}")
+            log "Will delete ${#DEL_IDS[@]} old tagged versions (keep latest $KEEP_VERSIONS)"
+            for line in "${DEL_IDS[@]}"; do
+              id=$(printf '%s\n' "$line" | cut -f1)
+              if [[ "$DRY_RUN" == "true" ]]; then
+                log "  🔸 DRY-RUN skip: DELETE versions/$id (tagged)"
+                continue
+              fi
+              out=$(gh api -X DELETE "$PKG_API/versions/$id" 2>&1) \
+                && rc=0 || rc=$?
+              if [[ $rc -eq 0 ]]; then
+                echo "  - id=$id"
+              else
+                reason=$(printf '%s' "$out" | jq -r '.message // empty' 2>/dev/null \
+                          || printf '%s' "$out" | head -c 200)
+                echo "  - id=$id (skipped: ${reason:-HTTP error (rc=$rc)})"
+              fi
+            done
+          else
+            log "tagged version count ${#TAGGED_LINES[@]} <= $KEEP_VERSIONS, nothing to clean"
+          fi
+
+          # 3c) Delete untagged versions that aren't in PROTECTED (true
+          #     orphans). Single-arch leftovers from old tags land here.
+          if [[ "$DELETE_UNTAGGED" == "true" ]]; then
+            mapfile -t UNTAGGED_LINES < <(
+              echo "$VERSIONS_JSON" \
+                | jq -r '.[] | select(.metadata.container.tags | length == 0)
+                         | [.id, .name] | @tsv'
+            )
+
+            DEL_UNTAGGED=()
+            SKIP_UNTAGGED=()
+            for line in "${UNTAGGED_LINES[@]}"; do
+              uid=$(printf '%s\n' "$line" | cut -f1)
+              uname=$(printf '%s\n' "$line" | cut -f2)
+              if [[ -z "$uname" ]]; then
+                SKIP_UNTAGGED+=("$uid (no digest info)")
+              elif [[ -n "${PROTECTED_DIGESTS[$uname]:-}" ]]; then
+                SKIP_UNTAGGED+=("$uid (protected)")
+              else
+                DEL_UNTAGGED+=("$uid")
+              fi
+            done
+
+            log "untagged versions: ${#UNTAGGED_LINES[@]} total, ${#DEL_UNTAGGED[@]} deletable, ${#SKIP_UNTAGGED[@]} skipped"
+            # DEBUG: show a few skipped ones so you can confirm the
+            # .name field really is sha256:.
+            if [[ "$DEBUG" == "true" && ${#SKIP_UNTAGGED[@]} -gt 0 ]]; then
+              log "DEBUG: ${#SKIP_UNTAGGED[@]} skipped (protected) untagged — verify .name starts with sha256:"
+              for entry in "${SKIP_UNTAGGED[@]:0:3}"; do
+                log "  example: $entry"
+              done
+            fi
+            for id in "${DEL_UNTAGGED[@]}"; do
+              if [[ "$DRY_RUN" == "true" ]]; then
+                log "  🔸 DRY-RUN skip: DELETE versions/$id (untagged)"
+                continue
+              fi
+              out=$(gh api -X DELETE "$PKG_API/versions/$id" 2>&1) \
+                && rc=0 || rc=$?
+              if [[ $rc -eq 0 ]]; then
+                echo "  - id=$id"
+              else
+                reason=$(printf '%s' "$out" | jq -r '.message // empty' 2>/dev/null \
+                          || printf '%s' "$out" | head -c 200)
+                echo "  - id=$id (skipped: ${reason:-HTTP error (rc=$rc)})"
+              fi
+            done
+          fi
+
+          ########################################
+          # 4) Clean up GitHub Actions workflow runs.
+          #    Keep the latest KEEP_RUNS, sliced by created_at desc.
+          #    Note: actions/runs returns {workflow_runs:[...]} (object
+          #    envelope), and gh api --paginate on that endpoint only
+          #    returns the first page — so we do an explicit page loop.
+          #    No workflow_id passed means ALL workflows.
+          ########################################
+          log "Fetching workflow runs (all workflows, page loop)..."
+
+          # Safe integer extraction from JSON: jq on a fallback path may
+          # emit multi-line output (caught by command substitution, this
+          # would break [[ ... -eq N ]]), so we strip whitespace, take
+          # the first line, regex-validate, and default to 0 on garbage.
+          to_int() {
+            local json="$1" q="$2" v
+            v=$(printf '%s' "$json" | jq -r "$q // 0" 2>/dev/null \
+                 | tr -d '[:space:]' | head -c 20)
+            [[ "$v" =~ ^[0-9]+$ ]] && { echo "$v"; return; }
+            echo 0
+          }
+
+          RUN_LINES=()
+          RUN_PAGE=1
+          while true; do
+            page_json=$(gh api "repos/$OWNER/$REPO/actions/runs?per_page=100&page=$RUN_PAGE" 2>/dev/null || echo '{}')
+            page_total=$(to_int "$page_json" '.total_count')
+            page_count=$(to_int "$page_json" '.workflow_runs | length')
+            [[ "$page_count" -eq 0 ]] && break
+            log "  page $RUN_PAGE: total_count=$page_total, returned=$page_count"
+            while IFS=$'\t' read -r rid rname rcreated; do
+              [[ -n "$rid" ]] && RUN_LINES+=("$rid	$rname	$rcreated")
+            done < <(printf '%s\n' "$page_json" \
+                      | jq -r '.workflow_runs[] | "\(.id)\t\(.name)\t\(.created_at)"' 2>/dev/null)
+            [[ "$page_count" -lt 100 ]] && break
+            RUN_PAGE=$((RUN_PAGE + 1))
+            [[ $RUN_PAGE -gt 50 ]] && { log "  ⚠️ over 50 pages (5000 runs), aborting pagination"; break; }
+          done
+          if (( ${#RUN_LINES[@]} > KEEP_RUNS )); then
+            DEL_RUNS=("${RUN_LINES[@]:KEEP_RUNS}")
+            log "Will delete ${#DEL_RUNS[@]} old workflow runs (keep latest $KEEP_RUNS)"
+            for line in "${DEL_RUNS[@]}"; do
+              run_id=$(printf '%s\n' "$line" | cut -f1)
+              run_name=$(printf '%s\n' "$line" | cut -f2)
+              if [[ "$DRY_RUN" == "true" ]]; then
+                log "  🔸 DRY-RUN skip: DELETE actions/runs/$run_id (name=$run_name)"
+                continue
+              fi
+              out=$(gh api -X DELETE "repos/$OWNER/$REPO/actions/runs/$run_id" 2>&1) \
+                && rc=0 || rc=$?
+              if [[ $rc -eq 0 ]]; then
+                echo "  - run#$run_id ($run_name)"
+              else
+                reason=$(printf '%s' "$out" | jq -r '.message // empty' 2>/dev/null \
+                          || printf '%s' "$out" | head -c 200)
+                echo "  - run#$run_id (skipped: ${reason:-HTTP error (rc=$rc)})"
+              fi
+            done
+          else
+            log "workflow run count ${#RUN_LINES[@]} <= $KEEP_RUNS, nothing to clean"
+          fi
+
+          log "cleanup done ✅"

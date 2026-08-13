@@ -61,8 +61,8 @@ COMMANDS:
                               is given.
 
 OPTIONS:
-    --host <H>      Bind host (default 127.0.0.1)
-    --port <P>      Port (default 8080)
+    --host <H>      Bind host (default 127.0.0.1, or $MDWEB_HOST)
+    --port <P>      Port (default 8080, or $MDWEB_PORT)
     --template <D>  Use a template directory instead of the theme from site.toml.
     -h, --help      Show this help.
     -V, --version   Show version.
@@ -73,8 +73,14 @@ OPTIONS:
 /// Parse `--key value` style options.
 fn parse_run_flags(args: &[String]) -> (Option<PathBuf>, String, u16, Option<PathBuf>) {
     let mut doc = None;
-    let mut host = "127.0.0.1".to_string();
-    let mut port = 8080u16;
+    // Seed defaults from env so `MDWEB_HOST` / `MDWEB_PORT` work for
+    // container / systemd deployments. CLI flags (parsed below) overwrite
+    // these, giving the precedence CLI > env > default.
+    let mut host = env::var("MDWEB_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let mut port = env::var("MDWEB_PORT")
+        .ok()
+        .and_then(|v| v.parse::<u16>().ok())
+        .unwrap_or(8080);
     let mut tpl = None;
 
     let mut i = 0;
@@ -90,7 +96,7 @@ fn parse_run_flags(args: &[String]) -> (Option<PathBuf>, String, u16, Option<Pat
             }
             "--port" => {
                 if let Some(v) = args.get(i + 1) {
-                    port = v.parse().unwrap_or(8080);
+                    port = v.parse().unwrap_or(port);
                     i += 1;
                 }
             }

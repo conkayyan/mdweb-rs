@@ -1,0 +1,39 @@
+# mdweb — single-service compose file.
+#
+# Quick start:
+#   1. (optional) edit the image tag below to pin a specific version,
+#      e.g. `ghcr.io/conkayyan/mdweb:v0.1.0`.
+#   2. `docker compose up -d`
+#   3. open http://127.0.0.1:8080/
+#
+# Bind host injection: the image's CMD is `mdweb run .` and defaults seed
+# from $MDWEB_HOST / $MDWEB_PORT. Precedence is CLI flag > env > default,
+# matching the in-binary help. Override either by editing `environment:`
+# below or by extending `command:` to pass CLI flags.
+
+services:
+  mdweb:
+    image: ghcr.io/conkayyan/mdweb:latest
+    container_name: mdweb
+    restart: unless-stopped
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      MDWEB_HOST: 0.0.0.0
+      MDWEB_PORT: 8080
+
+    # Edit Markdown on the host; the container serves it read-only. The
+    # Dockerfile bakes /app/site as a fallback so `mdweb create` works
+    # without a host site/ directory, but a mount here hides that copy.
+    volumes:
+      - ./site:/app/site:ro
+
+    healthcheck:
+      # curl ships in the runtime image (see Dockerfile).
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

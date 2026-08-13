@@ -67,6 +67,75 @@ mdweb run my-blog --port 8080
 # 3. open http://127.0.0.1:8080/ and start editing Markdown files
 ```
 
+## Configuration via environment
+
+The `run` subcommand reads two optional environment variables. They are
+useful in container / system-service deployments where passing command-line
+flags is awkward:
+
+| Variable      | Equivalent CLI flag | Default     |
+| ------------- | ------------------- | ----------- |
+| `MDWEB_HOST`  | `--host`            | `127.0.0.1` |
+| `MDWEB_PORT`  | `--port`            | `8080`      |
+
+Precedence is **CLI flag > environment variable > default**, matching the
+order most container runtimes expect. The example below binds the server
+to all interfaces on port 8080 (the typical Docker case):
+
+```bash
+MDWEB_HOST=0.0.0.0 MDWEB_PORT=8080 mdweb run ./my-blog
+```
+
+## Docker
+
+A pre-built image is published to GitHub Container Registry on every
+tagged release.
+
+```bash
+# Run with a local ./site directory mounted read-only:
+docker run -d --name mdweb -p 8080:8080 \
+  -v "$PWD/site:/app/site:ro" \
+  ghcr.io/conkayyan/mdweb:latest
+```
+
+Or with docker-compose (single service, see [`docker-compose.yaml`](docker-compose.yaml)):
+
+```bash
+docker compose up -d
+# open http://127.0.0.1:8080/
+```
+
+To build the image locally:
+
+```bash
+docker build -t mdweb .
+docker run --rm -p 8080:8080 -v "$PWD/site:/app/site:ro" mdweb
+```
+
+The container honors `MDWEB_HOST` and `MDWEB_PORT` (see
+[Configuration via environment](#configuration-via-environment) above).
+The bundled `docker-compose.yaml` also sets these explicitly so you can
+override at the deployment site without rebuilding the image.
+
+## Releases / downloads
+
+Pre-built binaries are attached to every tagged release on GitHub:
+
+- [github.com/conkayyan/mdweb-rs/releases](https://github.com/conkayyan/mdweb-rs/releases)
+
+| Target                                     | Archive                                                       |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| `x86_64-unknown-linux-gnu` (Linux x86_64)  | `mdweb-v<tag>-x86_64-unknown-linux-gnu.tar.gz`                |
+| `aarch64-unknown-linux-gnu` (Linux ARM64 — Raspberry Pi, AWS Graviton, …) | `mdweb-v<tag>-aarch64-unknown-linux-gnu.tar.gz` |
+| `x86_64-apple-darwin` (Intel Mac)          | `mdweb-v<tag>-x86_64-apple-darwin.tar.gz`                     |
+| `aarch64-apple-darwin` (Apple Silicon Mac) | `mdweb-v<tag>-aarch64-apple-darwin.tar.gz`                    |
+| `x86_64-pc-windows-msvc` (Windows x86_64)  | `mdweb-v<tag>-x86_64-pc-windows-msvc.zip`                     |
+| `aarch64-pc-windows-msvc` (Windows ARM64)  | `mdweb-v<tag>-aarch64-pc-windows-msvc.zip`                    |
+
+Each archive contains a single binary (`mdweb` or `mdweb.exe`) plus a
+SHA256 sidecar. Verify with `sha256sum -c <archive>.sha256` after
+downloading.
+
 ## Command line
 
 ```
@@ -94,8 +163,8 @@ COMMANDS:
                                site.toml [theme].
 
 OPTIONS:
-    --host <H>      Bind host (default 127.0.0.1)
-    --port <P>      Port (default 8080)
+    --host <H>      Bind host (default 127.0.0.1, or $MDWEB_HOST)
+    --port <P>      Port (default 8080, or $MDWEB_PORT)
     --template <D>  Use a template directory instead of the default theme.
     -h, --help      Show this help.
     -V, --version   Show version.
@@ -581,3 +650,7 @@ languages get a prefix (`/zh/posts/guide/hello-world/`). The language switcher u
 boolean context key is removed; use the `t.*` keys instead. The `lang_meta` map
 and `lang_active` flag are also removed — use `lang` for the current language
 code, `current_lang_display_name` for the language button label.
+
+## License
+
+[MIT](LICENSE) — Copyright (c) 2026 conkayyan.
