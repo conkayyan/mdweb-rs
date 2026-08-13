@@ -3338,6 +3338,19 @@ fn blocks_to_html(
     for b in blocks {
         block_to_html(b, refs, footnotes, &mut ctx, &mut out);
     }
+    // Resolve `[[TOC]]` placeholders now that every heading in the
+    // document has been collected into `ctx.toc`. Replace in reverse so
+    // that placeholder IDs of different lengths can't shadow each other.
+    for (placeholder, opts) in ctx.pending_tocs.iter().rev() {
+        let html = toc_html(&ctx.toc, opts);
+        // `replace` is safe because each placeholder is unique to this
+        // document; if the literal placeholder text appeared in the
+        // user's content it would be replaced here too, but that's an
+        // acceptable tradeoff for the simple placeholder scheme.
+        if let Some(pos) = out.find(placeholder) {
+            out.replace_range(pos..pos + placeholder.len(), &html);
+        }
+    }
     out
 }
 
@@ -3422,22 +3435,115 @@ fn align_attr(a: &Option<u8>) -> &'static str {
 }
 
 /// Per-document render state: heading slug dedup + collected TOC entries.
+///
+/// `pending_tocs` records `[[TOC]]` markers encountered during rendering.
+/// Each one writes a unique placeholder to the output; the placeholder is
+/// later swapped for the actual TOC HTML in `blocks_to_html`, once every
+/// heading in the document has been collected into `toc`. That way a
+/// `[[TOC]]` at the *top* of a page still sees the full heading list.
 #[derive(Default)]
 struct RenderCtx {
     used_slugs: HashMap<String, usize>,
     toc: Vec<(usize, String, String)>,
-    toc_rendered: bool,
+    pending_tocs: Vec<(String, TocOptions)>,
 }
 
-/// Turn a heading's plain text into an anchor id: lowercase, spaces/dots →
-/// hyphens, strip other punctuation, JS-free.
+/// Options parsed out of a `[[TOC …]]` tag.
+#[derive(Default, Clone, Debug)]
+struct TocOptions {
+    /// Skip headings deeper than this level. `None` keeps everything.
+    max_depth: Option<usize>,
+    /// Optional title rendered above the TOC nav.
+    title: Option<String>,
+}
+
+/// Parse a `[[TOC …]]` / `[TOC …]` marker into its options. Recognised
+/// attributes (case-insensitive on the key):
+///
+///   * `max-depth=N` — only headings with `level <= N` are included
+///   * `title="…"` — render a title above the TOC
+///
+/// Unknown keys are silently ignored; the tag fires as long as `TOC` is
+/// the first whitespace-separated token inside the brackets. Returns
+/// `None` if the input is not a TOC tag (so the caller can fall through
+/// to normal paragraph rendering).
+fn parse_toc_tag(input: &str) -> Option<TocOptions> {
+    let s = input.trim();
+    let inner = s
+        .strip_prefix("[[")
+        .and_then(|r| r.strip_suffix("]]"))
+        .or_else(|| s.strip_prefix('[').and_then(|r| r.strip_suffix(']')))?;
+    // Tokenise on whitespace, but keep anything inside `"..."` as a single
+    // token so a title may contain spaces — e.g. `title="On this page"`.
+    let mut parts = tokenize_toc_attrs(inner).into_iter();
+    let head = parts.next()?;
+    if !head.eq_ignore_ascii_case("TOC") {
+        return None;
+    }
+    let mut opts = TocOptions::default();
+    for tok in parts {
+        let Some((k, v)) = tok.split_once('=') else {
+            continue;
+        };
+        let v = v.trim();
+        let unquoted = if v.len() >= 2 && v.starts_with('"') && v.ends_with('"') {
+            &v[1..v.len() - 1]
+        } else {
+            v
+        };
+        match k.to_ascii_lowercase().as_str() {
+            "max-depth" | "max_depth" | "depth" => {
+                opts.max_depth = unquoted.parse().ok();
+            }
+            "title" => {
+                opts.title = Some(unquoted.to_string());
+            }
+            _ => {}
+        }
+    }
+    Some(opts)
+}
+
+/// Split a TOC attribute string on whitespace, but keep anything inside
+/// a `"..."` group as a single token so values may contain spaces.
+fn tokenize_toc_attrs(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut in_quotes = false;
+    for c in s.chars() {
+        match c {
+            '"' => {
+                in_quotes = !in_quotes;
+                cur.push(c);
+            }
+            c if c.is_whitespace() && !in_quotes => {
+                if !cur.is_empty() {
+                    out.push(std::mem::take(&mut cur));
+                }
+            }
+            _ => cur.push(c),
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// Turn a heading's plain text into an anchor id: lowercased, with each
+/// run of non-alphanumeric characters collapsed to a single `-`. Word
+/// characters are anything Unicode calls `is_alphanumeric()` — so CJK,
+/// Cyrillic, accented Latin, etc. all survive. The HTML5 `id` attribute
+/// allows arbitrary characters (browsers percent-encode the fragment on
+/// the way out and back), so no transliteration step is needed.
 fn slugify(text: &str) -> String {
     let mut out = String::new();
     let mut last_dash = false;
     for c in text.chars() {
-        let k = c.to_ascii_lowercase();
-        if k.is_ascii_alphanumeric() {
-            out.push(k);
+        if c.is_alphanumeric() {
+            for lc in c.to_lowercase() {
+                out.push(lc);
+            }
             last_dash = false;
         } else if !out.is_empty() && !last_dash {
             out.push('-');
@@ -3462,15 +3568,29 @@ fn reserve_slug(ctx: &mut RenderCtx, text: &str) -> String {
     }
 }
 
-fn toc_html(toc: &[(usize, String, String)]) -> String {
-    if toc.is_empty() {
+fn toc_html(toc: &[(usize, String, String)], opts: &TocOptions) -> String {
+    // Apply the depth filter first so we don't emit a nav with zero entries.
+    let entries: Vec<_> = toc
+        .iter()
+        .filter(|(level, _, _)| match opts.max_depth {
+            Some(d) => *level <= d,
+            None => true,
+        })
+        .collect();
+    if entries.is_empty() {
         return String::new();
     }
-    // Simplify: flat nested <ul> by keeping a stack of open levels.
     let mut out = String::new();
+    if let Some(title) = &opts.title {
+        out.push_str(&format!(
+            "<p class=\"toc-title\">{}</p>\n",
+            escape_html(title)
+        ));
+    }
     out.push_str("<nav class=\"toc\"><ul>\n");
+    // Simplify: flat nested <ul> by keeping a stack of open levels.
     let mut stack: Vec<usize> = Vec::new();
-    for (level, id, text) in toc {
+    for (level, id, text) in entries {
         while stack.last().copied().unwrap_or(0) >= *level {
             out.push_str("</ul></li>\n");
             stack.pop();
@@ -3500,11 +3620,16 @@ fn block_to_html(
 ) {
     match b {
         Block::Paragraph(text) => {
-            let t = text.trim();
-            // a `[[TOC]]` / `[TOC]` marker renders the collected heading list
-            if (t == "[[TOC]]" || t == "[TOC]") && !ctx.toc_rendered {
-                out.push_str(&toc_html(&ctx.toc));
-                ctx.toc_rendered = true;
+            // a `[[TOC]]` / `[TOC]` marker (case-insensitive, with optional
+            // `max-depth=N` / `title="…"` attributes) emits a placeholder
+            // that `blocks_to_html` resolves once every heading in the
+            // document has been collected. The tag can appear more than
+            // once in a document — each occurrence emits its own nav.
+            if let Some(opts) = parse_toc_tag(text.trim()) {
+                let id = ctx.pending_tocs.len();
+                let placeholder = format!("\x01TOC_PH:{id}\x01");
+                ctx.pending_tocs.push((placeholder.clone(), opts));
+                out.push_str(&placeholder);
                 return;
             }
             out.push_str("<p>");
@@ -3719,9 +3844,14 @@ fn plain_inline_text(src: &str) -> String {
     let mut chars = src.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
-            '*' | '_' | '~' | '`' | '=' | '^' | '!' | '\\' => {}
-            '[' | ']' if chars.peek() == Some(&']') || c == ']' => {}
-            '$' => {}
+            // Markdown markup that doesn't render as literal text: emphasis,
+            // strikethrough, code, highlight, superscript/subscript, admonition
+            // marker, escape backslash, math delimiters.
+            '*' | '_' | '~' | '`' | '=' | '^' | '!' | '\\' | '$' => {}
+            // Brackets are preserved — they're ordinary characters in
+            // headings and slugify() already maps them to `-` for the id.
+            // Stripping them here was over-eager and mangled content like
+            // `[[TOC]]` (the closing `]]` got dropped from TOC link text).
             _ => out.push(c),
         }
     }
@@ -4116,10 +4246,159 @@ mod tests {
     }
 
     #[test]
+    fn toc_marker_is_case_insensitive() {
+        for marker in ["[[toc]]", "[[Toc]]", "[[ToC]]", "[[tOc]]", "[TOC]", "[toc]"] {
+            let src = format!("# One\n\n{marker}");
+            let h = render(&src);
+            assert!(h.contains("<nav class=\"toc\">"), "marker {marker:?} did not render TOC");
+            assert!(h.contains("href=\"#one\""));
+        }
+    }
+
+    #[test]
+    fn toc_max_depth_filters_headings() {
+        let src = "# Top\n\n## Sub\n\n### Deep\n\n#### Deeper\n\n[[TOC max-depth=2]]";
+        let h = render(src);
+        // H1 and H2 survive, H3 and H4 are filtered.
+        assert!(h.contains("href=\"#top\""));
+        assert!(h.contains("href=\"#sub\""));
+        assert!(!h.contains("href=\"#deep\""));
+        assert!(!h.contains("href=\"#deeper\""));
+    }
+
+    #[test]
+    fn toc_title_attribute_renders_above_nav() {
+        let src = "# One\n\n[[TOC title=\"Contents\"]]";
+        let h = render(src);
+        assert!(h.contains("<p class=\"toc-title\">Contents</p>"));
+        // title appears before the nav.
+        let title_pos = h.find("toc-title").unwrap();
+        let nav_pos = h.find("<nav class=\"toc\">").unwrap();
+        assert!(title_pos < nav_pos);
+    }
+
+    #[test]
+    fn toc_renders_at_every_occurrence() {
+        let src = "# One\n\n## Two\n\n[[TOC]]\n\nbody\n\n[[TOC max-depth=1]]";
+        let h = render(src);
+        // Two `<nav class="toc">` blocks, in order.
+        assert_eq!(h.matches("<nav class=\"toc\">").count(), 2);
+        // Second TOC is depth-filtered: only the H1 lands.
+        let second = h.rfind("<nav class=\"toc\">").unwrap();
+        let tail = &h[second..];
+        assert!(tail.contains("href=\"#one\""));
+        assert!(!tail.contains("href=\"#two\""));
+    }
+
+    #[test]
+    fn toc_with_empty_toc_emits_nothing() {
+        // No headings collected → no nav, even with options.
+        let h = render("[[TOC max-depth=3 title=\"Empty\"]]");
+        assert!(!h.contains("<nav"));
+        assert!(!h.contains("toc-title"));
+    }
+
+    #[test]
+    fn toc_unknown_attribute_is_ignored_but_tag_fires() {
+        let src = "# One\n\n[[TOC mx-dpeth=9 title=\"Contents\"]]";
+        let h = render(&src);
+        // Tag still fires; the bogus key is dropped silently.
+        assert!(h.contains("<p class=\"toc-title\">Contents</p>"));
+        assert!(h.contains("href=\"#one\""));
+    }
+
+    #[test]
+    fn toc_title_with_spaces_is_kept_whole() {
+        // Regression: `inner.split_whitespace()` used to chop a multi-word
+        // title at the first space, so only the first word (plus a stray
+        // opening quote) reached the rendered output. The tokenizer must
+        // respect `"..."` so the whole phrase survives.
+        for title in ["On this page", "目录 标签", "Hello  World  Three"] {
+            let src = format!("# One\n\n[[TOC title=\"{title}\"]]");
+            let h = render(&src);
+            let needle = format!("<p class=\"toc-title\">{title}</p>");
+            assert!(
+                h.contains(&needle),
+                "title {title:?} was truncated; rendered: {h}"
+            );
+        }
+    }
+
+    #[test]
+    fn toc_marker_inside_heading_is_left_alone() {
+        // A heading that happens to contain the literal text `[[TOC]]`
+        // (e.g. a section documenting the tag itself) must not be
+        // rewritten — the TOC parser only runs on paragraph blocks.
+        let src = "## 目录标签 [[TOC]]\n\n[[TOC]]";
+        let h = render(src);
+        assert!(
+            h.contains("目录标签 [[TOC]]"),
+            "heading text was mangled; rendered: {h}"
+        );
+        // And the TOC entry that points at it must show the full text,
+        // not the truncated "目录标签 [[TOC" that `plain_inline_text`
+        // used to produce by stripping trailing `]]`.
+        assert!(
+            h.contains(">目录标签 [[TOC]]<"),
+            "TOC entry text was mangled; rendered: {h}"
+        );
+    }
+
+    #[test]
+    fn toc_at_top_of_document_sees_all_headings() {
+        // Regression: when `[[TOC]]` precedes every heading, the tag must
+        // still produce the full nav — not an empty one. Headings below
+        // it have to be discovered before the TOC HTML is emitted.
+        let src = "[[TOC]]\n\n# Alpha\n\n## Beta\n\n### Gamma";
+        let h = render(src);
+        assert!(h.contains("<nav class=\"toc\">"));
+        assert!(h.contains("href=\"#alpha\""));
+        assert!(h.contains("href=\"#beta\""));
+        assert!(h.contains("href=\"#gamma\""));
+    }
+
+    #[test]
+    fn toc_at_top_with_chinese_headings_still_resolves() {
+        // Same regression with non-ASCII headings: slugify() produces
+        // empty ids for Chinese-only headings, but the placeholder
+        // pipeline must still fire so the headings are listed.
+        let src = "[[TOC]]\n\n## 行内与块级公式\n\n## 绘图环境";
+        let h = render(src);
+        assert!(h.contains("<nav class=\"toc\">"));
+        assert!(h.contains(">行内与块级公式<"));
+        assert!(h.contains(">绘图环境<"));
+    }
+
+    #[test]
     fn duplicate_heading_slugs_dedupe() {
         let h = render("# Edit\n# Edit");
         assert!(h.contains("id=\"edit\""));
         assert!(h.contains("id=\"edit-2\""));
+    }
+
+    #[test]
+    fn non_ascii_headings_get_real_anchors() {
+        // CJK characters are Unicode-alphanumeric; the slug must keep
+        // them so the resulting `<a href="#…">` actually points at the
+        // heading. Previously these collapsed to an empty slug and the
+        // anchor links in the TOC navigated nowhere.
+        let h = render("## 行内与块级公式\n\n## 绘图环境");
+        assert!(h.contains("id=\"行内与块级公式\""));
+        assert!(h.contains("id=\"绘图环境\""));
+    }
+
+    #[test]
+    fn non_ascii_headings_dedupe_with_n_suffix() {
+        let h = render("## 你好\n## 你好");
+        assert!(h.contains("id=\"你好\""));
+        assert!(h.contains("id=\"你好-2\""));
+    }
+
+    #[test]
+    fn mixed_ascii_and_cjk_slug_keeps_both() {
+        let h = render("## Mermaid 流程图");
+        // ASCII part is preserved as-is; the CJK tail survives too.
+        assert!(h.contains("id=\"mermaid-流程图\""), "got: {h}");
     }
 
     #[test]

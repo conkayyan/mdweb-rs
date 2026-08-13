@@ -811,6 +811,50 @@ a.tag-link:visited {
 .post-content .admonition > *:first-child {
   margin-top: 0;
 }
+/* `[[TOC]]` table-of-contents block. The renderer emits a `<p class="toc-title">`
+ * (only when the user passes a title attribute) immediately followed by
+ * `<nav class="toc"><ul>…</ul></nav>`. Wrap it as a single card so the
+ * nav doesn't blur into the surrounding prose, and indent child levels
+ * so the depth hierarchy reads at a glance. */
+.post-content .toc-title {
+  margin: 0 0 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .8em;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+.post-content nav.toc {
+  background: var(--c-code-bg);
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  padding: 14px 18px 14px 14px;
+  margin: 0 0 1.4em;
+  /* generous line-height so nested rows breathe */
+  font-size: .95em;
+}
+.post-content nav.toc ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+.post-content nav.toc > ul { padding-left: 0; }
+.post-content nav.toc ul ul {
+  padding-left: 1.2em;
+  margin: 4px 0 2px;
+  border-left: 1px dashed var(--c-border);
+}
+.post-content nav.toc li { margin: 3px 0; }
+.post-content nav.toc li > a {
+  display: inline-block;
+  padding: 1px 0;
+  border-radius: 4px;
+  transition: color .12s ease, background .12s ease;
+}
+.post-content nav.toc li > a:hover {
+  color: var(--c-accent);
+  background: rgba(37, 99, 235, .08);
+}
 .post-content pre {
   background: var(--c-code-bg);
   padding: 14px 16px;

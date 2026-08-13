@@ -14,7 +14,7 @@ Graphviz and PlantUML, tables, admonitions, definition lists,
 superscript/subscript, highlights, emoji and HTML comments — all compiled
 to inline SVG or styled HTML at build time, with no client-side libraries.
 
-[[TOC]]
+[[TOC title="Table of Contents"]]
 
 ## Inline and display math
 
@@ -161,3 +161,53 @@ Shortcodes expand to emoji: :rocket: :smile: :wave: — unknown codes like
 
 Comments `<!-- like this -->` are stripped from the output entirely, so you
 can leave private notes in your drafts.
+
+## The `[[TOC]]` tag
+
+Write `[[TOC]]` on its own line and it is replaced with a
+`<nav class="toc">` listing every heading in the document. Place it
+near the top for a page-level outline, or anywhere in the body for
+an in-section recap. The tag can appear more than once — each
+occurrence emits its own nav.
+
+Accepted spellings:
+
+- `[[TOC]]` — the default, lists every heading
+- `[TOC]` — single-bracket form is also recognised
+- `[[toc]]` / `[[Toc]]` — case-insensitive on the marker word
+- `[[TOC max-depth=3]]` — keep only H1–H3, drop deeper headings
+- `[[TOC title="Contents"]]` — render a title line above the nav
+- `[[TOC max-depth=2 title="On this page"]]` — attributes combine
+  in any order; unknown keys are silently ignored
+
+Example:
+
+```markdown
+[[TOC title="Contents"]]
+
+## Setup
+### Install
+### Configure
+## Usage
+```
+
+renders to:
+
+```html
+<p class="toc-title">Contents</p>
+<nav class="toc"><ul>
+<li><a href="#setup">Setup</a><ul>
+<li><a href="#install">Install</a></li>
+<li><a href="#configure">Configure</a></li>
+</ul></li>
+<li><a href="#usage">Usage</a></li>
+</ul></nav>
+```
+
+Note: the heading slug is produced by `slugify()` — every character
+that Unicode calls alphanumeric is preserved (so CJK, Cyrillic and
+accented Latin all survive), case is folded to lowercase, and runs
+of non-alphanumeric characters collapse to a single `-`. HTML5 allows
+arbitrary characters in an `id`, and browsers percent-encode the
+fragment when following `href="#…"`, so `## 行内与块级公式` produces
+`<h2 id="行内与块级公式">` that the TOC links reach correctly.
