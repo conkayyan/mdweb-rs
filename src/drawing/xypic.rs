@@ -49,10 +49,7 @@ pub(crate) fn render(src: &str) -> Option<Canvas> {
         None => ENTRY_PAD,
     };
     let centre = |row: usize, col: usize| -> Pt {
-        (
-            col as f64 * EM_PER_XY_CELL,
-            -(row as f64) * EM_PER_XY_CELL,
-        )
+        (col as f64 * EM_PER_XY_CELL, -(row as f64) * EM_PER_XY_CELL)
     };
 
     for e in &entries {
@@ -158,7 +155,8 @@ fn anchor_for(ox: f64, oy: f64) -> Anchor {
 fn matrix_body(src: &str) -> Option<String> {
     let i = src.find("\\xymatrix")?;
     let mut s = Scanner::new(&src[i + "\\xymatrix".len()..]);
-    while matches!(s.peek(), Some(c) if c == '@' || c == '=' || c.is_alphanumeric() || c == '.' || c == '+' || c == '-') {
+    while matches!(s.peek(), Some(c) if c == '@' || c == '=' || c.is_alphanumeric() || c == '.' || c == '+' || c == '-')
+    {
         s.bump();
     }
     s.group()
@@ -332,7 +330,9 @@ mod tests {
     fn multi_step_directions_span_several_cells() {
         let c = render(r"\xymatrix{A \ar[rr] & B & C}").expect("canvas");
         let far = c.items.iter().any(|i| match i {
-            Item::Path { ops, .. } => matches!(ops.last(), Some(PathOp::Line(p)) if p.0 > EM_PER_XY_CELL),
+            Item::Path { ops, .. } => {
+                matches!(ops.last(), Some(PathOp::Line(p)) if p.0 > EM_PER_XY_CELL)
+            }
             _ => false,
         });
         assert!(far, "[rr] reaches the third column");

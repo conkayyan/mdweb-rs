@@ -14,12 +14,12 @@
 //! and any `pt` length map to `1/10 em` — see
 //! [`super::PIC_EM_PER_PT`].
 
+use super::expr::{eval, eval_in, Vars};
 use super::scan::Scanner;
 use super::{
     label, width_from_pt, Anchor, Arrow, ArrowKind, Canvas, Color, Item, PathOp, Pt, Stroke,
     PIC_EM_PER_CM, PIC_EM_PER_PT,
 };
-use super::expr::{eval, eval_in, Vars};
 
 struct Picture {
     canvas: Canvas,
@@ -134,7 +134,9 @@ impl Picture {
                     if let (Some(a), Some(b), Some(c)) = (a, b, c) {
                         // Quadratic → cubic: the control points sit two
                         // thirds of the way to the quadratic control point.
-                        let lift = |p: Pt, q: Pt| (p.0 + 2.0 / 3.0 * (q.0 - p.0), p.1 + 2.0 / 3.0 * (q.1 - p.1));
+                        let lift = |p: Pt, q: Pt| {
+                            (p.0 + 2.0 / 3.0 * (q.0 - p.0), p.1 + 2.0 / 3.0 * (q.1 - p.1))
+                        };
                         self.canvas.push(Item::Path {
                             ops: vec![
                                 PathOp::Move(a),
@@ -322,7 +324,10 @@ mod tests {
         let out = draw(JACKSON).expect("svg");
         assert!(out.contains("aria-label=\"LaTeX picture\""), "{out}");
         assert_eq!(out.matches("<circle").count(), 2, "two dots: {out}");
-        assert!(out.contains("<text"), "the A and B labels are typeset: {out}");
+        assert!(
+            out.contains("<text"),
+            "the A and B labels are typeset: {out}"
+        );
         // 76 pt wide at 1 pt = 1/10 em (LaTeX's 10 pt basis), plus stroke +
         // arrow + padding; labels are hugged to their ink so the canvas
         // carries no phantom margin.

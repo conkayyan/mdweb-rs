@@ -38,9 +38,7 @@ use crate::tex::Typeset;
 /// Cheap enough to run on every `$$…$$` block before the math renderer.
 pub fn is_drawing(src: &str) -> bool {
     let s = src.trim_start();
-    s.contains("\\begin{picture}")
-        || s.contains("\\begin{tikzpicture}")
-        || s.contains("\\xymatrix")
+    s.contains("\\begin{picture}") || s.contains("\\begin{tikzpicture}") || s.contains("\\xymatrix")
 }
 
 /// Render a LaTeX drawing environment to inline SVG. `None` when the source
@@ -497,7 +495,13 @@ impl Canvas {
                     bb.add((p0.0.min(p1.0) - half, p0.1.min(p1.1) - half));
                     bb.add((p0.0.max(p1.0) + half, p0.1.max(p1.1) + half));
                 }
-                Item::Label { at, anchor, ts, gap, .. } => {
+                Item::Label {
+                    at,
+                    anchor,
+                    ts,
+                    gap,
+                    ..
+                } => {
                     let (dx, dy) = label_offset(*anchor, ts, *gap);
                     let ox = at.0 + dx;
                     let oy = at.1 + dy;
@@ -598,7 +602,8 @@ impl Canvas {
                                 ));
                             }
                             if arrow.start {
-                                parts.push_str(&arrow_head(pts[1], pts[0], arrow, stroke, &tx, &ty));
+                                parts
+                                    .push_str(&arrow_head(pts[1], pts[0], arrow, stroke, &tx, &ty));
                             }
                         }
                     }
@@ -761,10 +766,7 @@ fn arrow_head(
     match arrow.kind {
         // `stealth` is notched at the back, which reads as a sharper dart.
         ArrowKind::Stealth => {
-            let notch = (
-                to.0 - len * 0.55 * ang.cos(),
-                to.1 - len * 0.55 * ang.sin(),
-            );
+            let notch = (to.0 - len * 0.55 * ang.cos(), to.1 - len * 0.55 * ang.sin());
             format!(
                 "<path d=\"M {} {} L {} {} L {} {} L {} {} Z\" fill=\"{}\"/>",
                 fmt(tx(to.0)),
@@ -963,7 +965,9 @@ mod tests {
     #[test]
     fn sniffs_the_three_environments() {
         assert!(is_drawing("\\begin{picture}(1,1)\\end{picture}"));
-        assert!(is_drawing("\\begin{tikzpicture}\\draw (0,0)--(1,1);\\end{tikzpicture}"));
+        assert!(is_drawing(
+            "\\begin{tikzpicture}\\draw (0,0)--(1,1);\\end{tikzpicture}"
+        ));
         assert!(is_drawing("\\xymatrix{A & B}"));
         assert!(!is_drawing("\\begin{pmatrix} 1 & 2 \\end{pmatrix}"));
     }
@@ -1091,7 +1095,13 @@ mod tests {
         let mut path: Vec<(f64, f64)> = Vec::new();
         for it in &c.items {
             match it {
-                Item::Label { at, anchor, ts, gap, .. } => {
+                Item::Label {
+                    at,
+                    anchor,
+                    ts,
+                    gap,
+                    ..
+                } => {
                     let (dx, dy) = label_offset(*anchor, ts, *gap);
                     eprintln!(
                         "LABEL at=({},{}) anchor={:?} gap={} w={} h={} d={} -> x0={} y0={} x1={} y1={}",

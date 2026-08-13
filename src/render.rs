@@ -42,8 +42,7 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
     //   - the visitor is sitting on the All Posts index itself. No category
     //     node is `active` on that page (no sub-page selected), so without
     //     this OR the highlight is missing whenever someone clicks the nav.
-    let categories_active =
-        tree_has_active(&categories) || current_url == categories_url;
+    let categories_active = tree_has_active(&categories) || current_url == categories_url;
     let pages = pages_value(&site.articles, lang, current_url);
     let pages_tree = site.pages_tree_value(lang, current_url);
     // Direct entries for the header nav. Each first-level child of
@@ -140,10 +139,7 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
             "categories_active".to_string(),
             Value::Bool(categories_active),
         ),
-        (
-            "categories_url".to_string(),
-            Value::str(&categories_url),
-        ),
+        ("categories_url".to_string(), Value::str(&categories_url)),
         ("pages".to_string(), pages),
         ("pages_tree".to_string(), pages_tree),
         ("page_sections".to_string(), page_sections),

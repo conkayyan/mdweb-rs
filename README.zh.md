@@ -155,23 +155,18 @@ my-blog/
 │   ├── pages/             # 一切非文章内容都在这里
 │   │   ├── _index.md      # → /pages/    （容器落地页）
 │   │   ├── about.md       # → /pages/about/      （同级叶子页）
-│   │   ├── notes/         # → /pages/notes/      （一个页面 section）
-│   │   │   ├── _index.md
-│   │   │   └── tips.md    # → /pages/notes/tips/
-│   │   └── docs/          # 另一个页面 section
+│   │   └── docs/          # 一个页面 section
 │   │       ├── _index.md
 │   │       └── guide/intro.md
 │   └── posts/             # 文章 → /posts/<category>/<slug>/
 │       ├── _index.md      # /posts/ 分类页
 │       ├── guide/         # 一个分类；文章都放在子目录里
-│       │   ├── _index.md
-│       │   ├── hello-world.md
-│       │   └── hello-world.zh.md
-│       └── web/           # 多级子分类
-│           ├── _index.md
-│           └── frontend/
-│               ├── _index.md
-│               └── react.md
+│       │   ├── _index.md  # 新手有序路径
+│       │   ├── installing-mdweb.md
+│       │   └── writing-your-first-post.md
+│       ├── hello/         # 另一个分类
+│       │   └── hello-world.md
+│       └── theme/         # 主题与模板语言相关文章
 └── template/              # 站点本地模板主题（见“主题”一节）
     └── default/           # 当前主题（site.toml 中 theme = "default"）
 ├── base.html

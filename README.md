@@ -166,23 +166,18 @@ my-blog/
 │   │   │                   # transparent container; sections and leaf
 │   │   │                   # pages surface at their own URLs)
 │   │   ├── about.md       # → /pages/about/      (leaf page)
-│   │   ├── notes/         # → /pages/notes/      (a page section)
-│   │   │   ├── _index.md
-│   │   │   └── tips.md    # → /pages/notes/tips/
-│   │   └── docs/          # another page section
+│   │   └── docs/          # a page section
 │   │       ├── _index.md
 │   │       └── guide/intro.md
 │   └── posts/             # posts → /posts/<category>/<slug>/
 │       ├── _index.md      # category page for /posts/ (the chronological feed)
 │       ├── guide/         # a category; posts live in a sub-directory
-│       │   ├── _index.md
-│       │   ├── hello-world.md
-│       │   └── hello-world.zh.md
-│       └── web/           # nested sub-categories
-│           ├── _index.md
-│           └── frontend/
-│               ├── _index.md
-│               └── react.md
+│       │   ├── _index.md  # the ordered beginner's path
+│       │   ├── installing-mdweb.md
+│       │   └── writing-your-first-post.md
+│       ├── hello/         # another category
+│       │   └── hello-world.md
+│       └── theme/         # theming and template language posts
 └── template/              # site-local template theme (see Themes)
     └── default/           # the active theme (theme = "default" in site.toml)
         ├── base.html

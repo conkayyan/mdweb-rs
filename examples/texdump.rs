@@ -7,7 +7,11 @@ fn main() {
         ("frac_inline", "\\frac{a}{b} + \\frac{c}{d}", false),
     ];
     for (name, src, disp) in cases {
-        let out = if disp { mdweb::tex::render_block(src) } else { mdweb::tex::render(src) };
+        let out = if disp {
+            mdweb::tex::render_block(src)
+        } else {
+            mdweb::tex::render(src)
+        };
         println!("===== {name} =====");
         println!("{out}");
     }

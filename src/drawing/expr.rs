@@ -37,7 +37,8 @@ impl Vars {
     }
 
     pub(crate) fn set(&mut self, name: &str, v: f64) {
-        self.map.insert(name.trim_start_matches('\\').to_string(), v);
+        self.map
+            .insert(name.trim_start_matches('\\').to_string(), v);
     }
 
     pub(crate) fn get(&self, name: &str) -> Option<f64> {

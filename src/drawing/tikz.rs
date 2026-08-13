@@ -247,10 +247,7 @@ impl Env {
                 }
             }
         }
-        items
-            .iter()
-            .filter_map(|s| eval(s, &self.vars))
-            .collect()
+        items.iter().filter_map(|s| eval(s, &self.vars)).collect()
     }
 }
 
@@ -531,11 +528,7 @@ fn parse_coord(s: &mut Scanner, env: &mut Env) -> Option<Pt> {
     }
     if s.peek() == Some('$') {
         return calc_coord(s, env).map(|p| {
-            let p = if rel {
-                (base.0 + p.0, base.1 + p.1)
-            } else {
-                p
-            };
+            let p = if rel { (base.0 + p.0, base.1 + p.1) } else { p };
             if update {
                 env.last_ref = Some(p);
             }
@@ -847,11 +840,8 @@ impl Env {
                             } else {
                                 (0.0, 0.0)
                             };
-let r = if parts.len() >= 3 {
-                                cm_to_em(eval(
-                                    parts[2],
-                                    &self.vars,
-                                ).unwrap_or(0.5))
+                            let r = if parts.len() >= 3 {
+                                cm_to_em(eval(parts[2], &self.vars).unwrap_or(0.5))
                             } else {
                                 cm_to_em(0.5)
                             };
@@ -970,10 +960,7 @@ let r = if parts.len() >= 3 {
         if s.eat_str("..") {
             let (c1, c2) = self.consume_controls(s)?;
             if let Some(p) = parse_coord(s, self) {
-                return Some((
-                    p,
-                    vec![PathOp::Bezier { c1, c2, to: p }],
-                ));
+                return Some((p, vec![PathOp::Bezier { c1, c2, to: p }]));
             }
             return None;
         }
@@ -1018,7 +1005,9 @@ let r = if parts.len() >= 3 {
 
     /// `plot (\x,{expr})` with the surrounding options.
     fn parse_plot(&mut self, s: &mut Scanner, opts: &Options) -> Vec<PathOp> {
-        let Some(body) = s.paren() else { return Vec::new() };
+        let Some(body) = s.paren() else {
+            return Vec::new();
+        };
         let domain = opts.domain.unwrap_or((0.0, 1.0));
         // TikZ's default `samples` is 25, not 50 — a `plot` with no explicit
         // `samples=` must discretise as coarsely as TikZ does.
@@ -1120,7 +1109,31 @@ let r = if parts.len() >= 3 {
     fn place_label(&mut self, opts: &Options, at: Pt, text: &str) {
         let Some(ts) = label(text) else { return };
         let anchor = opts.anchor.unwrap_or_else(|| node_anchor(opts));
-        let gap = opts.inner_sep.unwrap_or(DEFAULT_INNER_SEP);
+        // A label whose anchor sits *on* an axis (the x-axis at y=0 or
+        // the y-axis at x=0) and whose anchor direction has a component
+        // perpendicular to that axis would otherwise kiss the line —
+        // `above right` on a point at (π, 0) leaves only 4 pt between
+        // the label and the x-axis, which reads as glued to the line.
+        // Bump the gap in that case so the label body clears the axis
+        // automatically; the user no longer has to add `inner sep=…`
+        // by hand to every chart.
+        let gap = opts.inner_sep.unwrap_or_else(|| {
+            let on_x_axis = at.1.abs() < 1e-6;
+            let on_y_axis = at.0.abs() < 1e-6;
+            let clears_axis = match anchor {
+                Anchor::North | Anchor::South => on_x_axis,
+                Anchor::East | Anchor::West => on_y_axis,
+                Anchor::NorthEast | Anchor::NorthWest | Anchor::SouthEast | Anchor::SouthWest => {
+                    on_x_axis || on_y_axis
+                }
+                _ => false,
+            };
+            if clears_axis {
+                0.5
+            } else {
+                DEFAULT_INNER_SEP
+            }
+        });
         // `text` overrides the inherited path colour; a missing `text`
         // falls back to the path stroke (so `color=blue` propagates);
         // nothing overrides → `Current`, which means the page's text
@@ -1159,8 +1172,20 @@ fn node_anchor(opts: &Options) -> Anchor {
     // `f64::signum` returns 1.0 for +0.0, so classify against zero
     // explicitly: a bare `above`/`below`/`right` must resolve to the plain
     // North/South/East anchor, not drift into a corner.
-    let sx = if x < 0.0 { -1 } else if x > 0.0 { 1 } else { 0 };
-    let sy = if y < 0.0 { -1 } else if y > 0.0 { 1 } else { 0 };
+    let sx = if x < 0.0 {
+        -1
+    } else if x > 0.0 {
+        1
+    } else {
+        0
+    };
+    let sy = if y < 0.0 {
+        -1
+    } else if y > 0.0 {
+        1
+    } else {
+        0
+    };
     match (sx, sy) {
         (1, 1) => Anchor::NorthEast,
         (-1, 1) => Anchor::NorthWest,
@@ -1235,10 +1260,8 @@ mod tests {
 
     #[test]
     fn def_supplies_a_numeric_macro() {
-        let out = draw(
-            r"\begin{tikzpicture}\def\r{2}\draw (0,0) -- (\r,1);\end{tikzpicture}",
-        )
-        .expect("svg");
+        let out = draw(r"\begin{tikzpicture}\def\r{2}\draw (0,0) -- (\r,1);\end{tikzpicture}")
+            .expect("svg");
         // The macro resolves to 2, so the path ends at (2, 1) cm →
         // 2 · EM_PER_CM em — the bbox shift moves the path to
         // `L 4.997 0.272`.
@@ -1247,10 +1270,8 @@ mod tests {
 
     #[test]
     fn macro_works_inside_an_arithmetic_expression() {
-        let out = draw(
-            r"\begin{tikzpicture}\def\r{2}\draw (0,0) -- (0.5*\r,1);\end{tikzpicture}",
-        )
-        .expect("svg");
+        let out = draw(r"\begin{tikzpicture}\def\r{2}\draw (0,0) -- (0.5*\r,1);\end{tikzpicture}")
+            .expect("svg");
         // 0.5 * 2 = 1, so the path ends at (1, 1) cm → 1 · EM_PER_CM em
         // → `L 2.635 0.272`.
         assert!(out.contains("L 2.635"), "0.5*\\r resolves: {out}");

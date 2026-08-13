@@ -110,9 +110,7 @@ impl Typeset {
             let (ix0, iy0, ix1, iy1) = match ink {
                 Ink::T { x, y, s, .. } => (*x, *y, *x + 0.5 * *s, *y + 0.8 * *s),
                 Ink::R { x0, y0, x1, y1 } => (*x0, *y0, *x1, *y1),
-                Ink::P { x, y, sf, .. } | Ink::F { x, y, sf, .. } => {
-                    (*x, *y, *x + *sf, *y + *sf)
-                }
+                Ink::P { x, y, sf, .. } | Ink::F { x, y, sf, .. } => (*x, *y, *x + *sf, *y + *sf),
             };
             x0 = x0.min(ix0);
             y0 = y0.min(iy0);
@@ -1302,26 +1300,49 @@ fn delim_path(c: char) -> Option<(&'static str, f64, f64, f64)> {
     match c {
         '(' => Some((
             "M 0.30,0.88 C 0.16,0.84 0.09,0.66 0.09,0.31 C 0.09,-0.04 0.16,-0.22 0.30,-0.28",
-            0.90, 0.30, 0.40,
+            0.90,
+            0.30,
+            0.40,
         )),
         ')' => Some((
             "M 0.18,0.88 C 0.32,0.84 0.39,0.66 0.39,0.31 C 0.39,-0.04 0.32,-0.22 0.18,-0.28",
-            0.90, 0.30, 0.40,
+            0.90,
+            0.30,
+            0.40,
         )),
-        '[' => Some(("M 0.42,0.88 L 0.14,0.88 V -0.28 L 0.42,-0.28", 0.90, 0.30, 0.40)),
-        ']' => Some(("M 0.14,0.88 L 0.42,0.88 V -0.28 L 0.14,-0.28", 0.90, 0.30, 0.40)),
+        '[' => Some((
+            "M 0.42,0.88 L 0.14,0.88 V -0.28 L 0.42,-0.28",
+            0.90,
+            0.30,
+            0.40,
+        )),
+        ']' => Some((
+            "M 0.14,0.88 L 0.42,0.88 V -0.28 L 0.14,-0.28",
+            0.90,
+            0.30,
+            0.40,
+        )),
         '{' => Some((
             "M 0.34,0.88 C 0.12,0.88 0.06,0.74 0.06,0.58 C 0.06,0.40 0.22,0.34 0.20,0.14 \
              C 0.18,-0.06 0.06,-0.10 0.06,-0.28 C 0.06,-0.44 0.12,-0.58 0.34,-0.60",
-            0.90, 0.62, 0.40,
+            0.90,
+            0.62,
+            0.40,
         )),
         '}' => Some((
             "M 0.06,0.88 C 0.28,0.88 0.34,0.74 0.34,0.58 C 0.34,0.40 0.18,0.34 0.20,0.14 \
              C 0.22,-0.06 0.34,-0.10 0.34,-0.28 C 0.34,-0.44 0.28,-0.58 0.06,-0.60",
-            0.90, 0.62, 0.40,
+            0.90,
+            0.62,
+            0.40,
         )),
         '|' => Some(("M 0.25,0.80 L 0.25,-0.20", 0.80, 0.20, 0.28)),
-        '‖' => Some(("M 0.20,0.80 L 0.20,-0.20 M 0.70,0.80 L 0.70,-0.20", 0.80, 0.20, 0.90)),
+        '‖' => Some((
+            "M 0.20,0.80 L 0.20,-0.20 M 0.70,0.80 L 0.70,-0.20",
+            0.80,
+            0.20,
+            0.90,
+        )),
         _ => None,
     }
 }
@@ -1411,10 +1432,7 @@ fn bigop_path(c: char) -> Option<(String, f64, f64, f64)> {
             1.20,
         )),
         '∮' => Some((
-            format!(
-                "{} M 0.22,0.58 A 0.14 0.14 0 1 1 0.218,0.58",
-                int_path(0.0)
-            ),
+            format!("{} M 0.22,0.58 A 0.14 0.14 0 1 1 0.218,0.58", int_path(0.0)),
             0.76,
             0.36,
             0.60,
@@ -1821,7 +1839,7 @@ fn layout_sqrt(rad: &Node, deg: Option<&Node>, display: bool) -> LBox {
     let mut r = layout(rad, display);
     let bar_y = r.h + 0.15;
     let sf = (bar_y + 0.17) / 1.0; // radical glyph spans top 0.8 to hook -0.2
-    // Radical `√` (U+221A) design box: x 0.072..0.853, y -0.200..0.800.
+                                   // Radical `√` (U+221A) design box: x 0.072..0.853, y -0.200..0.800.
     let gw = 0.853 * sf;
     let mut out = LBox {
         w: gw + r.w,
@@ -1890,7 +1908,11 @@ fn layout_script(base: &Node, sub: Option<&Node>, sup: Option<&Node>, display: b
     let sup_h = su.as_ref().map(|x| x.h).unwrap_or(0.0);
     // The generic box ascent (0.72) overestimates real glyph tops (~0.5), so a
     // small *negative* drop keeps the exponent near the base's top-right corner.
-    let sup_y = if bigop { b.h - sup_h + sup_d } else { b.h - 0.05 };
+    let sup_y = if bigop {
+        b.h - sup_h + sup_d
+    } else {
+        b.h - 0.05
+    };
     let mut out = LBox {
         w: b.w,
         h: b.h,
@@ -1906,11 +1928,7 @@ fn layout_script(base: &Node, sub: Option<&Node>, sup: Option<&Node>, display: b
     }
     if let Some(s) = sd {
         let x = b.w + 0.01;
-        let sub_y = if bigop {
-            -b.d
-        } else {
-            -(s.h + 0.08)
-        };
+        let sub_y = if bigop { -b.d } else { -(s.h + 0.08) };
         let mut placed = s;
         placed.place(x, sub_y);
         out.w = out.w.max(b.w + 0.01 + placed.w);
@@ -2206,10 +2224,7 @@ fn mathml_frag(node: &Node) -> String {
             out
         }
         Node::Matrix {
-            rows,
-            open,
-            close,
-            ..
+            rows, open, close, ..
         } => {
             let mut out = String::new();
             if *open != '.' {
@@ -2497,7 +2512,9 @@ const MATH_FUNCS: [&str; 18] = [
     "sin", "cos", "tan", "cot", "sec", "csc", "sinh", "cosh", "tanh", "coth", "arcsin", "arccos",
     "arctan", "log", "ln", "exp", "lim", "det",
 ];
-const MATHVARIANTS: [&str; 7] = ["mathbf", "mathbb", "mathcal", "mathsf", "mathtt", "mathit", "mathfrak"];
+const MATHVARIANTS: [&str; 7] = [
+    "mathbf", "mathbb", "mathcal", "mathsf", "mathtt", "mathit", "mathfrak",
+];
 
 /// Combining char used in the MathML `<mover>` for each accent kind.
 fn accent_mo(kind: AccentKind) -> &'static str {
@@ -2637,18 +2654,27 @@ mod tests {
 
     #[test]
     fn boxed_frame_stays_inside_viewbox() {
-        let out = render_block("\\boxed{ \\int\\limits_{-\\infty}^{\\infty} e^{-x^2} \\, dx = \\sqrt{\\pi} }");
+        let out = render_block(
+            "\\boxed{ \\int\\limits_{-\\infty}^{\\infty} e^{-x^2} \\, dx = \\sqrt{\\pi} }",
+        );
         for attr in out.match_indices("<rect") {
             let rect = &out[attr.0..out[attr.0..].find("/>").unwrap() + attr.0 + 2];
             let x = rect
-                .split("x=\"").nth(1).and_then(|s| s.split('"').next())
+                .split("x=\"")
+                .nth(1)
+                .and_then(|s| s.split('"').next())
                 .and_then(|s| s.parse::<f64>().ok())
                 .unwrap();
             let w = rect
-                .split("width=\"").nth(1).and_then(|s| s.split('"').next())
+                .split("width=\"")
+                .nth(1)
+                .and_then(|s| s.split('"').next())
                 .and_then(|s| s.parse::<f64>().ok())
                 .unwrap();
-            assert!(x >= -0.001, "frame rect left edge must not be negative: {rect}");
+            assert!(
+                x >= -0.001,
+                "frame rect left edge must not be negative: {rect}"
+            );
             assert!(
                 x + w <= 8.35,
                 "frame rect must stay within viewBox width: {rect}"
@@ -2668,9 +2694,12 @@ mod tests {
         // The frame must lie *outside* every glyph's visual top/bottom, so
         // tall upper-limit glyphs (e.g. \int\limits upper limit) don't poke
         // through the box's top edge.
-        let out = render_block("\\boxed{ \\int\\limits_{-\\infty}^{\\infty} e^{-x^2} \\, dx = \\sqrt{\\pi} }");
+        let out = render_block(
+            "\\boxed{ \\int\\limits_{-\\infty}^{\\infty} e^{-x^2} \\, dx = \\sqrt{\\pi} }",
+        );
         let vb_h: f64 = out
-            .split("viewBox=\"0 0 ").nth(1)
+            .split("viewBox=\"0 0 ")
+            .nth(1)
             .and_then(|s| s.split('"').next())
             .and_then(|s| s.split(' ').nth(1))
             .and_then(|s| s.parse().ok())
@@ -2678,11 +2707,21 @@ mod tests {
         for m in out.match_indices("<text ") {
             let tag_end = m.0 + out[m.0..].find('>').unwrap() + 1;
             let tag = &out[m.0..tag_end];
-            let y_svg = match tag.split("y=\"").nth(1).and_then(|s| s.split('"').next()).and_then(|s| s.parse::<f64>().ok()) {
+            let y_svg = match tag
+                .split("y=\"")
+                .nth(1)
+                .and_then(|s| s.split('"').next())
+                .and_then(|s| s.parse::<f64>().ok())
+            {
                 Some(v) => v,
                 None => continue,
             };
-            let s = match tag.split("font-size=\"").nth(1).and_then(|s| s.split('"').next()).and_then(|s| s.parse::<f64>().ok()) {
+            let s = match tag
+                .split("font-size=\"")
+                .nth(1)
+                .and_then(|s| s.split('"').next())
+                .and_then(|s| s.parse::<f64>().ok())
+            {
                 Some(v) => v,
                 None => continue,
             };
@@ -2709,9 +2748,7 @@ mod tests {
 
     #[test]
     fn renders_align_rows() {
-        let out = render(
-            "\\begin{align*} y &= x^2 \\\\ z &= x + 1 \\end{align*}",
-        );
+        let out = render("\\begin{align*} y &= x^2 \\\\ z &= x + 1 \\end{align*}");
         assert!(out.contains("<mtable>"), "align maps to an mtable: {out}");
         assert!(
             out.contains("<mtr><mtd><mi mathvariant=\"italic\">y</mi></mtd>"),
@@ -2819,12 +2856,15 @@ mod tests {
     fn renders_accent_marks() {
         let vec = render("\\vec{R}");
         assert!(
-            vec.contains("<mover accent=\"true\"><mi mathvariant=\"italic\">R</mi><mo>⃗</mo></mover>"),
+            vec.contains(
+                "<mover accent=\"true\"><mi mathvariant=\"italic\">R</mi><mo>⃗</mo></mover>"
+            ),
             "vec mathml: {vec}"
         );
         assert!(vec.contains("<path"), "vec draws a mark: {vec}");
         let hat = render("\\hat{x}");
-        assert!(hat.contains("<mover accent=\"true\"><mi mathvariant=\"italic\">x</mi><mo>̂</mo></mover>"));
+        assert!(hat
+            .contains("<mover accent=\"true\"><mi mathvariant=\"italic\">x</mi><mo>̂</mo></mover>"));
         let over = render("\\overline{AB}");
         assert!(over.contains("<mover accent=\"true\"><mrow>"));
         let sub = render("\\vec{R}_0");

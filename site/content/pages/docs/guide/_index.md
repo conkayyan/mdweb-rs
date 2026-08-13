@@ -1,6 +1,7 @@
 ---
 title: "Guide"
-summary: "Step-by-step walkthroughs."
+summary: "Reference on how mdweb organizes content."
 ---
 
-Start here if you're new to mdweb.
+This is the reference section: concepts, layout rules and capabilities.
+For the hands-on, ordered tutorial path go to the [Beginner's guide](/posts/guide/).

@@ -3471,9 +3471,31 @@ fn block_to_html(
         }
         Block::Fence { info, code } => {
             let lang = info.split_whitespace().next().unwrap_or("");
-            if lang == "mermaid" || lang == "flowchart" {
+            // Diagram blocks. Accept either an explicit language
+            // (`mermaid`, `flowchart`, `pie`, `gantt`, `class`,
+            // `plantuml`, `dot`) or any lang the dispatcher recognises
+            // by inspecting the first line of the body.
+            let diagram_lang = match lang {
+                "mermaid" | "flowchart" => Some("flowchart"),
+                "pie" => Some("pie"),
+                "gantt" => Some("gantt"),
+                "class" | "classdiagram" => Some("class"),
+                "plantuml" => Some("plantuml"),
+                "dot" | "graphviz" => Some("dot"),
+                _ => None,
+            };
+            if let Some(kind) = diagram_lang.or_else(|| crate::diagram::kind_of(code)) {
                 if let Some(svg) = crate::diagram::render(code) {
-                    out.push_str("<div class=\"mermaid\">");
+                    let class = match kind {
+                        "flowchart" => "mermaid",
+                        "pie" => "pie",
+                        "gantt" => "gantt",
+                        "class" => "class-diagram",
+                        "plantuml" => "plantuml",
+                        "dot" => "dot",
+                        _ => "diagram",
+                    };
+                    out.push_str(&format!("<div class=\"{class}\">"));
                     out.push_str(&svg);
                     out.push_str("</div>\n");
                     return;
@@ -3843,18 +3865,15 @@ mod tests {
 
     #[test]
     fn latex_fence_routes_to_drawing() {
-        let h = render(
-            "```latex\n\\xymatrix{A \\ar[r] & B}\n```",
-        );
+        let h = render("```latex\n\\xymatrix{A \\ar[r] & B}\n```");
         assert!(h.contains("<div class=\"drawing\"><svg"), "{h}");
         assert!(h.contains("aria-label=\"commutative diagram\""), "{h}");
     }
 
     #[test]
     fn tikz_fence_routes_to_drawing() {
-        let h = render(
-            "```tikz\n\\begin{tikzpicture}\\draw (0,0) -- (1,1);\\end{tikzpicture}\n```",
-        );
+        let h =
+            render("```tikz\n\\begin{tikzpicture}\\draw (0,0) -- (1,1);\\end{tikzpicture}\n```");
         assert!(h.contains("<div class=\"drawing\"><svg"), "{h}");
         assert!(h.contains("aria-label=\"TikZ drawing\""), "{h}");
     }
@@ -3867,9 +3886,7 @@ mod tests {
 
     #[test]
     fn drawing_inside_raw_html_block() {
-        let h = render(
-            "<p>$$</p>\n\n```xy\n\\xymatrix{A \\ar[r] & B}\n```\n\n<p>trailing</p>",
-        );
+        let h = render("<p>$$</p>\n\n```xy\n\\xymatrix{A \\ar[r] & B}\n```\n\n<p>trailing</p>");
         assert!(h.contains("<div class=\"drawing\"><svg"), "{h}");
     }
 
