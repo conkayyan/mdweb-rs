@@ -1,7 +1,7 @@
 ---
 title: "插入图片"
 date: "2026-08-06"
-tags: ["tutorial", "images"]
+tags: ["教程", "图片"]
 ---
 
 把图片放进文档旁边的 `_image/` 目录。`content/` 下的任意目录都可以有一个:

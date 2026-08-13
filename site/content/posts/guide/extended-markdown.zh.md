@@ -3,7 +3,7 @@ title: "扩展 Markdown：公式、图表等"
 date: "2026-08-07"
 updated: "2026-08-11"
 author: "Jane Doe"
-tags: ["mdweb", "markdown", "math"]
+tags: ["mdweb", "markdown", "公式"]
 meta:
   description: "mdweb 原生渲染的全部扩展语法一览——无 JavaScript、无第三方依赖。"
 ---

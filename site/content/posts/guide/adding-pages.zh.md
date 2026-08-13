@@ -1,7 +1,7 @@
 ---
 title: "添加静态页面"
 date: "2026-08-02"
-tags: ["tutorial", "pages"]
+tags: ["教程", "页面"]
 ---
 
 `posts/` 之外的任何内容都是**页面**，页面统一放在 `pages/` 下。

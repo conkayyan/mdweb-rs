@@ -2,7 +2,7 @@
 title: "配置、RSS 与 SEO"
 date: "2026-08-08"
 updated: "2026-08-09"
-tags: ["tutorial", "config", "seo"]
+tags: ["教程", "配置", "SEO"]
 ---
 
 mdweb 的大部分行为都由项目根目录下的单个 `site.toml` 控制。设置标题、

@@ -1,7 +1,7 @@
 ---
 title: "自定义主题"
 date: "2026-07-30"
-tags: ["tutorial", "theme"]
+tags: ["教程", "主题"]
 ---
 
 在 `template/default/` 下覆盖任意文件即可。mdweb 会先加载内嵌的

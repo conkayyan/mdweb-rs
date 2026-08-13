@@ -1,7 +1,7 @@
 ---
 title: "安装 mdweb"
 date: "2026-08-04"
-tags: ["tutorial", "setup"]
+tags: ["教程", "安装"]
 ---
 
 mdweb 是单一静态二进制。从 GitHub 下载 release，或用

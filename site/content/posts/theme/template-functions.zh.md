@@ -2,7 +2,7 @@
 title: "模板表达式：条件、过滤器与循环"
 date: "2026-08-06"
 updated: "2026-08-08"
-tags: ["tutorial", "theme", "template"]
+tags: ["教程", "主题", "模板"]
 ---
 
 `template/default/` 下的主题文件是小型模板。除了基本的 `{{ var }}`

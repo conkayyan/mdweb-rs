@@ -1,7 +1,7 @@
 ---
 title: "撰写第一篇文章"
 date: "2026-08-03"
-tags: ["tutorial", "content"]
+tags: ["教程", "内容"]
 ---
 
 文章放在 `content/posts/` 目录下，就是普通 Markdown。目录即分类，
