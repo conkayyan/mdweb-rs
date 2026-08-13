@@ -161,6 +161,7 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
         ("routes".to_string(), routes),
         ("show_rss".to_string(), Value::Bool(config.show_rss)),
         ("show_sitemap".to_string(), Value::Bool(config.show_sitemap)),
+        ("footer_html".to_string(), Value::str(&config.footer_html)),
         ("search_action".to_string(), Value::str(&search_action)),
         ("search_query".to_string(), Value::str(current_query)),
         ("current_year".to_string(), Value::str(&year)),

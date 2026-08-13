@@ -1844,3 +1844,77 @@ pages = "docs"
         "RSS uses the posts route"
     );
 }
+
+#[test]
+fn footer_html_renders_and_hides_when_empty() {
+    let dir_set = tempdir("footer-html-set");
+    write(
+        &dir_set,
+        "site.toml",
+        r#"title = "X"
+footer_html = '<a href="https://beian.miit.gov.cn/" target="_blank">京ICP备1号</a>'"#,
+    );
+    write(&dir_set, "content/_index.md", "---\n---\nbody\n");
+    let site_set = Site::build(&dir_set, None).expect("build set");
+    assert_eq!(
+        site_set.config.footer_html,
+        "<a href=\"https://beian.miit.gov.cn/\" target=\"_blank\">京ICP备1号</a>"
+    );
+    let html_set = mdweb::render::render_home(&site_set, "en", 1).expect("render set");
+    assert!(
+        html_set.contains("footer-extra"),
+        "footer_html span present when configured: {html_set}"
+    );
+    assert!(
+        html_set.contains("京ICP备1号"),
+        "footer_html content present when configured"
+    );
+
+    let dir_empty = tempdir("footer-html-empty");
+    write(
+        &dir_empty,
+        "site.toml",
+        r#"title = "X"
+footer_html = '   '"#,
+    );
+    write(&dir_empty, "content/_index.md", "---\n---\nbody\n");
+    let site_empty = Site::build(&dir_empty, None).expect("build empty");
+    assert_eq!(site_empty.config.footer_html, "");
+    let html_empty = mdweb::render::render_home(&site_empty, "en", 1).expect("render empty");
+    assert!(
+        !html_empty.contains("footer-extra"),
+        "footer_html span hidden when empty/whitespace-only"
+    );
+}
+
+#[test]
+fn top_level_keys_must_come_before_table_headers() {
+    // The minimal TOML-subset parser (`src/parse.rs`) keeps a sticky `section`
+    // once it enters a `[table]` header, so a bare `key = value` line after
+    // the table is silently nested under that table (e.g. `routes.show_rss`)
+    // and never reaches `Config::from_value`. This test pins down the
+    // canonical ordering: every top-level field appears before any `[table]`
+    // block, so values like `home_limit = 5` actually take effect.
+    let dir = tempdir("toplevel-order");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+home_limit = 5
+show_rss = false
+footer_html = '<a href="https://example.com/">x</a>'
+
+[routes]
+search = "search"
+"#,
+    );
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    let site = Site::build(&dir, None).expect("build");
+    assert_eq!(site.config.home_limit, 5, "home_limit parsed at root");
+    assert!(!site.config.show_rss, "show_rss parsed at root");
+    assert_eq!(
+        site.config.footer_html, "<a href=\"https://example.com/\">x</a>",
+        "footer_html parsed at root"
+    );
+    assert_eq!(site.config.routes.search, "search", "[routes] still works");
+}

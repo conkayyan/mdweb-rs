@@ -160,6 +160,11 @@ pub struct Config {
     pub show_rss: bool,
     /// Whether to surface the sitemap link in templates. Default `true`.
     pub show_sitemap: bool,
+    /// Raw HTML appended to the right of the copyright/Powered-by line in the
+    /// footer (e.g. a Chinese ICP record link). Inserted verbatim via `| safe`,
+    /// so the site author is responsible for keeping it well-formed. Empty by
+    /// default.
+    pub footer_html: String,
     /// Articles shown per page on the home feed. `0` disables pagination
     /// (every article on one page). Default `10`.
     pub home_limit: usize,
@@ -378,6 +383,7 @@ impl Default for Config {
             friend_links: Vec::new(),
             show_rss: true,
             show_sitemap: true,
+            footer_html: String::new(),
             home_limit: 10,
             category_limit: 20,
             pages_limit: 50,
@@ -447,6 +453,9 @@ impl Config {
         }
         if let Some(b) = m.get("show_sitemap").and_then(|v| v.as_bool()) {
             cfg.show_sitemap = b;
+        }
+        if let Some(s) = m.get("footer_html").and_then(|v| v.as_str()) {
+            cfg.footer_html = s.trim().to_string();
         }
         if let Some(n) = m.get("home_limit").and_then(|v| v.as_int()) {
             if n >= 0 {

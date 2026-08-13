@@ -5,6 +5,36 @@ language = "en"
 languages = ["en", "zh"]
 theme = "default"
 
+# Syndication: toggle visibility of the RSS feed and sitemap links in the
+# footer. Both default to `true`; flip to `false` to hide.
+show_rss = true
+show_sitemap = true
+
+# Custom HTML appended to the right of the "Powered by mdweb" line in the
+# footer. Use single quotes to embed HTML with double quotes (e.g. a Chinese
+# ICP record link). Inserted verbatim — make sure the markup is well-formed.
+# footer_html = '<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">京ICP备12345678号</a>'
+
+# Listing limits. Set `0` to disable pagination for that listing.
+home_limit = 5       # articles per page on /
+category_limit = 5   # articles per page in category landings
+pages_limit = 50     # pages per page in a directory landing
+tags_limit = 10      # articles per page on a /tags/<tag>/ landing
+
+# Tag cloud: show the tag widget in the sidebar (true) or hide it (false).
+show_tag_cloud = true
+tag_cloud_limit = 0   # max tags in the sidebar cloud; 0 = show all
+
+# Friend links — rendered in the sidebar (target="_blank"). Set
+# `show_friend_links = false` to hide the block even when entries exist.
+show_friend_links = true
+
+# NOTE: every top-level key above MUST appear before any `[table]` header
+# below. The minimal TOML-subset parser used by `site.toml` keeps a sticky
+# `section` once it enters a `[table]`, so a bare `key = value` line after
+# a table header is silently nested under that table (e.g. `routes.show_rss`)
+# and ignored at config-lookup time. Keep this in mind when adding fields.
+
 # Routing rules — URL slugs for the well-known, non-content routes. Each value
 # renames that route everywhere: the server, generated links, the footer/theme
 # templates and the feed/sitemap/search-index URLs all pick up the new value.
@@ -21,21 +51,6 @@ search_index = "search.json"   # client-side search:   /search.json
 static       = "static"        # theme assets:         /static/...
 posts        = "posts"         # blog container:       content/posts/... → /posts/...
 pages        = "pages"         # pages container:      content/pages/... → /pages/...
-
-# Syndication: toggle visibility of the RSS feed and sitemap links in the
-# footer. Both default to `true`; flip to `false` to hide.
-show_rss = true
-show_sitemap = true
-
-# Listing limits. Set `0` to disable pagination for that listing.
-home_limit = 5       # articles per page on /
-category_limit = 5   # articles per page in category landings
-pages_limit = 50     # pages per page in a directory landing
-tags_limit = 10      # articles per page on a /tags/<tag>/ landing
-
-# Tag cloud: show the tag widget in the sidebar (true) or hide it (false).
-show_tag_cloud = true
-tag_cloud_limit = 0   # max tags in the sidebar cloud; 0 = show all
 
 # Analytics — leave commented out (or `id = ""`) to disable. When `id` is
 # non-empty, the matching tracker JS is auto-injected into the page <head>
@@ -100,10 +115,6 @@ search_placeholder = "搜索…"
 search_no_results = "未找到相关文章。"
 rss           = "RSS 订阅"
 sitemap       = "站点地图"
-
-# Friend links — rendered in the sidebar (target="_blank"). Set
-# `show_friend_links = false` to hide the block even when entries exist.
-show_friend_links = true
 
 [[friend_links]]
 name = "mdweb"
