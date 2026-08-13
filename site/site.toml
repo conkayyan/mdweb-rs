@@ -101,7 +101,10 @@ search_no_results = "未找到相关文章。"
 rss           = "RSS 订阅"
 sitemap       = "站点地图"
 
-# Friend links — rendered in the sidebar (target="_blank").
+# Friend links — rendered in the sidebar (target="_blank"). Set
+# `show_friend_links = false` to hide the block even when entries exist.
+show_friend_links = true
+
 [[friend_links]]
 name = "mdweb"
 url = "https://github.com/conkayyan/mdweb-rs"

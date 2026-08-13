@@ -150,6 +150,10 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
             "show_tag_cloud".to_string(),
             Value::Bool(config.show_tag_cloud),
         ),
+        (
+            "show_friend_links".to_string(),
+            Value::Bool(config.show_friend_links),
+        ),
         ("friend_links".to_string(), Value::Arr(friend_links)),
         ("rss_url".to_string(), Value::str(&rss_url)),
         ("sitemap_url".to_string(), Value::str(&sitemap_url)),

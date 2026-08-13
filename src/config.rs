@@ -169,6 +169,10 @@ pub struct Config {
     pub pages_limit: usize,
     /// Whether to show the tag cloud widget in the sidebar. Default `true`.
     pub show_tag_cloud: bool,
+    /// Whether to show the friend-links block in the sidebar. The block is
+    /// also hidden when no `[[friend_links]]` entries are configured. Default
+    /// `true`.
+    pub show_friend_links: bool,
     /// Articles shown per page on a tag listing page. `0` disables
     /// pagination (every match on one page). Default `20`.
     pub tags_limit: usize,
@@ -378,6 +382,7 @@ impl Default for Config {
             category_limit: 20,
             pages_limit: 50,
             show_tag_cloud: true,
+            show_friend_links: true,
             tags_limit: 20,
             tag_cloud_limit: 0,
             analytics: AnalyticsConfig::default(),
@@ -460,6 +465,9 @@ impl Config {
         }
         if let Some(b) = m.get("show_tag_cloud").and_then(|v| v.as_bool()) {
             cfg.show_tag_cloud = b;
+        }
+        if let Some(b) = m.get("show_friend_links").and_then(|v| v.as_bool()) {
+            cfg.show_friend_links = b;
         }
         if let Some(n) = m.get("tags_limit").and_then(|v| v.as_int()) {
             if n >= 0 {
