@@ -8,6 +8,9 @@ use crate::value::Value;
 #[derive(Debug, Clone, Default)]
 pub struct LangMeta {
     pub title: Option<String>,
+    /// Brand text shown at the top-left logo. Distinct from `title` (the
+    /// HTML `<title>`); falls back to the site title when unset.
+    pub site_name: Option<String>,
     pub display_name: Option<String>,
     pub description: Option<String>,
     pub keywords: Option<String>,
@@ -145,6 +148,10 @@ impl Routes {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub title: String,
+    /// Brand text for the top-left logo. Separate from `title` (the HTML
+    /// `<title>`); each language may override it via `[lang.<code>].site_name`,
+    /// falling back to the site title when unset.
+    pub site_name: String,
     pub base_url: String,
     pub author: String,
     pub language: String,
@@ -396,6 +403,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             title: "My Site".into(),
+            site_name: String::new(),
             base_url: String::new(),
             author: "Unknown".into(),
             language: "en".into(),
@@ -489,6 +497,9 @@ impl Config {
         let mut cfg = Config::default();
         if let Some(s) = get_str("title") {
             cfg.title = s;
+        }
+        if let Some(s) = get_str("site_name") {
+            cfg.site_name = s;
         }
         if let Some(s) = get_str("base_url") {
             cfg.base_url = s;
@@ -663,6 +674,10 @@ impl Config {
                             .get("title")
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string()),
+                        site_name: mm
+                            .get("site_name")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string()),
                         display_name: mm
                             .get("display_name")
                             .and_then(|v| v.as_str())
@@ -714,6 +729,18 @@ impl Config {
             .get(lang)
             .and_then(|m| m.title.clone())
             .unwrap_or_else(|| self.title.clone())
+    }
+
+    /// Brand text for the top-left logo in a language: `[lang.<code>].site_name`
+    /// → top-level `site_name` → `title_for(lang)`.
+    pub fn site_name_for(&self, lang: &str) -> String {
+        if let Some(n) = self.langs.get(lang).and_then(|m| m.site_name.clone()) {
+            return n;
+        }
+        if !self.site_name.is_empty() {
+            return self.site_name.clone();
+        }
+        self.title_for(lang)
     }
 
     pub fn description_for(&self, lang: &str) -> String {
@@ -828,6 +855,36 @@ mod tests {
     fn parse(text: &str) -> Config {
         let v = crate::parse::parse_toml(text).expect("parse");
         Config::from_value(&v)
+    }
+
+    #[test]
+    fn site_name_resolves_per_lang_then_top_level_then_title() {
+        let cfg = parse(
+            r#"
+            title = "My Blog"
+            site_name = "mdweb"
+
+            [lang.zh]
+            title = "我的博客"
+            site_name = "码德网"
+        "#,
+        );
+        // Per-language site_name wins.
+        assert_eq!(cfg.site_name_for("zh"), "码德网");
+        // Language without a site_name falls back to the top-level one.
+        assert_eq!(cfg.site_name_for("en"), "mdweb");
+        assert_eq!(cfg.site_name, "mdweb", "top-level parsed");
+
+        // No site_name anywhere → the (per-language) title is used.
+        let cfg2 = parse(
+            r#"
+            languages = ["en", "zh"]
+            [lang.zh]
+            title = "我的博客"
+        "#,
+        );
+        assert_eq!(cfg2.site_name_for("zh"), "我的博客");
+        assert_eq!(cfg2.site_name_for("en"), "My Site", "default title fallback");
     }
 
     #[test]

@@ -403,6 +403,7 @@ Rules:
 
 ```toml
 title = "My Blog"            # site title (fallback for every language)
+site_name = "MDWeb Demo"          # brand text at the top-left logo (falls back to title)
 base_url = "http://localhost:8080"
 author = "Jane Doe"
 language = "en"              # default language (unprefixed URLs)
@@ -431,12 +432,14 @@ show_tag_cloud = true
 
 [lang.en]                    # per-language overrides
 title = "My Blog"
+site_name = "MDWeb Demo"          # logo text; unset falls back to `title`
 display_name = "English"     # label shown in the language dropdown
 description = "A demo site built with mdweb."
 keywords = "blog, rust"
 
 [lang.zh]
 title = "我的博客"
+site_name = "MDWeb Demo"
 display_name = "简体中文"
 description = "使用 mdweb 构建的演示站点，支持多语言。"
 keywords = "博客, rust"
@@ -682,8 +685,9 @@ Globally available:
 | `config.title` / `config.base_url` / `config.author` / `config.language` | site config |
 | `config.languages` | list of language codes |
 | `config.meta` / `config.params` | arbitrary maps from `site.toml` |
-| `site.title` / `site.lang` | site title and current language |
+| `site.title` / `site.site_name` / `site.lang` | site title, logo brand text and current language |
 | `title` | current page/site title |
+| `site_name` | logo brand text for the current language (falls back to `title`) |
 | `description` / `keywords` | current language description/keywords |
 | `lang` | current language code |
 | `languages` | list of `{ code, display_name, url, active }` for the language switcher |

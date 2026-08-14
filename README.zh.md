@@ -373,6 +373,7 @@ content/posts/guide/
 
 ```toml
 title = "My Blog"            # 站点标题（所有语言的兜底值）
+site_name = "MDWeb Demo"          # 左上角 logo 处的品牌名（缺省时回退到 title）
 base_url = "http://localhost:8080"
 author = "Jane Doe"
 language = "en"              # 默认语言（无前缀 URL）
@@ -402,12 +403,14 @@ tag_cloud_limit = 0   # 侧边栏标签云最多显示几个标签；0 = 全部�
 
 [lang.en]                    # 各语言的覆盖项
 title = "My Blog"
+site_name = "MDWeb Demo"          # logo 文本；未设置时回退到 `title`
 display_name = "English"     # 语言下拉菜单中显示的标签
 description = "A demo site built with mdweb."
 keywords = "blog, rust"
 
 [lang.zh]
 title = "我的博客"
+site_name = "MDWeb Demo"
 display_name = "简体中文"
 description = "使用 mdweb 构建的演示站点，支持多语言。"
 keywords = "博客, rust"
@@ -649,8 +652,9 @@ aliases = ["about-us", "contact"]
 | `config.title` / `config.base_url` / `config.author` / `config.language` | 站点配置 |
 | `config.languages` | 语言代码列表 |
 | `config.meta` / `config.params` | `site.toml` 中的任意映射 |
-| `site.title` / `site.lang` | 站点标题与当前语言 |
+| `site.title` / `site.site_name` / `site.lang` | 站点标题、logo 品牌名与当前语言 |
 | `title` | 当前页面 / 站点标题 |
+| `site_name` | 当前语言的 logo 品牌名（缺省回退到 `title`） |
 | `description` / `keywords` | 当前语言的描述 / 关键词 |
 | `lang` | 当前语言代码 |
 | `languages` | 语言切换列表：`{ code, display_name, url, active }` |

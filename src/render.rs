@@ -102,6 +102,7 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
             "config".to_string(),
             Value::Map(BTreeMap::from([
                 ("title".to_string(), Value::str(&config.title)),
+                ("site_name".to_string(), Value::str(&config.site_name)),
                 ("base_url".to_string(), Value::str(&config.base_url)),
                 ("author".to_string(), Value::str(&config.author)),
                 ("language".to_string(), Value::str(lang)),
@@ -115,11 +116,16 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
             "site".to_string(),
             Value::Map(BTreeMap::from([
                 ("title".to_string(), Value::str(site.title_for(lang))),
+                ("site_name".to_string(), Value::str(site.config.site_name_for(lang))),
                 ("lang".to_string(), Value::str(lang)),
                 ("languages".to_string(), Value::Arr(languages.clone())),
             ])),
         ),
         ("title".to_string(), Value::str(site.title_for(lang))),
+        (
+            "site_name".to_string(),
+            Value::str(site.config.site_name_for(lang)),
+        ),
         (
             "description".to_string(),
             opt_str(Some(&config.description_for(lang))),

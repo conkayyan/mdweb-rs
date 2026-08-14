@@ -2487,3 +2487,52 @@ fn aliases_parse_into_canonical_url_and_value() {
     assert!(xml.contains("/zh/about-us/"), "sitemap lists the alias URL");
     assert!(!xml.contains("/zh/pages/about/"), "slug URL not canonical");
 }
+
+#[test]
+fn site_name_drives_brand_and_title_stays_in_head() {
+    // `[lang.<code>].site_name` (→ top-level `site_name` → `title`) feeds the
+    // top-left brand; the HTML `<title>` keeps using the language `title`.
+    let dir = tempdir("sitename");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "My Blog"
+site_name = "mdweb"
+languages = ["en", "zh"]
+
+[lang.zh]
+title = "我的博客"
+site_name = "码德网"
+"#,
+    );
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    let site = Site::build(&dir, None).expect("build");
+    assert_eq!(site.config.site_name_for("en"), "mdweb");
+    assert_eq!(site.config.site_name_for("zh"), "码德网");
+
+    let en = mdweb::render::render_home(&site, "en", 1).expect("render en");
+    assert!(
+        en.contains("<span class=\"brand-name\">mdweb</span>"),
+        "brand uses site_name, not title"
+    );
+    assert!(
+        en.contains("<title>My Blog</title>"),
+        "HTML head title still uses the site title"
+    );
+
+    let zh = mdweb::render::render_home(&site, "zh", 1).expect("render zh");
+    assert!(zh.contains("<span class=\"brand-name\">码德网</span>"));
+    assert!(
+        zh.contains("<title>我的博客</title>"),
+        "zh HTML title uses the zh language title"
+    );
+
+    // Without any site_name the brand falls back to the title.
+    let dir2 = tempdir("sitename-fb");
+    write(&dir2, "site.toml", r#"title = "Plain Blog""#);
+    write(&dir2, "content/_index.md", "---\n---\nbody\n");
+    let site2 = Site::build(&dir2, None).expect("build fb");
+    assert_eq!(site2.config.site_name_for("en"), "Plain Blog");
+    let html = mdweb::render::render_home(&site2, "en", 1).expect("render fb");
+    assert!(html.contains("<span class=\"brand-name\">Plain Blog</span>"));
+}
