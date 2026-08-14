@@ -830,10 +830,7 @@ pub(crate) fn fmt(x: f64) -> String {
 }
 
 fn escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+    crate::html::escape_attr(s)
 }
 
 // ---------------------------------------------------------------------------

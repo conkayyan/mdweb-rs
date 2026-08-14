@@ -10,10 +10,7 @@
 /// before the SVG fragment is handed to the renderer, so user input
 /// (Cyrillic, CJK, ampersands in labels) survives intact.
 pub fn escape_text(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+    crate::html::escape_attr(s)
 }
 
 /// One row of wrapped text — either a single line, or multiple `<tspan>`

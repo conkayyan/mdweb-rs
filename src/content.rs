@@ -95,6 +95,11 @@ pub struct Article {
 }
 
 impl Article {
+    /// Whether this document lives under the posts directory.
+    pub fn is_post(&self) -> bool {
+        path_is_posts(&self.path)
+    }
+
     /// Word-like and CJK-character counts for the readable body, ignoring any
     /// markup tags so the estimate reflects what a reader actually sees.
     fn reading_content_counts(&self) -> (usize, usize) {
@@ -432,7 +437,7 @@ impl Site {
         // they have their own navigation surface.
         let posts_paths: HashSet<Vec<String>> = all_paths
             .iter()
-            .filter(|p| p.first().map(|s| s.as_str()) == Some(POSTS_DIR))
+            .filter(|p| path_is_posts(p))
             .cloned()
             .collect();
         let tree = build_tree(&posts_paths, &indices, &config);
@@ -617,7 +622,7 @@ impl Site {
             // Only blog posts surface on the home feed: pages (anything not
             // under `posts/`) belong in the pages tree, not the home stream.
             .filter(|a| {
-                a.lang == lang && !a.draft && a.path.first().map(|s| s.as_str()) == Some(POSTS_DIR)
+                a.lang == lang && !a.draft && a.is_post()
             })
             .map(|a| a.to_value())
             .collect();
@@ -805,7 +810,7 @@ impl Site {
         let pages: Vec<&Article> = self
             .articles
             .iter()
-            .filter(|a| a.lang == lang && a.path.first().map(|s| s.as_str()) != Some(POSTS_DIR))
+            .filter(|a| a.lang == lang && !a.is_post())
             .collect();
 
         // 2. Collect every directory prefix that any page lives under.
@@ -852,7 +857,7 @@ impl Site {
     /// Index › pages.
     pub fn breadcrumbs(&self, path: &[String], lang: &str, current_title: &str) -> Vec<Value> {
         let mut items: Vec<Value> = Vec::new();
-        if path.first().map(|s| s.as_str()) != Some(POSTS_DIR) {
+        if !path_is_posts(path) {
             // A fixed "Index" / "首页" label rather than the site title (which
             // can be long). i18n key: `breadcrumb_home`.
             let home_label = self.config.t("breadcrumb_home", lang);
@@ -868,7 +873,7 @@ impl Site {
         // `pages/[…]` (e.g. `pages/about.md` whose path is just `["pages"]`)
         // therefore drop the Pages level entirely; the current title then
         // becomes the only post-home crumb.
-        let skip_pages = path.first().map(|s| s.as_str()) == Some(PAGES_DIR);
+        let skip_pages = path_is_pages(path);
         let mut acc: Vec<String> = Vec::new();
         for (i, seg) in path.iter().enumerate() {
             acc.push(seg.clone());
@@ -1031,7 +1036,7 @@ impl Site {
             .filter(|a| {
                 a.lang == lang
                     && a.path == dir_path
-                    && a.path.first().map(|s| s.as_str()) != Some(POSTS_DIR)
+                    && !a.is_post()
             })
             .collect();
         leafs.sort_by_key(|a| std::cmp::Reverse(a.sort_ts));
@@ -1304,7 +1309,7 @@ fn parse_name(stem: &str, languages: &[String], default: &str) -> (String, Strin
     (stem.to_string(), default.to_string())
 }
 
-fn find_category_by_path<'a>(cats: &'a [Category], path: &[String]) -> Option<&'a Category> {
+pub fn find_category_by_path<'a>(cats: &'a [Category], path: &[String]) -> Option<&'a Category> {
     for c in cats {
         if c.path == path {
             return Some(c);
@@ -1314,6 +1319,16 @@ fn find_category_by_path<'a>(cats: &'a [Category], path: &[String]) -> Option<&'
         }
     }
     None
+}
+
+/// Whether a document path lives under the posts directory (`posts/…`).
+pub fn path_is_posts(path: &[String]) -> bool {
+    path.first().map(|s| s.as_str()) == Some(POSTS_DIR)
+}
+
+/// Whether a document path lives under the pages directory (`pages/…`).
+pub fn path_is_pages(path: &[String]) -> bool {
+    path.first().map(|s| s.as_str()) == Some(PAGES_DIR)
 }
 
 fn split_dir(dir: &str) -> Vec<String> {
@@ -1511,42 +1526,13 @@ fn parse_date(raw: Option<&str>) -> (Option<String>, Option<String>, Option<i64>
 
 fn parse_epoch(date_part: &str) -> Option<i64> {
     let mut parts = date_part.split('-');
-    let y = parts.next()?.parse::<i32>().ok()?;
+    let y = parts.next()?.parse::<i64>().ok()?;
     let m = parts.next()?.parse::<u32>().ok()?;
     let d = parts.next()?.parse::<u32>().ok()?;
-    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+    if !(1..=12).contains(&m) || d == 0 || d > crate::date::month_len(y, m) {
         return None;
     }
-    Some(date_to_epoch(y, m, d))
-}
-
-fn date_to_epoch(y: i32, m: u32, d: u32) -> i64 {
-    let my = if m <= 2 { y - 1 } else { y };
-    let mut days = 365 * (i64::from(my) - 1970);
-    days += (i64::from(my) - 1969) / 4;
-    days -= (i64::from(my) - 1901) / 100;
-    days += (i64::from(my) - 1601) / 400;
-    let leap = if is_leap(y) && m > 2 { 1 } else { 0 };
-    let md: i64 = match m {
-        1 => 0,
-        2 => 31,
-        3 => 59,
-        4 => 90,
-        5 => 120,
-        6 => 151,
-        7 => 181,
-        8 => 212,
-        9 => 243,
-        10 => 273,
-        11 => 304,
-        12 => 334,
-        _ => 0,
-    };
-    days + md + leap + i64::from(d) - 1
-}
-
-fn is_leap(y: i32) -> bool {
-    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+    Some(crate::date::date_to_epoch(y, m, d))
 }
 
 fn compute_navigation(articles: &mut [Article]) {

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::config::{I18N_DEFAULTS, POSTS_DIR};
+use crate::config::I18N_DEFAULTS;
 use crate::content::{category_tree_value, tree_has_active, Article, Category, Site};
 use crate::feed;
 use crate::value::{opt_str, Value};
@@ -183,9 +183,7 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
 /// `posts/`. The `pages_tree` value supersedes this for the new header nav,
 /// but we keep it for backward compatibility with custom themes.
 fn pages_value(articles: &[Article], lang: &str, current_url: &str) -> Value {
-    nav_links_value(articles, lang, current_url, |a| {
-        a.path.first().map(|s| s.as_str()) != Some(POSTS_DIR)
-    })
+    nav_links_value(articles, lang, current_url, |a| !a.is_post())
 }
 
 /// Top-level entries for the header's **Pages** dropdown: every direct
@@ -288,16 +286,15 @@ fn nav_links_value(
 fn recent_value(articles: &[Article], lang: &str, limit: usize) -> Value {
     let mut filtered: Vec<&Article> = articles
         .iter()
-        .filter(|a| a.lang == lang && a.path.first().map(|s| s.as_str()) == Some(POSTS_DIR))
+        .filter(|a| a.lang == lang && a.is_post())
         .collect();
     filtered.sort_by_key(|a| std::cmp::Reverse(a.sort_ts));
     let mut out = Vec::new();
     for a in filtered.into_iter().take(limit) {
-        let date = a.date.as_deref().unwrap_or("");
         out.push(Value::Map(BTreeMap::from([
             ("title".to_string(), Value::str(&a.title)),
             ("url".to_string(), Value::str(&a.url)),
-            ("date".to_string(), opt_str(Some(date))),
+            ("date".to_string(), opt_str(a.date.as_deref())),
         ])));
     }
     Value::Arr(out)
@@ -401,7 +398,7 @@ pub fn render_home(site: &Site, lang: &str, page: usize) -> Result<String, Strin
 
 pub fn render_article(site: &Site, lang: &str, article: &Article) -> Result<String, String> {
     // Directory-driven: posts/* → article template, anything else → page.
-    let template = if article.path.first().map(|s| s.as_str()) == Some(POSTS_DIR) {
+    let template = if article.is_post() {
         "article.html"
     } else {
         "page.html"
@@ -566,25 +563,5 @@ fn current_year() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    days_to_year(now / 86400)
-}
-
-fn days_to_year(days: i64) -> i64 {
-    fn leaps(v: i64) -> i64 {
-        v / 4 - v / 100 + v / 400
-    }
-    fn start(y: i64) -> i64 {
-        365 * (y - 1970) + leaps(y - 1) - leaps(1969)
-    }
-    let mut y = 1970 + days / 366;
-    if days < start(y) {
-        while days < start(y) {
-            y -= 1;
-        }
-    } else {
-        while days >= start(y + 1) {
-            y += 1;
-        }
-    }
-    y
+    crate::date::year_for_days(now / 86400)
 }

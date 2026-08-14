@@ -147,7 +147,7 @@ impl Typeset {
                     } else {
                         ""
                     },
-                    esc(t)
+                    crate::html::escape_attr(t)
                 ));
                 }
                 Ink::R { x0, y0, x1, y1 } => {
@@ -215,7 +215,7 @@ fn svg_doc(src: &str, display: bool) -> String {
     } else {
         format!(" style=\"vertical-align:-{}em;overflow:visible\"", fmt(t.d))
     };
-    let aria = esc_attr(trimmed);
+    let aria = crate::html::escape_attr(trimmed);
     let parts = t.emit_at(0.0, t.h);
     let mml = to_mathml(&node, display);
     format!(
@@ -2163,7 +2163,7 @@ fn mathml_frag(node: &Node) -> String {
         Node::Accent { base, kind } => format!(
             "<mover accent=\"true\">{}{}</mover>",
             wrap(&mathml_frag(base)),
-            format!("<mo>{}</mo>", esc(&accent_mo(*kind)))
+            format!("<mo>{}</mo>", crate::html::escape_attr(&accent_mo(*kind)))
         ),
         Node::Sqrt {
             rad,
@@ -2211,14 +2211,14 @@ fn mathml_frag(node: &Node) -> String {
             if *open != '.' {
                 out.push_str(&format!(
                     "<mo stretchy=\"true\">{}</mo>",
-                    esc(&open.to_string())
+                    crate::html::escape_attr(&open.to_string())
                 ));
             }
             out.push_str(&mid);
             if *close != '.' {
                 out.push_str(&format!(
                     "<mo stretchy=\"true\">{}</mo>",
-                    esc(&close.to_string())
+                    crate::html::escape_attr(&close.to_string())
                 ));
             }
             out
@@ -2230,7 +2230,7 @@ fn mathml_frag(node: &Node) -> String {
             if *open != '.' {
                 out.push_str(&format!(
                     "<mo stretchy=\"true\">{}</mo>",
-                    esc(&open.to_string())
+                    crate::html::escape_attr(&open.to_string())
                 ));
             }
             out.push_str("<mtable>");
@@ -2252,7 +2252,7 @@ fn mathml_frag(node: &Node) -> String {
             if *close != '.' {
                 out.push_str(&format!(
                     "<mo stretchy=\"true\">{}</mo>",
-                    esc(&close.to_string())
+                    crate::html::escape_attr(&close.to_string())
                 ));
             }
             out
@@ -2264,12 +2264,12 @@ fn mathml_frag(node: &Node) -> String {
 fn sym_mathml(s: &Sym) -> String {
     let t = &s.t;
     if t.chars().all(|c| c.is_ascii_digit()) {
-        return format!("<mn>{}</mn>", esc(t));
+        return format!("<mn>{}</mn>", crate::html::escape_attr(t));
     }
     if s.italic {
         return t
             .chars()
-            .map(|c| format!("<mi mathvariant=\"italic\">{}</mi>", esc(&c.to_string())))
+            .map(|c| format!("<mi mathvariant=\"italic\">{}</mi>", crate::html::escape_attr(&c.to_string())))
             .collect();
     }
     match s.cls {
@@ -2292,13 +2292,13 @@ fn sym_mathml(s: &Sym) -> String {
                 "<mo {}{}>{}</mo>",
                 att,
                 if mov.is_empty() { "" } else { mov },
-                esc(t)
+                crate::html::escape_attr(t)
             )
         }
         Class::Bin | Class::Rel | Class::Open | Class::Close | Class::Punct => {
-            format!("<mo>{}</mo>", esc(t))
+            format!("<mo>{}</mo>", crate::html::escape_attr(t))
         }
-        Class::Ord => format!("<mi mathvariant=\"normal\">{}</mi>", esc(t)),
+        Class::Ord => format!("<mi mathvariant=\"normal\">{}</mi>", crate::html::escape_attr(t)),
     }
 }
 
@@ -2528,21 +2528,6 @@ fn accent_mo(kind: AccentKind) -> &'static str {
         AccentKind::Tilde | AccentKind::Widetilde => "̃",
         AccentKind::Widehat => "̂",
     }
-}
-
-fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
-fn esc(s: &str) -> String {
-    escape_html(s)
-}
-
-fn esc_attr(s: &str) -> String {
-    escape_html(s)
 }
 
 #[cfg(test)]

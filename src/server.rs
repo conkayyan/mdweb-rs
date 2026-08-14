@@ -3,8 +3,8 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::config::POSTS_DIR;
-use crate::content::{theme_files, Category, Site};
+use crate::config::SecurityConfig;
+use crate::content::{theme_files, Site};
 use crate::feed;
 use crate::image_path;
 use crate::render;
@@ -14,6 +14,10 @@ pub fn serve(site: Site, host: &str, port: u16) -> Result<(), String> {
     let addr = format!("{host}:{port}");
     let listener = TcpListener::bind(&addr).map_err(|e| e.to_string())?;
     let site = Arc::new(site);
+    // Cap concurrent workers so a connection flood can't exhaust threads.
+    // Connections beyond the cap are dropped (the TCP backlog absorbs the
+    // burst); this is a bound on resource use, not a rate limit.
+    let active = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     println!("mdweb: serving site at http://{}/", addr);
     println!("       docs: {}", site.doc_root.display());
     for lang in &site.languages {
@@ -27,13 +31,23 @@ pub fn serve(site: Site, host: &str, port: u16) -> Result<(), String> {
 
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
+        if active.fetch_add(1, std::sync::atomic::Ordering::SeqCst) >= MAX_CONNECTIONS {
+            active.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            drop(stream);
+            continue;
+        }
         let site = Arc::clone(&site);
+        let active = Arc::clone(&active);
         std::thread::spawn(move || {
             let _ = handle(stream, &site);
+            active.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
         });
     }
     Ok(())
 }
+
+/// Upper bound on concurrent connections before new ones are dropped.
+const MAX_CONNECTIONS: usize = 64;
 
 fn handle(mut stream: TcpStream, site: &Arc<Site>) -> std::io::Result<()> {
     // Bound how long a connection may sit idle while we are still reading the
@@ -60,11 +74,11 @@ fn handle(mut stream: TcpStream, site: &Arc<Site>) -> std::io::Result<()> {
     let head = String::from_utf8_lossy(&buf).to_string();
     let request_line = head.lines().next().unwrap_or("GET / HTTP/1.1");
     let parts: Vec<&str> = request_line.split_whitespace().collect();
-    let csp = site.config.security.csp_header();
+    let security = &site.config.security;
     if parts.len() < 2 {
         let _ = respond(
             &mut stream,
-            &csp,
+            security,
             400,
             "Bad Request",
             "text/plain; charset=utf-8",
@@ -76,7 +90,7 @@ fn handle(mut stream: TcpStream, site: &Arc<Site>) -> std::io::Result<()> {
     if method != "GET" && method != "HEAD" {
         let _ = respond(
             &mut stream,
-            &csp,
+            security,
             405,
             "Method Not Allowed",
             "text/plain; charset=utf-8",
@@ -99,14 +113,14 @@ fn handle(mut stream: TcpStream, site: &Arc<Site>) -> std::io::Result<()> {
 
     match route(site, &path, &query) {
         Ok(resp) => {
-            respond(&mut stream, &csp, 200, "OK", resp.content_type, &resp.body)?;
+            respond(&mut stream, security, 200, "OK", resp.content_type, &resp.body)?;
         }
         Err(_) => {
             let html = render::render_not_found(site, &lang)
                 .unwrap_or_else(|_| "<h1>404 Not Found</h1>".to_string());
             respond(
                 &mut stream,
-                &csp,
+                security,
                 404,
                 "Not Found",
                 "text/html; charset=utf-8",
@@ -273,7 +287,7 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
         *first = routes.prefix_disk(first);
     }
 
-    if let Some(cat) = find_category(site, &rest.join("/")) {
+    if let Some(cat) = crate::content::find_category_by_path(&site.tree, &rest) {
         return render::render_category(site, &lang, cat, page).map(|h| Response {
             body: h.into_bytes(),
             content_type: HTML,
@@ -346,21 +360,6 @@ fn serve_static(site: &Arc<Site>, rel: &str) -> Option<Vec<u8>> {
     None
 }
 
-fn find_category<'a>(site: &'a Site, key: &str) -> Option<&'a Category> {
-    fn walk<'a>(cats: &'a [Category], key: &str) -> Option<&'a Category> {
-        for c in cats {
-            if c.path.join("/") == key {
-                return Some(c);
-            }
-            if let Some(f) = walk(&c.children, key) {
-                return Some(f);
-            }
-        }
-        None
-    }
-    walk(&site.tree, key)
-}
-
 fn find_article<'a>(
     site: &'a Site,
     lang: &str,
@@ -399,7 +398,7 @@ fn find_section(site: &Site, rest: &[String]) -> Option<Vec<String>> {
     }
     let dir: Vec<String> = rest.to_vec();
     let key = dir.join("/");
-    if site.indices.contains_key(&key) && dir.first().map(|s| s.as_str()) != Some(POSTS_DIR) {
+    if site.indices.contains_key(&key) && !crate::content::path_is_posts(&dir) {
         Some(dir)
     } else {
         None
@@ -458,19 +457,30 @@ fn parse_form_query(query: &str, key: &str) -> String {
 
 fn respond(
     stream: &mut TcpStream,
-    csp: &str,
+    security: &SecurityConfig,
     status: u16,
     reason: &str,
     ctype: &str,
     body: &[u8],
 ) -> std::io::Result<()> {
-    let csp_line = if csp.is_empty() {
-        String::new()
+    // `security.enabled` is the master switch: `false` drops the hardening
+    // headers entirely, including the Content-Security-Policy.
+    let (csp_line, harden) = if security.enabled {
+        let csp = security.csp_header();
+        let csp_line = if csp.is_empty() {
+            String::new()
+        } else {
+            format!("Content-Security-Policy: {csp}\r\n")
+        };
+        (
+            csp_line,
+            "X-Content-Type-Options: nosniff\r\nX-Frame-Options: SAMEORIGIN\r\nReferrer-Policy: no-referrer\r\n",
+        )
     } else {
-        format!("Content-Security-Policy: {csp}\r\n")
+        (String::new(), "")
     };
     let head = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nConnection: close\r\nServer: mdweb\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: SAMEORIGIN\r\nReferrer-Policy: no-referrer\r\n{csp_line}\r\n",
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nConnection: close\r\nServer: mdweb\r\n{harden}{csp_line}\r\n",
         body.len(),
     );
     stream.write_all(head.as_bytes())?;

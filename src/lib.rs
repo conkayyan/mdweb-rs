@@ -1,9 +1,11 @@
 pub mod config;
 pub mod content;
 pub mod diagram;
+pub mod date;
 pub mod drawing;
 pub mod emoji;
 pub mod feed;
+pub mod html;
 pub mod image_path;
 pub mod markdown;
 pub mod parse;

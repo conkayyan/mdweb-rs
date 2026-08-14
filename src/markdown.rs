@@ -13,8 +13,12 @@
 //!
 //! Fenced and indented code is always HTML-escaped, so a `</pre>` inside a
 //! code block can never break out of the page — a security guarantee rather
-//! than a style. The renderer makes no network calls and executes nothing, so
-//! it is safe to run on untrusted content.
+//! than a style. Link and image destinations carrying non-web schemes
+//! (`javascript:`, `data:`, …) render as plain text instead of live URLs.
+//! The renderer makes no network calls and executes nothing, so it is safe
+//! to run on untrusted content. (Raw HTML blocks and inline tags are still
+//! passed through verbatim, per CommonMark, so pages rendering such content
+//! should treat it as author-trusted HTML.)
 //!
 //! The public entry point is [`render`].
 
@@ -65,21 +69,8 @@ fn expand_tabs(line: &str) -> String {
 // Character-level helpers
 // ---------------------------------------------------------------------------
 
-fn escape_html(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
 fn escape_attr(s: &str) -> String {
-    escape_html(s).replace('"', "&quot;")
+    crate::html::escape_attr(s)
 }
 
 /// Leading space columns (tabs are already expanded to spaces).
@@ -1743,6 +1734,26 @@ fn scheme_autolink(s: &str) -> Option<(String, usize)> {
     Some((s[..k].to_string(), k + 2))
 }
 
+/// Web-safe schemes allowed as explicit link destinations (`[x](…markdown…)`
+/// and autolinks). Anything with a different scheme — `javascript:`,
+/// `vbscript:`, `file:`, … — renders as plain text instead of a live URL.
+fn safe_link_dest(dest: &str) -> bool {
+    let Some(pos) = dest.find(':') else { return true };
+    let scheme = dest[..pos].to_ascii_lowercase();
+    matches!(
+        scheme.as_str(),
+        "http" | "https" | "ftp" | "ftps" | "mailto" | "tel" | "news" | "nntp" | "irc" | "ircs"
+            | "xmpp"
+    )
+}
+
+/// Safe image source. Like links, but `data:image/…` is additionally allowed
+/// (an `<img>` source is inert — scripts never run from it).
+fn safe_image_dest(dest: &str) -> bool {
+    let lower = dest.to_ascii_lowercase();
+    lower.starts_with("data:image/") || safe_link_dest(dest)
+}
+
 /// The CommonMark `html_inline` grammar: comment, CDATA, PI, declaration,
 /// open tag, closing tag. Returns the matched tag and its length.
 fn match_html_inline(s: &str) -> Option<(String, usize)> {
@@ -1962,10 +1973,10 @@ fn render_children(
     while let Some(i) = c {
         let n = &nodes.nodes[i];
         match n.kind {
-            Kind::Text => out.push_str(&escape_html(&n.text)),
+            Kind::Text => out.push_str(&crate::html::escape(&n.text)),
             Kind::Code => {
                 out.push_str("<code>");
-                out.push_str(&escape_html(&n.text));
+                out.push_str(&crate::html::escape(&n.text));
                 out.push_str("</code>");
             }
             Kind::Html => out.push_str(&n.text),
@@ -1987,30 +1998,42 @@ fn render_children(
                 out.push_str("</del>");
             }
             Kind::Link => {
-                out.push_str("<a href=\"");
-                out.push_str(&escape_attr(&n.dest));
-                out.push('"');
-                if !n.title.is_empty() {
-                    out.push_str(" title=\"");
-                    out.push_str(&escape_attr(&n.title));
+                if safe_link_dest(&n.dest) {
+                    out.push_str("<a href=\"");
+                    out.push_str(&escape_attr(&n.dest));
                     out.push('"');
+                    if !n.title.is_empty() {
+                        out.push_str(" title=\"");
+                        out.push_str(&escape_attr(&n.title));
+                        out.push('"');
+                    }
+                    out.push('>');
+                    out.push_str(&render_children(nodes, i, refmap, footnotes));
+                    out.push_str("</a>");
+                } else {
+                    // Executable / non-web destination (`javascript:`, …):
+                    // render the label as plain text rather than a live link.
+                    out.push_str(&render_children(nodes, i, refmap, footnotes));
                 }
-                out.push('>');
-                out.push_str(&render_children(nodes, i, refmap, footnotes));
-                out.push_str("</a>");
             }
             Kind::Image => {
-                out.push_str("<img src=\"");
-                out.push_str(&escape_attr(&n.dest));
-                out.push_str("\" alt=\"");
-                out.push_str(&escape_attr(&plain_text(nodes, i)));
-                out.push('"');
-                if !n.title.is_empty() {
-                    out.push_str(" title=\"");
-                    out.push_str(&escape_attr(&n.title));
+                if safe_image_dest(&n.dest) {
+                    out.push_str("<img src=\"");
+                    out.push_str(&escape_attr(&n.dest));
+                    out.push_str("\" alt=\"");
+                    out.push_str(&escape_attr(&plain_text(nodes, i)));
                     out.push('"');
+                    if !n.title.is_empty() {
+                        out.push_str(" title=\"");
+                        out.push_str(&escape_attr(&n.title));
+                        out.push('"');
+                    }
+                    out.push_str(" />");
+                } else {
+                    // `data:`/`javascript:` image sources are inert when
+                    // dropped; keep the alt text so the reference survives.
+                    out.push_str(&escape_attr(&plain_text(nodes, i)));
                 }
-                out.push_str(" />");
             }
             Kind::Footnote => {
                 // text holds the label, dest the number
@@ -3584,7 +3607,7 @@ fn toc_html(toc: &[(usize, String, String)], opts: &TocOptions) -> String {
     if let Some(title) = &opts.title {
         out.push_str(&format!(
             "<p class=\"toc-title\">{}</p>\n",
-            escape_html(title)
+            crate::html::escape(title)
         ));
     }
     out.push_str("<nav class=\"toc\"><ul>\n");
@@ -3595,7 +3618,7 @@ fn toc_html(toc: &[(usize, String, String)], opts: &TocOptions) -> String {
             out.push_str("</ul></li>\n");
             stack.pop();
         }
-        out.push_str(&format!("<li><a href=\"#{id}\">{}</a>", escape_html(text)));
+        out.push_str(&format!("<li><a href=\"#{id}\">{}</a>", crate::html::escape(text)));
         if *level > stack.len() {
             out.push_str("<ul>\n");
             stack.push(*level);
@@ -3696,12 +3719,12 @@ fn block_to_html(
                 out.push('"');
             }
             out.push('>');
-            out.push_str(&escape_html(code));
+            out.push_str(&crate::html::escape(code));
             out.push_str("</code></pre>\n");
         }
         Block::IndentedCode(code) => {
             out.push_str("<pre><code>");
-            out.push_str(&escape_html(code));
+            out.push_str(&crate::html::escape(code));
             out.push_str("</code></pre>\n");
         }
         Block::Html(code) => {
@@ -3761,7 +3784,7 @@ fn block_to_html(
             // (unlike body content, where raw HTML pass-through is allowed by
             // the renderer). `escape_html` first, then inline-render, so the
             // raw text is inert while markdown emphasis/links still work.
-            out.push_str(&render_inline(&escape_html(label), refs, footnotes));
+            out.push_str(&render_inline(&crate::html::escape(label), refs, footnotes));
             out.push_str("</p>\n");
             out.push_str(&blocks_to_html(inner, refs, footnotes));
             out.push_str("</div>\n");
@@ -3876,6 +3899,35 @@ mod tests {
         assert!(!h.contains("<math"));
         assert!(!h.contains("<sub>"));
         assert!(!h.contains("<mark>"));
+    }
+
+    #[test]
+    fn unsafe_link_schemes_render_as_plain_text() {
+        let h = render("[click](javascript:alert(1))");
+        assert!(!h.contains("<a "));
+        assert!(h.contains("click"));
+        assert!(!h.contains("javascript:"));
+
+        let h = render("[bad](vbscript:msgbox(1))");
+        assert!(!h.contains("<a "));
+
+        let h = render("[ok](https://example.com)");
+        assert!(h.contains("<a href=\"https://example.com\""));
+        assert!(h.contains(">ok</a>"));
+    }
+
+    #[test]
+    fn unsafe_image_schemes_render_as_alt_text() {
+        let h = render("![x](data:text/html;base64,PHNjcmlwdD4)");
+        assert!(!h.contains("<img "));
+        assert!(h.contains("x"));
+
+        let h = render("![x](javascript:alert(1))");
+        assert!(!h.contains("<img "));
+        assert!(h.contains("x"));
+
+        let h = render("![ok](data:image/png;base64,AAAA)");
+        assert!(h.contains("<img src=\"data:image/png;base64,AAAA\""));
     }
 
     #[test]

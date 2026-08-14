@@ -12,7 +12,6 @@
 //! `search_results` runs the matching logic on the server side so the
 //! `/search?q=...` page can render without round-tripping through JSON.
 
-use crate::config::POSTS_DIR;
 use crate::content::{strip_html, Article, Category, Site};
 
 fn collapse_ws(s: &str) -> String {
@@ -168,7 +167,7 @@ pub fn rss_xml(site: &Site, lang: &str, limit: usize) -> Result<String, String> 
         .articles
         .iter()
         .filter(|a| {
-            a.lang == lang && a.path.first().map(|s| s.as_str()) == Some(POSTS_DIR) && !a.draft
+            a.lang == lang && a.is_post() && !a.draft
         })
         .collect();
     arts.sort_by_key(|a| std::cmp::Reverse(a.sort_ts));
@@ -296,7 +295,7 @@ fn rfc822_from_iso(iso: &str) -> String {
         },
         None => return iso.to_string(),
     };
-    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+    if !(1..=12).contains(&m) || d == 0 || d > crate::date::month_len(i64::from(y), m) {
         return iso.to_string();
     }
     let time = if time_part.is_empty() {

@@ -1,5 +1,18 @@
 use std::collections::BTreeMap;
 
+/// Split a dotted expression into lookup keys, dropping empty segments that
+/// appear *between* keys (so `"a..b"`, `".a"` and `"a"` all behave like
+/// `["a", "b"]`, `["a"]`, `["a"]`). A trailing empty segment is preserved —
+/// it addresses a key literally named `""`.
+fn path_parts(expr: &str) -> impl Iterator<Item = &str> {
+    let parts: Vec<&str> = expr.split('.').collect();
+    let len = parts.len();
+    parts
+        .into_iter()
+        .enumerate()
+        .filter_map(move |(i, part)| if part.is_empty() && i + 1 < len { None } else { Some(part) })
+}
+
 /// A tiny dynamic value used for both parsed config/frontmatter and template
 /// contexts. Deliberately std-only.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -34,14 +47,10 @@ impl Value {
     }
 
     pub fn path_mut(&mut self, expr: &str) -> Option<&mut Value> {
-        let parts: Vec<&str> = expr.split('.').collect();
         let mut cur = self;
-        for (i, part) in parts.iter().enumerate() {
-            if part.is_empty() && i + 1 < parts.len() {
-                continue;
-            }
+        for part in path_parts(expr) {
             match cur {
-                Value::Map(m) => match m.get_mut(*part) {
+                Value::Map(m) => match m.get_mut(part) {
                     Some(v) => cur = v,
                     None => return None,
                 },
@@ -101,14 +110,10 @@ impl Value {
     /// Resolve a dotted path such as "a.b.c" or "a". Keys may be quoted with
     /// double quotes inside the path, e.g. page."og:title" — not needed here.
     pub fn path(&self, expr: &str) -> Option<&Value> {
-        let parts: Vec<&str> = expr.split('.').collect();
         let mut cur = self;
-        for (i, part) in parts.iter().enumerate() {
-            if part.is_empty() && i + 1 < parts.len() {
-                continue;
-            }
+        for part in path_parts(expr) {
             match cur {
-                Value::Map(m) => match m.get(*part) {
+                Value::Map(m) => match m.get(part) {
                     Some(v) => cur = v,
                     None => return None,
                 },

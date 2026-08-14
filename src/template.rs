@@ -125,40 +125,6 @@ const WEEKDAYS: [&str; 7] = [
 ];
 const WEEKDAYS_SHORT: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-/// Number of days in month `m` (1-12) of year `y`.
-fn month_len(y: u32, m: u32) -> u32 {
-    match m {
-        4 | 6 | 9 | 11 => 30,
-        2 => {
-            if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 {
-                29
-            } else {
-                28
-            }
-        }
-        _ => 31,
-    }
-}
-
-fn is_leap(y: u32) -> bool {
-    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
-}
-
-fn days_in_year(y: u32) -> u32 {
-    if is_leap(y) {
-        366
-    } else {
-        365
-    }
-}
-
-/// 0 = Sunday .. 6 = Saturday (Sakamoto's algorithm).
-fn weekday(y: u32, m: u32, d: u32) -> usize {
-    let t = [0u32, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-    let y = if m < 3 { y - 1 } else { y };
-    ((y + y / 4 - y / 100 + y / 400 + t[(m - 1) as usize] + d) % 7) as usize
-}
-
 struct ParsedDate {
     y: u32,
     m: u32,
@@ -173,7 +139,7 @@ impl ParsedDate {
         let mut days = self.d;
         let mut mo = 1;
         while mo < self.m {
-            days += month_len(self.y, mo);
+            days += crate::date::month_len(i64::from(self.y), mo);
             mo += 1;
         }
         days
@@ -181,14 +147,14 @@ impl ParsedDate {
 
     /// ISO-8601 week number (`%V`) and its year (`%G`).
     fn iso_week(&self) -> (u32, u32) {
-        let wd = weekday(self.y, self.m, self.d);
+        let wd = crate::date::weekday(i64::from(self.y), self.m, self.d);
         let dow = (wd as u32 + 6) % 7 + 1; // 1 = Monday .. 7 = Sunday
         let mut y = self.y;
         let mut doy = self.day_of_year();
         let mut w = (doy - dow + 10) / 7;
         if w < 1 {
             y -= 1;
-            doy += days_in_year(y);
+            doy += crate::date::days_in_year(i64::from(y));
             w = (doy - dow + 10) / 7;
         } else if w > 52 && doy - dow + 10 >= 7 * 53 {
             y += 1;
@@ -214,7 +180,7 @@ fn parse_date_value(s: &str) -> Option<ParsedDate> {
     let y = dp.next()?.parse::<u32>().ok()?;
     let m = dp.next()?.parse::<u32>().ok()?;
     let d = dp.next()?.parse::<u32>().ok()?;
-    if !(1..=12).contains(&m) || d == 0 || d > month_len(y, m) {
+    if !(1..=12).contains(&m) || d == 0 || d > crate::date::month_len(i64::from(y), m) {
         return None;
     }
     let h = match time_part.split(':').next() {
@@ -275,14 +241,14 @@ fn date_format(s: &str, fmt: &str) -> Option<String> {
             'M' => out.push_str(&format!("{:02}", d.min)),
             'S' => out.push_str(&format!("{:02}", d.sec)),
             'p' => out.push_str(if d.h < 12 { "AM" } else { "PM" }),
-            'a' => out.push_str(WEEKDAYS_SHORT[weekday(d.y, d.m, d.d)]),
-            'A' => out.push_str(WEEKDAYS[weekday(d.y, d.m, d.d)]),
+            'a' => out.push_str(WEEKDAYS_SHORT[crate::date::weekday(i64::from(d.y), d.m, d.d)]),
+            'A' => out.push_str(WEEKDAYS[crate::date::weekday(i64::from(d.y), d.m, d.d)]),
             'b' => out.push_str(MONTHS_SHORT[(d.m - 1) as usize]),
             'B' => out.push_str(MONTHS[(d.m - 1) as usize]),
             'j' => out.push_str(&format!("{:03}", d.day_of_year())),
-            'w' => out.push_str(&format!("{}", weekday(d.y, d.m, d.d))),
+            'w' => out.push_str(&format!("{}", crate::date::weekday(i64::from(d.y), d.m, d.d))),
             'u' => {
-                let w = weekday(d.y, d.m, d.d);
+                let w = crate::date::weekday(i64::from(d.y), d.m, d.d);
                 out.push_str(&format!("{}", if w == 0 { 7 } else { w }));
             }
             'V' => {
@@ -468,10 +434,7 @@ impl Engine {
 }
 
 fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+    crate::html::escape_attr(s)
 }
 
 /// Evaluate a full filter-chained expression. Returns the value and whether

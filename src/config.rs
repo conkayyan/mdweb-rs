@@ -346,17 +346,7 @@ fn baidu_snippet(id: &str) -> String {
 
 /// Escape a string for safe use inside an HTML attribute value (double-quoted).
 fn html_attr_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '"' => out.push_str("&quot;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            _ => out.push(c),
-        }
-    }
-    out
+    crate::html::escape_attr(s)
 }
 
 /// Escape a string for safe use inside a JS double-quoted string literal.
