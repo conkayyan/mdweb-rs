@@ -1,5 +1,8 @@
 ---
 title: "Introduction"
+date: "2026-08-02"
+updated: "2026-08-05"
+author: "mdweb"
 summary: "What mdweb is and how it fits your workflow."
 ---
 

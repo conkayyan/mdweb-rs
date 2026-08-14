@@ -2,6 +2,16 @@
 # Page title (required).
 title: "Sample Page"
 
+# Creation date (quoted strings recommended). Shown on the page and used to
+# sort the section page list newest-first, like posts.
+date: "2026-08-08"
+
+# Last update date (optional).
+updated: "2026-08-08"
+
+# Author (optional; falls back to site.toml's author).
+author: "Author Name"
+
 # One-line summary (optional). Shown in category listings and used as
 # the default value for <meta name="description"> when meta.description
 # is unset.

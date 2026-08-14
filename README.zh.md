@@ -272,8 +272,11 @@ my-blog/
   - 顶级 `.md` 文件（如 `pages/about.md`）→ 平铺的 `About` 链接。
   每个 section 或叶子页都可以挂自己的 `_image/` 目录；当文章中通过
   相对路径跨章节引用图片时，本地编辑器直接打开 `.md` 与最终渲染的
-  网页效果一致。模板里的 `{% for s in page_sections %}` 循环就是布局
-  的唯一入口，改它即可重排/分组/删除某个 section。
+   网页效果一致。模板里的 `{% for s in page_sections %}` 循环就是布局
+   的唯一入口，改它即可重排/分组/删除某个 section。页面与文章一样支持
+   `date` / `updated` / `author` frontmatter；section 落地页按 `date`（缺省
+   回退 `updated`，再回退文件修改时间）从新到旧列出其中的页面，与文章
+   列表一致。
 - 顶层 `content/_index.md` 是**可选的**——不放时，`/` 就是文章列表；
   放上后，其正文以 hero 块形式渲染在列表上方。`content/` 顶层的其它
   `.md` 文件会被忽略，请放进 `pages/`。

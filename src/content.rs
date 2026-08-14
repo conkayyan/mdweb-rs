@@ -1007,7 +1007,9 @@ impl Site {
                 ("is_section".to_string(), Value::Bool(true)),
             ])));
         }
-        // Also surface pages that live directly in this directory.
+        // Also surface pages that live directly in this directory. Like the
+        // post listings, leaf pages sort newest-first by their frontmatter
+        // date (`sort_ts`); the date is exposed so templates can show it.
         let mut leafs: Vec<&Article> = self
             .articles
             .iter()
@@ -1017,12 +1019,18 @@ impl Site {
                     && a.path.first().map(|s| s.as_str()) != Some(POSTS_DIR)
             })
             .collect();
-        leafs.sort_by(|a, b| a.title.cmp(&b.title));
+        leafs.sort_by_key(|a| std::cmp::Reverse(a.sort_ts));
         for a in leafs {
             children.push(Value::Map(BTreeMap::from([
                 ("title".to_string(), Value::str(&a.title)),
                 ("url".to_string(), Value::str(&a.url)),
                 ("is_section".to_string(), Value::Bool(false)),
+                ("date".to_string(), opt_str(a.date.as_deref())),
+                ("date_iso".to_string(), opt_str(a.date_iso.as_deref())),
+                (
+                    "date_display".to_string(),
+                    opt_str(Some(&a.date_display())),
+                ),
             ])));
         }
 

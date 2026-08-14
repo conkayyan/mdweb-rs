@@ -1,5 +1,8 @@
 ---
 title: "关于"
+date: "2026-08-01"
+updated: "2026-08-08"
+author: "mdweb"
 summary: "本演示站点的简介。"
 ---
 

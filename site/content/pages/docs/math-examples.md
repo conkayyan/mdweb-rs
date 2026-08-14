@@ -1,5 +1,8 @@
 ---
 title: "Math examples"
+date: "2026-08-03"
+updated: "2026-08-08"
+author: "mdweb"
 summary: "A gallery of formulas and diagrams the build-time renderer handles."
 ---
 

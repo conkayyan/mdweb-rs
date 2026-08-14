@@ -563,6 +563,79 @@ fn page_section_renders_with_children_list() {
 }
 
 #[test]
+fn page_section_sorts_children_newest_first_with_dates() {
+    // Leaf pages in a section listing sort newest-first by their frontmatter
+    // date, mirroring the post listings, and expose `date`/`date_display` so
+    // templates can show it.
+    let dir = tempdir("section-dates");
+    write(&dir, "site.toml", r#"title = "X""#);
+    write(
+        &dir,
+        "content/pages/docs/_index.md",
+        "---\ntitle: Docs\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/docs/older.md",
+        "---\ntitle: Older\ndate: 2026-01-02\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/docs/newer.md",
+        "---\ntitle: Newer\ndate: 2026-03-04\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/docs/nodate.md",
+        "---\ntitle: NoDate\n---\nbody\n",
+    );
+    let site = Site::build(&dir, None).expect("build");
+    let payload = site
+        .page_section_value(&["pages".to_string(), "docs".to_string()], "en", 1)
+        .expect("section");
+    let kids = payload
+        .as_map()
+        .and_then(|m| m.get("children"))
+        .and_then(|v| v.as_arr())
+        .expect("kids");
+    let order: Vec<(&str, Option<&str>)> = kids
+        .iter()
+        .filter_map(|c| c.as_map())
+        .map(|m| {
+            (
+                m.get("title").and_then(|t| t.as_str()).unwrap_or(""),
+                m.get("date_display").and_then(|t| t.as_str()),
+            )
+        })
+        .collect();
+    let titles: Vec<&str> = order.iter().map(|(t, _)| *t).collect();
+    let pos = |t: &str| titles.iter().position(|x| *x == t).expect(t);
+    assert!(
+        pos("Newer") < pos("Older"),
+        "newest-dated page sorts before older one"
+    );
+    assert!(
+        titles.contains(&"NoDate"),
+        "undated page still listed (falls back to mtime)"
+    );
+    assert_eq!(order.len(), 3, "all three pages listed");
+    // The section template renders the date next to the title link.
+    let section_html =
+        mdweb::render::render_section(&site, "en", &["pages".to_string(), "docs".to_string()], 1)
+            .expect("render section");
+    assert!(section_html.contains("2026-03-04"), "renders the date");
+    // A dated page also shows its date on the page itself.
+    let newer = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "newer")
+        .expect("newer");
+    let page_html =
+        mdweb::render::render_article(&site, "en", newer).expect("render newer page");
+    assert!(page_html.contains("2026-03-04"), "page shows its own date");
+}
+
+#[test]
 fn article_to_value_exposes_lang_field() {
     // Article::to_value must surface `lang` so templates can label
     // search results and language badges.
@@ -816,7 +889,9 @@ home_limit = 5"#,
 fn directory_drives_template_selection() {
     // The `layout:` frontmatter field is gone. Template selection now lives
     // entirely in directory: posts/* uses article.html, everything else uses
-    // page.html. Verify by inspecting the rendered output.
+    // page.html. Verify by inspecting the rendered output. Pages support
+    // dates too, so both templates emit the post-meta header; they differ in
+    // the prev/next navigation block (article-only).
     let dir = tempdir("layoutdir");
     write(&dir, "site.toml", r#"title = "X""#);
     write(
@@ -824,7 +899,16 @@ fn directory_drives_template_selection() {
         "content/posts/post.md",
         "---\ntitle: P\ndate: 2026-08-01\n---\nbody\n",
     );
-    write(&dir, "content/pages/leaf.md", "---\ntitle: L\n---\nbody\n");
+    write(
+        &dir,
+        "content/posts/post2.md",
+        "---\ntitle: P2\ndate: 2026-08-02\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/leaf.md",
+        "---\ntitle: L\ndate: 2026-07-01\n---\nbody\n",
+    );
     let site = Site::build(&dir, None).expect("build");
     let post_html = mdweb::render::render_article(
         &site,
@@ -844,15 +928,24 @@ fn directory_drives_template_selection() {
             .expect("leaf"),
     )
     .expect("page render");
-    // Different templates → different DOM. The article template emits the
-    // post meta header (date, prev/next nav); the page template does not.
+    // Posts render with article.html: meta header plus prev/next nav.
     assert!(
         post_html.contains("post-meta") || post_html.contains("article-meta"),
         "posts render with article.html (meta header)"
     );
     assert!(
-        !page_html.contains("post-meta") && !page_html.contains("article-meta"),
-        "pages render with page.html (no meta header)"
+        post_html.contains("post-nav"),
+        "posts render with article.html (prev/next nav)"
+    );
+    // Pages render with page.html: they now show the date in a meta header
+    // too, but skip the prev/next navigation block.
+    assert!(
+        page_html.contains("post-meta") && page_html.contains("2026-07-01"),
+        "pages render with page.html (date meta header)"
+    );
+    assert!(
+        !page_html.contains("post-nav"),
+        "pages render with page.html (no prev/next nav)"
     );
 }
 

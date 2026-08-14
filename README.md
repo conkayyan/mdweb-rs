@@ -295,6 +295,9 @@ Notes:
   symmetrically when the docs are opened locally in an editor. The
   template's `{% for s in page_sections %}` loop is the single source of
   truth for the layout — edit it to reorder, group, or drop entries.
+  Pages support the same `date` / `updated` / `author` frontmatter as posts;
+  a section's landing page lists its direct pages newest-first (by `date`,
+  falling back to `updated`, then file mtime), like the post listings.
 - A top-level `content/_index.md` is **optional**. Without one, `/` is just
   the article stream; with one, its body renders as a hero block above
   the list. Other top-level `.md` files at the site root are ignored —

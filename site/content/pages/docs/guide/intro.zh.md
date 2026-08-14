@@ -1,5 +1,8 @@
 ---
 title: "简介"
+date: "2026-08-02"
+updated: "2026-08-05"
+author: "mdweb"
 summary: "mdweb 是什么，适合怎样的工作流。"
 ---
 
