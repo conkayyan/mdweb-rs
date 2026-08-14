@@ -276,7 +276,8 @@ my-blog/
    的唯一入口，改它即可重排/分组/删除某个 section。页面与文章一样支持
    `date` / `updated` / `author` frontmatter；section 落地页按 `date`（缺省
    回退 `updated`，再回退文件修改时间）从新到旧列出其中的页面，与文章
-   列表一致。
+   列表一致。每个列出的页面都会显示日期与摘要（frontmatter 的
+   `summary`，未配置时自动生成——见 `summary_length`）。
 - 顶层 `content/_index.md` 是**可选的**——不放时，`/` 就是文章列表；
   放上后，其正文以 hero 块形式渲染在列表上方。`content/` 顶层的其它
   `.md` 文件会被忽略，请放进 `pages/`。
@@ -376,6 +377,7 @@ home_limit = 10      # 首页每页文章数（/）
 category_limit = 20  # 分类页每页文章数
 pages_limit = 50     # 目录落地页每页数量
 tags_limit = 20      # 标签页每页文章数（/tags/<标签>/）
+summary_length = 240 # 自动生成的摘要最多保留多少个字符（0 = 全文保留）
 
 # 标签云：是否在侧边栏显示标签小部件（true）或隐藏（false）。
 show_tag_cloud = true

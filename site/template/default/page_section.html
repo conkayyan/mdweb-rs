@@ -23,6 +23,7 @@
     <li class="page-child{% if node.is_section %} is-section{% endif %}">
       <a href="{{ node.url }}">{{ node.title }}</a>
       {% if node.date_display %}<time class="page-child-date" datetime="{{ node.date_display }}">{{ node.date_display }}</time>{% endif %}
+      {% if node.summary %}<p class="page-child-summary">{{ node.summary }}</p>{% endif %}
     </li>
     {% endfor %}
   </ul>

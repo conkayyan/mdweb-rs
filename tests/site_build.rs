@@ -636,6 +636,136 @@ fn page_section_sorts_children_newest_first_with_dates() {
 }
 
 #[test]
+fn page_section_children_expose_generated_summary() {
+    // A page without a frontmatter `summary` gets an auto-generated one from
+    // its body; the section listing exposes it so templates can render it.
+    let dir = tempdir("section-summary");
+    write(&dir, "site.toml", r#"title = "X""#);
+    write(
+        &dir,
+        "content/pages/docs/_index.md",
+        "---\ntitle: Docs\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/docs/leaf.md",
+        "---\ntitle: Leaf\n---\nHello **bold** leaf body words here.\n",
+    );
+    let site = Site::build(&dir, None).expect("build");
+    let payload = site
+        .page_section_value(&["pages".to_string(), "docs".to_string()], "en", 1)
+        .expect("section");
+    let kids = payload
+        .as_map()
+        .and_then(|m| m.get("children"))
+        .and_then(|v| v.as_arr())
+        .expect("kids");
+    let leaf = kids
+        .iter()
+        .find_map(|c| c.as_map())
+        .expect("one child map");
+    assert_eq!(
+        leaf.get("title").and_then(|v| v.as_str()),
+        Some("Leaf")
+    );
+    let summary = leaf
+        .get("summary")
+        .and_then(|v| v.as_str())
+        .expect("generated summary exposed");
+    assert!(
+        summary.contains("Hello bold leaf body words here."),
+        "summary strips markup: {summary}"
+    );
+    // The template renders the summary next to the title link.
+    let section_html =
+        mdweb::render::render_section(&site, "en", &["pages".to_string(), "docs".to_string()], 1)
+            .expect("render section");
+    assert!(
+        section_html.contains("Hello bold leaf body words here."),
+        "section template renders the page summary"
+    );
+}
+
+#[test]
+fn summary_length_config_controls_truncation() {
+    // `summary_length` caps the auto-generated summary; `0` keeps everything.
+    let long_body = "word ".repeat(100); // 500 chars, well past 240.
+    let dir = tempdir("summary-len");
+    write(&dir, "site.toml", r#"title = "X""#);
+    write(
+        &dir,
+        "content/posts/short.md",
+        "---\ntitle: S\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/posts/long.md",
+        &format!("---\ntitle: L\n---\n{long_body}\n"),
+    );
+    let site = Site::build(&dir, None).expect("build");
+    let short = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "short")
+        .expect("short");
+    let long = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "long")
+        .expect("long");
+    assert_eq!(short.summary, "body", "short body never truncated");
+    assert!(
+        long.summary.ends_with('…'),
+        "long body truncated with ellipsis by default"
+    );
+    assert!(
+        long.summary.chars().count() <= 241,
+        "default summary_length caps the summary"
+    );
+
+    let dir0 = tempdir("summary-len0");
+    write(&dir0, "site.toml", "title = \"X\"\nsummary_length = 0\n");
+    write(
+        &dir0,
+        "content/posts/long.md",
+        &format!("---\ntitle: L\n---\n{long_body}\n"),
+    );
+    let site0 = Site::build(&dir0, None).expect("build0");
+    let long0 = site0
+        .articles
+        .iter()
+        .find(|a| a.slug == "long")
+        .expect("long0");
+    assert!(
+        long0.summary.chars().count() > 400,
+        "summary_length = 0 keeps the whole text"
+    );
+
+    let dir20 = tempdir("summary-len20");
+    write(&dir20, "site.toml", "title = \"X\"\nsummary_length = 20\n");
+    write(
+        &dir20,
+        "content/posts/long.md",
+        &format!("---\ntitle: L\n---\n{long_body}\n"),
+    );
+    let site20 = Site::build(&dir20, None).expect("build20");
+    let long20 = site20
+        .articles
+        .iter()
+        .find(|a| a.slug == "long")
+        .expect("long20");
+    assert!(
+        long20.summary.chars().count() <= 21,
+        "custom summary_length respected: {}",
+        long20.summary
+    );
+    assert_eq!(
+        site20.config.summary_length, 20,
+        "summary_length parsed from site.toml"
+    );
+}
+
+#[test]
 fn article_to_value_exposes_lang_field() {
     // Article::to_value must surface `lang` so templates can label
     // search results and language badges.

@@ -470,7 +470,7 @@ impl Site {
                 let summary = ra
                     .field("summary")
                     .map(|s| s.to_string())
-                    .unwrap_or_else(|| make_summary(&ra.html));
+                    .unwrap_or_else(|| make_summary(&ra.html, config.summary_length));
                 // The `layout:` frontmatter field was removed: every article's
                 // role is now derived from its directory. Anything under
                 // `posts/` is an article; everything else is a page.
@@ -1031,6 +1031,14 @@ impl Site {
                     "date_display".to_string(),
                     opt_str(Some(&a.date_display())),
                 ),
+                (
+                    "summary".to_string(),
+                    opt_str(if a.summary.is_empty() {
+                        None
+                    } else {
+                        Some(a.summary.as_str())
+                    }),
+                ),
             ])));
         }
 
@@ -1516,18 +1524,21 @@ fn compute_navigation(articles: &mut [Article]) {
     }
 }
 
-fn make_summary(html: &str) -> String {
+/// Build a plain-text summary from rendered HTML: strip the markup, then keep
+/// up to `max_len` characters (word/count-aware; the trailing `…` marks a
+/// truncation). `max_len == 0` keeps the whole text.
+fn make_summary(html: &str, max_len: usize) -> String {
     let txt = strip_html(html);
     let words: Vec<&str> = txt.split_whitespace().collect();
     let total: usize = words.iter().map(|w| w.chars().count()).sum();
-    if total <= 240 {
+    if max_len == 0 || total <= max_len {
         return words.join(" ");
     }
     let mut out = String::new();
     let mut count = 0;
     for w in words {
         count += w.chars().count() + 1;
-        if count > 240 {
+        if count > max_len {
             break;
         }
         out.push_str(w);

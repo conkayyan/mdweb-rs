@@ -297,7 +297,9 @@ Notes:
   truth for the layout — edit it to reorder, group, or drop entries.
   Pages support the same `date` / `updated` / `author` frontmatter as posts;
   a section's landing page lists its direct pages newest-first (by `date`,
-  falling back to `updated`, then file mtime), like the post listings.
+  falling back to `updated`, then file mtime), like the post listings. Each
+  listed page shows its date and summary (the frontmatter `summary`, or an
+  auto-generated one — see `summary_length`).
 - A top-level `content/_index.md` is **optional**. Without one, `/` is just
   the article stream; with one, its body renders as a hero block above
   the list. Other top-level `.md` files at the site root are ignored —
@@ -403,6 +405,7 @@ home_limit = 10      # articles per page on /
 category_limit = 20  # articles per page in category landings
 pages_limit = 50     # pages per page in a directory landing
 tags_limit = 20      # articles per page on a /tags/<tag>/ landing
+summary_length = 240 # max chars of an auto-generated summary (0 = keep all)
 
 # Tag cloud: show the tag widget in the sidebar (true) or hide it (false).
 show_tag_cloud = true

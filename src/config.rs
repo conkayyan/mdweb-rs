@@ -172,6 +172,10 @@ pub struct Config {
     pub category_limit: usize,
     /// Pages shown per page in a directory landing listing. Default `50`.
     pub pages_limit: usize,
+    /// Maximum number of characters a generated summary keeps (used when a
+    /// document's frontmatter omits `summary`). `0` keeps the whole text.
+    /// Default `240`.
+    pub summary_length: usize,
     /// Whether to show the tag cloud widget in the sidebar. Default `true`.
     pub show_tag_cloud: bool,
     /// Whether to show the friend-links block in the sidebar. The block is
@@ -387,6 +391,7 @@ impl Default for Config {
             home_limit: 10,
             category_limit: 20,
             pages_limit: 50,
+            summary_length: 240,
             show_tag_cloud: true,
             show_friend_links: true,
             tags_limit: 20,
@@ -470,6 +475,11 @@ impl Config {
         if let Some(n) = m.get("pages_limit").and_then(|v| v.as_int()) {
             if n >= 0 {
                 cfg.pages_limit = n as usize;
+            }
+        }
+        if let Some(n) = m.get("summary_length").and_then(|v| v.as_int()) {
+            if n >= 0 {
+                cfg.summary_length = n as usize;
             }
         }
         if let Some(b) = m.get("show_tag_cloud").and_then(|v| v.as_bool()) {
