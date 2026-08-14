@@ -585,6 +585,7 @@ updated: "2024-06-01"    # 最后更新时间
 author: "Jane Doe"
 tags: ["mdweb", "rust"]
 summary: "一行简介。"
+aliases: ["about-us", "contact"]  # 伪静态地址，该页面也可通过这些 URL 访问（如 /about-us/）
 layout: "page"           # "article"（默认）或 "page"；page 使用 page.html 渲染
 draft: false             # true 时隐藏该文章
 meta:                    # 任意映射，模板中以 article.meta 访问
@@ -593,6 +594,23 @@ meta:                    # 任意映射，模板中以 article.meta 访问
 ```
 
 同时支持 TOML 风格的 `+++` 块。
+
+### 别名（伪静态地址）
+
+`aliases` 让页面或文章除磁盘目录对应的 slug 路径外，还能通过自定义的干净 URL
+访问。每个条目都相对于语言前缀；第一个条目会成为规范 URL，用于导航、列表、
+订阅源与 sitemap。
+
+```markdown
+---
+title: "关于"
+aliases = ["about-us", "contact"]
+---
+```
+
+`content/pages/about.md` 会同时通过 `/about-us/` 与 `/contact/`（规范 URL 为
+`/about-us/`）访问，其 `zh` 变体则通过 `/zh/about-us/` 与 `/zh/contact/` 访问。
+原有的 slug 路径（`/pages/about/`）仍然可用，保持向后兼容。
 
 ## 主题
 

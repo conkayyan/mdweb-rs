@@ -379,6 +379,11 @@ fn split_key_value(line: &str) -> (String, String) {
     if let Some(idx) = line.find(':') {
         return (line[..idx].trim().to_string(), line[idx + 1..].to_string());
     }
+    // Lenient TOML-style separator: `key = value` works in a `---` block too
+    // (it only applies when no `:` was found, so `url: /p?x=1` keeps working).
+    if let Some(idx) = line.find('=') {
+        return (line[..idx].trim().to_string(), line[idx + 1..].to_string());
+    }
     (line.to_string(), String::new())
 }
 
@@ -470,6 +475,18 @@ fn unescape(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn yaml_accepts_toml_style_equals_separator() {
+        let fm = parse_yaml("aliases = [\"about-us\", \"contact\"]\n");
+        let aliases = fm.get("aliases").unwrap().as_arr().unwrap();
+        assert_eq!(aliases.len(), 2);
+        assert_eq!(aliases[0].as_str(), Some("about-us"));
+        assert_eq!(aliases[1].as_str(), Some("contact"));
+        // A colon value containing `=` is untouched.
+        let fm = parse_yaml("url: /p?x=1\n");
+        assert_eq!(fm.get("url").unwrap().as_str(), Some("/p?x=1"));
+    }
 
     #[test]
     fn parses_basic_frontmatter() {

@@ -625,6 +625,7 @@ updated: "2024-06-01"    # last update date
 author: "Jane Doe"
 tags: ["mdweb", "rust"]
 summary: "One-line description."
+aliases: ["about-us", "contact"]  # pretty URLs that also serve this page (/about-us/)
 layout: "page"           # "article" (default) or "page"; page renders with page.html
 draft: false             # true hides the article
 meta:                    # arbitrary map exposed to templates as article.meta
@@ -633,6 +634,23 @@ meta:                    # arbitrary map exposed to templates as article.meta
 ```
 
 A TOML-style `+++` block is also accepted.
+
+### Aliases (pretty URLs)
+
+`aliases` lets a page or post be reachable at custom clean URLs in addition to
+its on-disk slug path. Each entry is relative to the language prefix; the first
+entry becomes the canonical URL used everywhere (nav, listings, feeds, sitemap).
+
+```markdown
+---
+title: "About"
+aliases = ["about-us", "contact"]
+---
+```
+
+serves `content/pages/about.md` at both `/about-us/` and `/contact/` (canonical
+`/about-us/`), and its `zh` variant at `/zh/about-us/` and `/zh/contact/`. The
+original slug path (`/pages/about/`) keeps working for backward compatibility.
 
 ## Themes
 

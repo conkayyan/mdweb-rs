@@ -251,6 +251,18 @@ fn route(site: &Arc<Site>, path: &str, query: &str) -> Result<Response, String> 
         });
     }
 
+    // Aliases: custom pretty URLs defined in frontmatter (`aliases =
+    // ["about-us"]` → `/zh/about-us/`). An alias replaces the whole on-disk
+    // path, so it must be matched against the raw URL before the disk-prefix
+    // mapping below.
+    let alias_key = rest.join("/");
+    if let Some(a) = find_alias(site, &lang, &alias_key) {
+        return render::render_article(site, &lang, a).map(|h| Response {
+            body: h.into_bytes(),
+            content_type: HTML,
+        });
+    }
+
     // Content routes match against on-disk paths, so map the URL container
     // prefix back to its directory name first (e.g. a `routes.posts = "blog"`
     // prefix → `posts`). Components under a renamed prefix are translated by
@@ -362,6 +374,20 @@ fn find_article<'a>(
             && a.path.len() == path_parts.len()
             && a.path.iter().zip(path_parts.iter()).all(|(x, y)| x == y)
     })
+}
+
+/// Match a request path (already stripped of the language prefix) against any
+/// document's frontmatter `aliases` list. An alias is an exact whole-path
+/// match — `aliases = ["about-us"]` matches `/zh/about-us/` but not
+/// `/zh/about-us/x/`.
+fn find_alias<'a>(
+    site: &'a Site,
+    lang: &str,
+    key: &str,
+) -> Option<&'a crate::content::Article> {
+    site.articles
+        .iter()
+        .find(|a| a.lang == lang && a.aliases.iter().any(|al| al == key))
 }
 
 /// Match a request path against any `_index.md` directory in the doc tree,
@@ -488,5 +514,94 @@ fn content_type(path: &str) -> &'static str {
         "zip" => "application/zip",
         "wasm" => "application/wasm",
         _ => "application/octet-stream",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    fn write(dir: &Path, rel: &str, body: &str) {
+        let p = dir.join(rel);
+        if let Some(parent) = p.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(p, body).unwrap();
+    }
+
+    fn tempdir(prefix: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!(
+            "mdweb-srv-{prefix}-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    fn build() -> Site {
+        let dir = tempdir("alias");
+        write(&dir, "site.toml", r#"languages = ["en", "zh"]"#);
+        write(
+            &dir,
+            "content/pages/about.md",
+            "---\ntitle: About\n---\nALIAS-BODY\n",
+        );
+        write(
+            &dir,
+            "content/pages/about.zh.md",
+            "---\ntitle: 关于\n---\n中文正文\n",
+        );
+        write(
+            &dir,
+            "content/posts/hello.md",
+            "---\ntitle: Hello\ndate: 2026-08-01\n---\nHELLO-BODY\n",
+        );
+        write(
+            &dir,
+            "content/posts/hello.zh.md",
+            "---\ntitle: 你好\naliases = [\"hello-zh\"]\ndate: 2026-08-01\n---\n你好正文\n",
+        );
+        Site::build(&dir, None).expect("build")
+    }
+
+    fn body_of(resp: Result<Response, String>) -> String {
+        String::from_utf8(resp.expect("ok response").body).unwrap()
+    }
+
+    #[test]
+    fn aliases_route_and_keep_slug_url() {
+        let site = Arc::new(build());
+
+        // Page without aliases keeps its slug URL.
+        assert!(route(&site, "/pages/about/", "").is_ok());
+
+        // Canonical URL of the aliased zh post is its first alias.
+        let hello_zh = site
+            .articles
+            .iter()
+            .find(|a| a.slug == "hello" && a.lang == "zh")
+            .expect("zh post");
+        assert_eq!(hello_zh.url, "/zh/hello-zh/");
+        assert_eq!(hello_zh.aliases, vec!["hello-zh".to_string()]);
+        // The English post (no alias) keeps its slug URL.
+        let hello_en = site
+            .articles
+            .iter()
+            .find(|a| a.slug == "hello" && a.lang == "en")
+            .expect("en post");
+        assert_eq!(hello_en.url, "/posts/hello/");
+
+        // Alias path serves the document.
+        assert!(body_of(route(&site, "/zh/hello-zh/", "")).contains("你好正文"));
+        // The original slug path still works alongside the alias.
+        assert!(body_of(route(&site, "/zh/posts/hello/", "")).contains("你好正文"));
+        // Alias without the zh prefix must not resolve (wrong language).
+        assert!(route(&site, "/hello-zh/", "").is_err());
+        // A partial match is not an alias hit.
+        assert!(route(&site, "/zh/hello-zh/extra/", "").is_err());
     }
 }

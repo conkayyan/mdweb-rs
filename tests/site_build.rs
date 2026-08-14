@@ -2395,3 +2395,95 @@ url = "/linked/"
         "no empty hrefs in the nav: {header}"
     );
 }
+
+#[test]
+fn aliases_parse_into_canonical_url_and_value() {
+    // Frontmatter `aliases = ["about-us", "contact"]` makes the first alias
+    // the canonical URL, exposes the full list on the Article, and leaks the
+    // pretty URL into listings, translations and the template value.
+    let dir = tempdir("aliases");
+    write(
+        &dir,
+        "site.toml",
+        r#"languages = ["en", "zh"]"#,
+    );
+    write(
+        &dir,
+        "content/pages/about.md",
+        "---\ntitle: About\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/about.zh.md",
+        "---\ntitle: 关于\naliases = [\"/about-us/\", \"contact\"]\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/_index.md",
+        "---\ntitle: Pages\n---\nbody\n",
+    );
+    write(
+        &dir,
+        "content/pages/_index.zh.md",
+        "---\ntitle: 页面\n---\nbody\n",
+    );
+    let site = Site::build(&dir, None).expect("build");
+
+    let zh = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "about" && a.lang == "zh")
+        .expect("zh page");
+    // Slashes around the first alias are trimmed; it becomes the canonical URL.
+    assert_eq!(zh.url, "/zh/about-us/");
+    assert_eq!(zh.aliases, vec!["about-us".to_string(), "contact".to_string()]);
+    // The English variant has no aliases and keeps its slug URL.
+    let en = site
+        .articles
+        .iter()
+        .find(|a| a.slug == "about" && a.lang == "en")
+        .expect("en page");
+    assert_eq!(en.url, "/pages/about/");
+    assert!(en.aliases.is_empty());
+
+    // The translation entry points at the translation's own alias URL.
+    let tr = en.translations[0].as_map().expect("translation map");
+    assert_eq!(
+        tr.get("url").and_then(|v| v.as_str()),
+        Some("/zh/about-us/"),
+        "translations link to the aliased URL"
+    );
+
+    // to_value exposes both url and aliases.
+    let v = zh.to_value();
+    let m = v.as_map().expect("map");
+    assert_eq!(m.get("url").and_then(|v| v.as_str()), Some("/zh/about-us/"));
+    let aliases = m
+        .get("aliases")
+        .and_then(|v| v.as_arr())
+        .expect("aliases array");
+    assert_eq!(aliases.len(), 2);
+
+    // Listing payload uses the pretty URL.
+    let payload = site
+        .page_section_value(&["pages".to_string()], "zh", 1)
+        .expect("section payload");
+    let kids = payload
+        .as_map()
+        .and_then(|m| m.get("children"))
+        .and_then(|v| v.as_arr())
+        .expect("kids");
+    assert!(
+        kids.iter().any(|c| c
+            .as_map()
+            .and_then(|m| m.get("url"))
+            .and_then(|v| v.as_str())
+            == Some("/zh/about-us/")),
+        "section listing links to the alias URL"
+    );
+
+    // Sitemap uses the canonical (alias) URL, not the slug path.
+    let xml = mdweb::feed::sitemap_xml(&site);
+    assert!(xml.contains("/zh/about-us/"), "sitemap lists the alias URL");
+    assert!(!xml.contains("/zh/pages/about/"), "slug URL not canonical");
+}

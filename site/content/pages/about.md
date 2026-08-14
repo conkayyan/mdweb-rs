@@ -4,6 +4,7 @@ date: "2026-08-01"
 updated: "2026-08-08"
 author: "mdweb"
 summary: "What this demo site is about."
+aliases: ["about-us"]    # also reachable at /about-us/ (canonical URL)
 ---
 
 This demo shows how mdweb renders a doc directory into a blog.

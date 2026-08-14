@@ -71,6 +71,10 @@ pub struct Article {
     pub path: Vec<String>,
     pub lang: String,
     pub url: String,
+    /// Pretty URLs from frontmatter `aliases = ["about-us", "contact"]` that
+    /// also serve this document (e.g. `/zh/about-us/`). The first alias, when
+    /// present, becomes the canonical `url`.
+    pub aliases: Vec<String>,
     pub title: String,
     pub date: Option<String>,
     pub date_iso: Option<String>,
@@ -148,6 +152,10 @@ impl Article {
         let mut m = BTreeMap::new();
         m.insert("slug".into(), Value::str(&self.slug));
         m.insert("url".into(), Value::str(&self.url));
+        m.insert(
+            "aliases".into(),
+            Value::Arr(self.aliases.iter().cloned().map(Value::str).collect()),
+        );
         m.insert("title".into(), Value::str(&self.title));
         m.insert("lang".into(), Value::str(&self.lang));
         m.insert("date".into(), opt_str(self.date.as_deref()));
@@ -450,7 +458,7 @@ impl Site {
                             ),
                             (
                                 "url".to_string(),
-                                Value::str(url_for(&config, &o.path, Some(&o.slug), &o.lang)),
+                                Value::str(raw_article_url(&config, o)),
                             ),
                             (
                                 "display_name".to_string(),
@@ -495,12 +503,18 @@ impl Site {
                         url: config.tag_url(&ra.lang, t),
                     })
                     .collect();
+                let aliases = parse_aliases(&ra.fm);
+                let url = match aliases.first() {
+                    Some(first) => alias_url(&config, first, &ra.lang),
+                    None => url_for(&config, &ra.path, Some(&ra.slug), &ra.lang),
+                };
 
                 articles.push(Article {
                     slug: ra.slug.clone(),
                     path: ra.path.clone(),
                     lang: ra.lang.clone(),
-                    url: url_for(&config, &ra.path, Some(&ra.slug), &ra.lang),
+                    url,
+                    aliases,
                     title,
                     date,
                     date_iso,
@@ -526,6 +540,7 @@ impl Site {
                                         | "draft"
                                         | "summary"
                                         | "meta"
+                                        | "aliases"
                                 )
                             })
                             .map(|(k, v)| (k.clone(), v.clone()))
@@ -1436,6 +1451,41 @@ fn url_for(config: &Config, path: &[String], slug: Option<&String>, lang: &str) 
         prefix
     } else {
         format!("{prefix}{joined}/")
+    }
+}
+
+/// Parse the `aliases` frontmatter array into pretty-URL paths. Each entry is
+/// trimmed of surrounding whitespace and slashes; empty entries are dropped.
+fn parse_aliases(fm: &BTreeMap<String, Value>) -> Vec<String> {
+    fm.get("aliases")
+        .and_then(|v| v.as_arr())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.trim().trim_matches('/').to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// URL for an alias path under a language prefix, e.g. `"about-us"` in `zh`
+/// → `/zh/about-us/`.
+fn alias_url(config: &Config, alias: &str, lang: &str) -> String {
+    let prefix = config.lang_prefix(lang);
+    if prefix == "/" {
+        format!("/{alias}/")
+    } else {
+        format!("{prefix}{alias}/")
+    }
+}
+
+/// The canonical URL for a raw article: its first alias when one is defined,
+/// otherwise the slug-based URL.
+fn raw_article_url(config: &Config, ra: &RawArticle) -> String {
+    match parse_aliases(&ra.fm).first() {
+        Some(first) => alias_url(config, first, &ra.lang),
+        None => url_for(config, &ra.path, Some(&ra.slug), &ra.lang),
     }
 }
 

@@ -4,6 +4,7 @@ date: "2026-08-01"
 updated: "2026-08-08"
 author: "mdweb"
 summary: "本演示站点的简介。"
+aliases: ["about-us"]    # 也可通过 /zh/about-us/ 访问（规范 URL）
 ---
 
 本演示展示了 mdweb 如何把一个文档目录渲染成博客。
