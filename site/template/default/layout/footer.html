@@ -1,6 +1,6 @@
 <footer class="site-footer">
   <div class="container">
-    <p>&copy; {{ current_year }} {{ title }} · Powered by mdweb{% if footer_html %} · <span class="footer-extra">{{ footer_html | safe }}</span>{% endif %}</p>
+    <p>&copy; {{ current_year }} {{ title }} · Powered by <a href="https://github.com/conkayyan/mdweb-rs" target="_blank" rel="noopener">mdweb</a>{% if footer_html %} · <span class="footer-extra">{{ footer_html | safe }}</span>{% endif %}</p>
     {% if show_rss %}
     <p class="footer-links">
       <a href="{{ rss_url }}" type="application/rss+xml" target="_blank" rel="noopener">RSS</a>
