@@ -278,6 +278,13 @@ my-blog/
    回退 `updated`，再回退文件修改时间）从新到旧列出其中的页面，与文章
    列表一致。每个列出的页面都会显示日期与摘要（frontmatter 的
    `summary`，未配置时自动生成——见 `summary_length`）。
+ - 自定义**页眉导航**：在 `site.toml` 里用 `[[nav]]` 表配置（与侧边栏的
+   **友情链接**是两个不同的配置），渲染在页面区块下拉与平铺页面链接**之间**
+   （示例中“关于”的前面）。每个条目支持 `title`、
+   可选的 `url`（省略则渲染为不可点击的组标题）、可选的 `lang`（把条目
+   及其子项限制为只在某一种语言显示），以及可选的 `[[nav.children]]`
+   子表（支持多级下拉）。没有配置任何 `[[nav]]` 条目时整个导航块隐藏；
+   它的位置由 `layout/header.html` 里的 `{% if nav %}` 块决定，可以自由移动。
 - 顶层 `content/_index.md` 是**可选的**——不放时，`/` 就是文章列表；
   放上后，其正文以 hero 块形式渲染在列表上方。`content/` 顶层的其它
   `.md` 文件会被忽略，请放进 `pages/`。
@@ -435,6 +442,40 @@ url = "https://github.com/conkayyan/mdweb-rs"
 [[friend_links]]
 name = "Rust"
 url = "https://www.rust-lang.org/zh/"
+
+# 自定义页眉导航——与侧边栏的“友情链接”是**两个不同的配置**。它渲染在页眉栏中、
+# 页面区块下拉与平铺页面链接之间（即示例中“关于”的前面）。想改位置就编辑
+# `layout/header.html`，把 `{% if nav %}` 块移动到别处即可。没有 [[nav]] 条目时
+# 整个导航块隐藏。每个条目支持：
+#   - title   必填，显示的文字
+#   - url     可选；省略则渲染为不可点击的组标题
+#   - lang    可选；把该条目（及其子项）限制为只在某一种语言显示
+#   - children（通过 [[nav.children]]）可选的子条目，支持多级下拉；
+#     想更深就继续写 [[nav.children.children]]…，任意层级省略 url 都会
+#     渲染成不可点击的组标题
+[[nav]]
+title = "Links"
+lang = "en"
+
+[[nav.children]]
+title = "Rust Blog"
+url = "https://blog.rust-lang.org/"
+
+[[nav.children]]
+title = "crates.io"
+url = "https://crates.io/"
+
+[[nav]]
+title = "外链"
+lang = "zh"
+
+[[nav.children]]
+title = "Rust 博客"
+url = "https://blog.rust-lang.org/"
+
+[[nav.children]]
+title = "crates.io"
+url = "https://crates.io/"
 ```
 
 ### 多语言下拉菜单

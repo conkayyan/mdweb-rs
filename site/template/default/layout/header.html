@@ -27,7 +27,9 @@
          mirrors the layout of post categories (which all live under a single
          "Categories" wrapper) without forcing a parallel "Pages" wrapper on
          the page side: every page section gets its own button, matching the
-         way it lives on disk. #}
+         way it lives on disk. The custom `[[nav]]` block below is rendered
+         between the page-section dropdowns and the flat page links — to
+         reposition it, just move the `{% if nav %}` block. #}
       {% for s in page_sections %}
         {% if s.has_children %}
         <div class="nav-item">
@@ -38,7 +40,34 @@
             {% endfor %}
           </ul>
         </div>
+        {% endif %}
+      {% endfor %}
+      {% if nav %}
+      {% for n in nav %}
+        {% if n.has_children %}
+        <div class="nav-item">
+          {% if n.url %}
+          <a class="nav-link has-caret{% if n.active %} is-active{% endif %}" href="{{ n.url }}">{{ n.title }}</a>
+          {% else %}
+          <span class="nav-link has-caret">{{ n.title }}</span>
+          {% endif %}
+          <ul class="dropdown">
+            {% for c in n.children %}
+              {% include "layout/_nav_node.html" %}
+            {% endfor %}
+          </ul>
+        </div>
         {% else %}
+          {% if n.url %}
+          <a class="nav-link{% if n.active %} is-active{% endif %}" href="{{ n.url }}">{{ n.title }}</a>
+          {% else %}
+          <span class="nav-link">{{ n.title }}</span>
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+      {% endif %}
+      {% for s in page_sections %}
+        {% if not s.has_children %}
         <a class="nav-link{% if s.descendant_active %} is-active{% endif %}" href="{{ s.url }}">{{ s.title }}</a>
         {% endif %}
       {% endfor %}

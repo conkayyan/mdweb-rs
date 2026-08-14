@@ -112,6 +112,18 @@ button.nav-link {
   font: inherit;
   cursor: pointer;
 }
+/* Non-clickable nav entries (custom nav items configured without a url) are
+   rendered as spans; drop the pointer cursor and the hover tint so they read
+   as plain group labels rather than links. */
+span.nav-link,
+.cat-link:not(a) {
+  cursor: default;
+}
+span.nav-link:hover,
+.cat-link:not(a):hover {
+  color: #cbd5e1;
+  background: transparent;
+}
 .nav-link:hover { color: #fff; background: rgba(255,255,255,.06); }
 .nav-link.is-active {
   color: #fff;
@@ -175,6 +187,18 @@ button.nav-link {
 .dropdown a:hover {
   color: #fff;
   background: rgba(255,255,255,.10);  /* match .nav-link:hover */
+}
+/* Non-clickable group headers inside dropdowns are spans, not <a>, so they
+   miss `.dropdown a`'s light color and would inherit the dark body `--c-fg`
+   from `.cat-link` — invisible on the dark dropdown. Match the link color,
+   and keep a hover highlight so hovering the group header still gives visual
+   feedback even though it has no url. */
+.dropdown .cat-link:not(a) {
+  color: #cbd5e1;
+}
+.dropdown .cat-link:not(a):hover {
+  color: #fff;
+  background: rgba(255,255,255,.10);
 }
 .dropdown a.is-active {
   color: #fff;

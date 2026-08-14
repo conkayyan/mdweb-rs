@@ -30,6 +30,73 @@ tag_cloud_limit = 0   # max tags in the sidebar cloud; 0 = show all
 # `show_friend_links = false` to hide the block even when entries exist.
 show_friend_links = true
 
+# Custom header navigation — a SEPARATE config from the sidebar friend links
+# above. Rendered in the header bar between the page-section dropdowns (like
+# "Docs") and the flat page links (like "About"). To reposition it, edit
+# template/default/layout/header.html and move the `{% if nav %}` block. The
+# whole nav block is hidden when there are no [[nav]] entries. Each entry:
+#   - title   required label
+#   - url     optional; omit to render a non-clickable group header
+#   - lang    optional; restrict the entry (and its children) to one language
+#   - children (via [[nav.children]]) optional nested entries (multi-level;
+#     keep adding [[nav.children.children]] … for deeper dropdowns, and omit
+#     url on any level for a non-clickable group header)
+#
+# The example below shows all three: an entry restricted to one language,
+# a nested group without a url ("Guides") and links inside it, plus plain
+# external links.
+#
+# NOTE: the [[nav]] and [[nav.children]] blocks are array headers; they follow
+# the same sticky-section rule as `[table]` headers, so keep bare top-level
+# keys (like the ones above) above all of them.
+[[nav]]
+title = "Links"
+lang = "en"
+
+[[nav.children]]
+title = "Guides"
+# no url → non-clickable group header that still opens a submenu
+
+[[nav.children.children]]
+title = "Beginner's Guide"
+url = "/posts/guide/"
+
+[[nav.children.children]]
+title = "Theme Guide"
+url = "/posts/theme/"
+
+[[nav.children]]
+title = "Rust Blog"
+url = "https://blog.rust-lang.org/"
+
+[[nav.children]]
+title = "crates.io"
+url = "https://crates.io/"
+
+[[nav]]
+title = "外链"
+lang = "zh"
+
+[[nav.children]]
+title = "指南"
+# 没有 url → 不可点击的组标题，仍可展开子菜单
+
+[[nav.children.children]]
+title = "新手指南"
+url = "/zh/posts/guide/"
+
+[[nav.children.children]]
+title = "主题指南"
+url = "/zh/posts/theme/"
+
+[[nav.children]]
+title = "Rust 博客"
+url = "https://blog.rust-lang.org/"
+
+[[nav.children]]
+title = "crates.io"
+url = "https://crates.io/"
+
 # NOTE: every top-level key above MUST appear before any `[table]` header
 # below. The minimal TOML-subset parser used by `site.toml` keeps a sticky
 # `section` once it enters a `[table]`, so a bare `key = value` line after

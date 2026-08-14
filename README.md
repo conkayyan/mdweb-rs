@@ -300,6 +300,15 @@ Notes:
   falling back to `updated`, then file mtime), like the post listings. Each
   listed page shows its date and summary (the frontmatter `summary`, or an
   auto-generated one — see `summary_length`).
+- Custom **header navigation** from `[[nav]]` tables in `site.toml` renders
+  **between** the page-section dropdowns and the flat page links (before
+  `About` in the demo). It is a **separate config** from the sidebar friend
+  links (`[[friend_links]]`). Each entry takes a `title`, an optional `url`
+  (omit it to render a non-clickable group header), an optional `lang`
+  restriction, and optional nested `[[nav.children]]` tables for multi-level
+  dropdowns. The whole nav block is hidden when no `[[nav]]` entries are
+  configured; its position is set by the `{% if nav %}` block in
+  `layout/header.html`, which you can move to reposition it.
 - A top-level `content/_index.md` is **optional**. Without one, `/` is just
   the article stream; with one, its body renders as a hero block above
   the list. Other top-level `.md` files at the site root are ignored —
@@ -462,6 +471,41 @@ url = "https://github.com/conkayyan/mdweb-rs"
 [[friend_links]]
 name = "Rust"
 url = "https://www.rust-lang.org/"
+
+# Custom header navigation — a SEPARATE config from the sidebar friend links.
+# Rendered in the header bar between the page-section dropdowns and the flat
+# page links (e.g. before "About" in this demo). To reposition it, edit
+# `layout/header.html` and move the `{% if nav %}` block. The nav block is
+# hidden when there are no [[nav]] entries. Each entry supports:
+#   - title   required label
+#   - url     optional; omit to render a non-clickable group header
+#   - lang    optional; restrict the entry (and its children) to one language
+#   - children (via [[nav.children]]) optional nested entries (multi-level;
+#     keep adding [[nav.children.children]] … for deeper dropdowns, and omit
+#     url on any level for a non-clickable group header)
+[[nav]]
+title = "Links"
+lang = "en"
+
+[[nav.children]]
+title = "Rust Blog"
+url = "https://blog.rust-lang.org/"
+
+[[nav.children]]
+title = "crates.io"
+url = "https://crates.io/"
+
+[[nav]]
+title = "外链"
+lang = "zh"
+
+[[nav.children]]
+title = "Rust 博客"
+url = "https://blog.rust-lang.org/"
+
+[[nav.children]]
+title = "crates.io"
+url = "https://crates.io/"
 ```
 
 ### Multi-language dropdown

@@ -2141,3 +2141,257 @@ search = "search"
     );
     assert_eq!(site.config.routes.search, "search", "[routes] still works");
 }
+
+#[test]
+fn custom_nav_renders_between_page_sections() {
+    // `[[nav]]` entries render in the header between the page-section
+    // dropdowns (e.g. pages/docs/ → "Docs") and the flat page links (e.g.
+    // pages/about.md → "About"). Entries without a url render as
+    // non-clickable group headers; nested `[[nav.children]]` become dropdown
+    // items.
+    let dir = tempdir("navpos");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+[[nav]]
+title = "Links"
+[[nav.children]]
+title = "mdweb"
+url = "https://github.com/conkayyan/mdweb-rs"
+[[nav.children]]
+title = "Rust"
+url = "https://www.rust-lang.org/"
+"#,
+    );
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+    write(&dir, "content/pages/_index.md", "---\ntitle: Pages\n---\nbody\n");
+    write(&dir, "content/pages/docs/_index.md", "---\ntitle: Docs\n---\nbody\n");
+    write(&dir, "content/pages/docs/guide.md", "---\ntitle: Guide\n---\nbody\n");
+    write(&dir, "content/pages/about.md", "---\ntitle: About\n---\nbody\n");
+
+    let site = Site::build(&dir, None).expect("build");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
+
+    let header_start = html
+        .find("class=\"primary-nav\"")
+        .expect("primary nav present");
+    let header_end = html[header_start..]
+        .find("</nav>")
+        .map(|i| header_start + i)
+        .expect("primary nav closes");
+    let header = &html[header_start..header_end];
+
+    // The custom nav sits between the page-section dropdown (Docs) and the
+    // flat page link (About).
+    let docs_pos = header.find(">Docs<").expect("Docs dropdown present");
+    let links_pos = header.find("Links").expect("nav group title present");
+    let about_pos = header
+        .find(">About<")
+        .expect("page section About present");
+    assert!(
+        docs_pos < links_pos && links_pos < about_pos,
+        "custom nav renders between Docs and About: {header}"
+    );
+
+    // No url on the group header → rendered as a span, not an <a href>.
+    assert!(
+        header.contains("<span class=\"nav-link has-caret\">Links</span>"),
+        "group header without url is non-clickable: {header}"
+    );
+    assert!(
+        header.contains("class=\"cat-link\" href=\"https://github.com/conkayyan/mdweb-rs\"")
+            || header.contains("href=\"https://github.com/conkayyan/mdweb-rs\" class=\"cat-link\""),
+        "child link renders clickable: {header}"
+    );
+    assert!(
+        header.contains("class=\"cat-link\" href=\"https://www.rust-lang.org/\"")
+            || header.contains("href=\"https://www.rust-lang.org/\" class=\"cat-link\""),
+        "second child link renders clickable: {header}"
+    );
+}
+
+#[test]
+fn custom_nav_hidden_when_config_empty() {
+    let dir = tempdir("navempty");
+    write(&dir, "site.toml", "title = \"X\"\n");
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+
+    let site = Site::build(&dir, None).expect("build");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
+    let header_start = html
+        .find("class=\"primary-nav\"")
+        .expect("primary nav present");
+    let header_end = html[header_start..]
+        .find("</nav>")
+        .map(|i| header_start + i)
+        .expect("primary nav closes");
+    let header = &html[header_start..header_end];
+    assert!(
+        !header.contains("Links") && !header.contains("nav-link has-caret\">"),
+        "no custom nav when config is empty: {header}"
+    );
+}
+
+#[test]
+fn custom_nav_filters_by_language() {
+    // An entry restricted to `lang = "zh"` only shows in the Chinese header;
+    // an entry with no `lang` shows everywhere.
+    let dir = tempdir("navlang");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+languages = ["en", "zh"]
+
+[[nav]]
+title = "Everywhere"
+url = "/everywhere/"
+
+[[nav]]
+title = "Chinese Only"
+lang = "zh"
+url = "/zh-only/"
+"#,
+    );
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+
+    let site = Site::build(&dir, None).expect("build");
+    let en = mdweb::render::render_home(&site, "en", 1).expect("render");
+    let zh = mdweb::render::render_home(&site, "zh", 1).expect("render");
+
+    let header_of = |html: &str| -> String {
+        let s = html.find("class=\"primary-nav\"").expect("nav present");
+        let e = html[s..].find("</nav>").map(|i| s + i).expect("nav closes");
+        html[s..e].to_string()
+    };
+    let en_header = header_of(&en);
+    let zh_header = header_of(&zh);
+    assert!(en_header.contains("Everywhere"), "unrestricted shows in en");
+    assert!(
+        !en_header.contains("Chinese Only"),
+        "zh-only entry hidden in en header"
+    );
+    assert!(zh_header.contains("Chinese Only"), "zh-only entry shows in zh");
+    assert!(zh_header.contains("Everywhere"), "unrestricted shows in zh");
+}
+
+#[test]
+fn custom_nav_supports_deep_nesting_without_url() {
+    // `[[nav.children.children]]` (3 levels deep) renders as a nested
+    // dropdown; entries without a url at any level render non-clickable.
+    let dir = tempdir("navdeep");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+[[nav]]
+title = "Resources"
+
+[[nav.children]]
+title = "Group"            # no url → non-clickable group header
+
+[[nav.children.children]]
+title = "Sub"              # no url → non-clickable deeper group
+
+[[nav.children.children.children]]
+title = "Leaf"
+url = "/leaf/"
+
+[[nav.children.children]]
+title = "Other Sub"
+url = "/other/"
+
+[[nav.children]]
+title = "Direct Link"
+url = "/direct/"
+"#,
+    );
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+
+    let site = Site::build(&dir, None).expect("build");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
+    let header = {
+        let s = html.find("class=\"primary-nav\"").expect("nav present");
+        let e = html[s..].find("</nav>").map(|i| s + i).expect("nav closes");
+        html[s..e].to_string()
+    };
+
+    // Top-level custom nav entry renders as a dropdown (has children).
+    assert!(
+        header.contains("<span class=\"nav-link has-caret\">Resources</span>"),
+        "root without url is non-clickable: {header}"
+    );
+
+    // Second level: no url → span; nested submenu still rendered.
+    assert!(
+        header.contains("<span class=\"cat-link\">Group <span class=\"sub-caret\"")
+            || header.contains("<span class=\"cat-link\">Group <span"),
+        "level-2 group without url is non-clickable: {header}"
+    );
+
+    // Third level: no url → span, nested further down.
+    assert!(
+        header.contains("<span class=\"cat-link\">Sub <span class=\"sub-caret\"")
+            || header.contains("<span class=\"cat-link\">Sub <span"),
+        "level-3 group without url is non-clickable: {header}"
+    );
+
+    // Leaves at depth 3 and 2 render as links.
+    assert!(
+        header.contains("href=\"/leaf/\"") || header.contains("class=\"cat-link\" href=\"/leaf/\""),
+        "deep leaf renders clickable: {header}"
+    );
+    assert!(
+        header.contains("href=\"/other/\"") || header.contains("class=\"cat-link\" href=\"/other/\""),
+        "level-3 leaf renders clickable: {header}"
+    );
+    assert!(
+        header.contains("href=\"/direct/\"") || header.contains("class=\"cat-link\" href=\"/direct/\""),
+        "level-2 leaf renders clickable: {header}"
+    );
+}
+
+#[test]
+fn custom_nav_child_without_url_is_non_clickable() {
+    // A dropdown child without a url renders as a span.cat-link (no href).
+    let dir = tempdir("navchild");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+[[nav]]
+title = "Group"
+[[nav.children]]
+title = "Plain"
+[[nav.children]]
+title = "Linked"
+url = "/linked/"
+"#,
+    );
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+
+    let site = Site::build(&dir, None).expect("build");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
+    let header_start = html
+        .find("class=\"primary-nav\"")
+        .expect("primary nav present");
+    let header_end = html[header_start..]
+        .find("</nav>")
+        .map(|i| header_start + i)
+        .expect("primary nav closes");
+    let header = &html[header_start..header_end];
+    assert!(
+        header.contains("<span class=\"cat-link\">Plain</span>"),
+        "child without url is a non-clickable span: {header}"
+    );
+    assert!(
+        header.contains("class=\"cat-link\" href=\"/linked/\"")
+            || header.contains("href=\"/linked/\" class=\"cat-link\""),
+        "child with url is a link: {header}"
+    );
+    assert!(
+        !header.contains("href=\"\""),
+        "no empty hrefs in the nav: {header}"
+    );
+}

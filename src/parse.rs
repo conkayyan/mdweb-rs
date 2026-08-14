@@ -203,6 +203,8 @@ pub fn parse_toml(text: &str) -> Result<Value, String> {
         if line.starts_with("[[") {
             // Array of tables: each [[name]] appends a new map into the
             // array at `name`. Subsequent key = value lines fill that map.
+            // Segments may nest arrays-of-tables: `[[nav]]` then
+            // `[[nav.children]]` appends into the *last* `[[nav]]` entry.
             if !line.ends_with("]]") {
                 return Err(format!("bad array header: {line}"));
             }
@@ -211,21 +213,8 @@ pub fn parse_toml(text: &str) -> Result<Value, String> {
                 .split('.')
                 .map(|s| s.trim().trim_matches('"').to_string())
                 .collect();
-            let arr_path = parts.join(".");
-            // Ensure the parent path holds an array, and append a new entry.
-            match root.path_mut(&arr_path) {
-                Some(v) => {
-                    if v.as_arr_mut().is_none() {
-                        *v = Value::Arr(Vec::new());
-                    }
-                }
-                None => {
-                    root.insert_path(&arr_path, Value::Arr(Vec::new()));
-                }
-            }
-            if let Some(Value::Arr(items)) = root.path_mut(&arr_path) {
-                items.push(Value::map());
-            }
+            push_array_entry(&mut root, &parts)
+                .map_err(|e| format!("bad array header {inner}: {e}"))?;
             section = parts.clone();
             array_section = Some(parts);
             continue;
@@ -248,15 +237,11 @@ pub fn parse_toml(text: &str) -> Result<Value, String> {
         let key = line[..eq].trim().trim_matches('"').to_string();
         let value = parse_scalar(line[eq + 1..].trim());
         if let Some(parts) = &array_section {
-            // Append into the current array entry.
-            let arr_path = parts.join(".");
-            if let Some(Value::Arr(items)) = root.path_mut(&arr_path) {
-                if items.is_empty() {
-                    items.push(Value::map());
-                }
-                if let Some(Value::Map(m)) = items.last_mut() {
-                    m.insert(key, value);
-                }
+            // Append into the current array entry. `parts` may nest through
+            // arrays-of-tables (e.g. `nav.children`), each of which is
+            // addressed by its last element.
+            if let Some(m) = array_section_map_mut(&mut root, parts) {
+                m.insert(key, value);
             }
         } else {
             let mut path = section.clone();
@@ -265,6 +250,81 @@ pub fn parse_toml(text: &str) -> Result<Value, String> {
         }
     }
     Ok(root)
+}
+
+/// Resolve the innermost map of an array-section path, descending through
+/// nested arrays-of-tables by taking the last element of each array. Used to
+/// fill in `key = value` lines under `[[nav]]` / `[[nav.children]]`.
+fn array_section_map_mut<'a>(
+    root: &'a mut Value,
+    parts: &[String],
+) -> Option<&'a mut BTreeMap<String, Value>> {
+    fn walk<'a>(
+        node: &'a mut Value,
+        parts: &[String],
+    ) -> Option<&'a mut BTreeMap<String, Value>> {
+        if parts.is_empty() {
+            // `node` is the array holding the entry's fields.
+            let items = node.as_arr_mut()?;
+            if items.is_empty() {
+                items.push(Value::map());
+            }
+            return items.last_mut().and_then(map_mut);
+        }
+        let cur = descend_array(node);
+        let m = map_mut(cur)?;
+        let (head, tail) = parts.split_first().unwrap();
+        let entry = m.entry(head.clone()).or_insert_with(Value::map);
+        walk(entry, tail)
+    }
+    walk(root, parts)
+}
+
+/// When `node` is an array-of-tables, descend into its last element (the
+/// "current" entry); otherwise return the node unchanged. Used while walking
+/// an array-section path where every intermediate array is addressed by its
+/// most recently pushed entry.
+fn descend_array(node: &mut Value) -> &mut Value {
+    match node {
+        Value::Arr(items) => {
+            if items.is_empty() {
+                items.push(Value::map());
+            }
+            items.last_mut().unwrap()
+        }
+        other => other,
+    }
+}
+
+/// Walk an array-of-tables header path and append a new (empty) map into the
+/// array named by the final segment. Intermediate segments address the last
+/// element of each array, so `[[nav.children]]` appends into the `children`
+/// array of the most recently pushed `[[nav]]` entry.
+fn push_array_entry(node: &mut Value, parts: &[String]) -> Result<(), String> {
+    // If `node` is an array-of-tables, the remaining path lives inside its
+    // last element (the "current" entry).
+    let cur = descend_array(node);
+    let m = map_mut(cur).ok_or_else(|| "expected a table".to_string())?;
+    if parts.len() == 1 {
+        let entry = m.entry(parts[0].clone()).or_insert_with(Value::map);
+        if entry.as_arr_mut().is_none() {
+            *entry = Value::Arr(Vec::new());
+        }
+        if let Value::Arr(items) = entry {
+            items.push(Value::map());
+        }
+        Ok(())
+    } else {
+        let entry = m.entry(parts[0].clone()).or_insert_with(Value::map);
+        push_array_entry(entry, &parts[1..])
+    }
+}
+
+fn map_mut(v: &mut Value) -> Option<&mut BTreeMap<String, Value>> {
+    match v {
+        Value::Map(m) => Some(m),
+        _ => None,
+    }
 }
 
 fn strip_comment(line: &str) -> &str {
@@ -442,6 +502,43 @@ mod tests {
                 .as_str(),
             Some("English")
         );
+    }
+
+    #[test]
+    fn parses_nested_array_of_tables() {
+        let t = r#"
+        [[nav]]
+        title = "Docs"
+        [[nav.children]]
+        title = "Guide"
+        url = "/guide/"
+        [[nav.children]]
+        title = "API"
+        url = "/api/"
+        [[nav]]
+        title = "Blog"
+        url = "/posts/"
+        "#;
+        let v = parse_toml(t).unwrap();
+        let m = v.as_map().unwrap();
+        let nav = m.get("nav").unwrap().as_arr().unwrap();
+        assert_eq!(nav.len(), 2);
+        let first = nav[0].as_map().unwrap();
+        assert_eq!(first.get("title").unwrap().as_str(), Some("Docs"));
+        let children = first.get("children").unwrap().as_arr().unwrap();
+        assert_eq!(children.len(), 2);
+        assert_eq!(
+            children[1]
+                .as_map()
+                .unwrap()
+                .get("url")
+                .unwrap()
+                .as_str(),
+            Some("/api/")
+        );
+        let second = nav[1].as_map().unwrap();
+        assert_eq!(second.get("title").unwrap().as_str(), Some("Blog"));
+        assert!(second.get("children").is_none());
     }
 
     #[test]

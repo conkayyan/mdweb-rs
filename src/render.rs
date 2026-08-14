@@ -72,6 +72,9 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
             ]))
         })
         .collect();
+    // Custom header navigation from `[[nav]]`. Filtered per language; entries
+    // without a url keep a `Null` url so templates can skip the `href`.
+    let nav = nav_value(&site.config.nav, lang, current_url);
     let rss_url = config.rss_url(lang);
     let search_action = config.search_url(lang);
     let sitemap_url = config.sitemap_url();
@@ -155,6 +158,7 @@ fn base_ctx(site: &Site, lang: &str, current_url: &str, current_query: &str) -> 
             Value::Bool(config.show_friend_links),
         ),
         ("friend_links".to_string(), Value::Arr(friend_links)),
+        ("nav".to_string(), nav),
         ("rss_url".to_string(), Value::str(&rss_url)),
         ("sitemap_url".to_string(), Value::str(&sitemap_url)),
         ("static_url".to_string(), Value::str(&static_url)),
@@ -212,6 +216,40 @@ fn unwrapped_page_sections_value(pages_tree: &Value) -> Value {
 /// section's hierarchy.
 fn root_pages_value(articles: &[Article], lang: &str, current_url: &str) -> Value {
     nav_links_value(articles, lang, current_url, |a| a.path.is_empty())
+}
+
+/// Custom header navigation from `[[nav]]` config: a recursive
+/// `{title, url, active, has_children, children}` tree. Entries restricted to
+/// a language are dropped for other languages; an entry without a url carries
+/// `url = Null` so templates can render it as non-clickable.
+fn nav_value(entries: &[crate::config::NavEntry], lang: &str, current_url: &str) -> Value {
+    let mut out = Vec::new();
+    for e in entries {
+        if let Some(l) = &e.lang {
+            if l != lang {
+                continue;
+            }
+        }
+        let children = nav_value(&e.children, lang, current_url);
+        let has_children = !matches!(&children, Value::Arr(a) if a.is_empty());
+        let active = e
+            .url
+            .as_deref()
+            .map(|u| u == current_url)
+            .unwrap_or(false);
+        let url = match &e.url {
+            Some(u) => Value::str(u),
+            None => Value::Null,
+        };
+        out.push(Value::Map(BTreeMap::from([
+            ("title".to_string(), Value::str(&e.title)),
+            ("url".to_string(), url),
+            ("active".to_string(), Value::Bool(active)),
+            ("has_children".to_string(), Value::Bool(has_children)),
+            ("children".to_string(), children),
+        ])));
+    }
+    Value::Arr(out)
 }
 
 /// Build a flat `{title,url,active}` link list from the articles matching the

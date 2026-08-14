@@ -156,6 +156,12 @@ pub struct Config {
     pub i18n: BTreeMap<String, BTreeMap<String, String>>,
     /// Friend links parsed from `[[friend_links]]` tables in site.toml.
     pub friend_links: Vec<FriendLink>,
+    /// Custom header navigation parsed from `[[nav]]` tables in site.toml.
+    /// Each entry may carry an optional `url` (a missing url renders the entry
+    /// as a non-clickable group header) and an optional `lang` restriction,
+    /// plus nested `[[nav.children]]` tables for multi-level dropdowns. The
+    /// nav block is omitted from the header when this list is empty.
+    pub nav: Vec<NavEntry>,
     /// Whether to surface the RSS feed link in templates. Default `true`.
     pub show_rss: bool,
     /// Whether to surface the sitemap link in templates. Default `true`.
@@ -371,6 +377,21 @@ pub struct FriendLink {
     pub url: String,
 }
 
+/// One entry under `[[nav]]` (or a nested `[[nav.children]]`).
+#[derive(Debug, Clone)]
+pub struct NavEntry {
+    /// Label shown in the header nav.
+    pub title: String,
+    /// Link target. `None` (or empty) renders the entry without an `href`,
+    /// i.e. it is not clickable — useful for a pure group header.
+    pub url: Option<String>,
+    /// Optional language restriction: when set, the entry (and its children)
+    /// only appear in headers for that language. `None` shows it everywhere.
+    pub lang: Option<String>,
+    /// Nested entries for multi-level dropdowns.
+    pub children: Vec<NavEntry>,
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
@@ -385,6 +406,7 @@ impl Default for Config {
             langs: BTreeMap::new(),
             i18n: BTreeMap::new(),
             friend_links: Vec::new(),
+            nav: Vec::new(),
             show_rss: true,
             show_sitemap: true,
             footer_html: String::new(),
@@ -402,6 +424,41 @@ impl Default for Config {
             extra: Value::map(),
         }
     }
+}
+
+/// Recursively parse `[[nav.children]]` entries from a `children` value.
+fn parse_nav_children(v: Option<&Value>) -> Vec<NavEntry> {
+    let Some(Value::Arr(items)) = v else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for item in items {
+        if let Value::Map(entry) = item {
+            let title = entry
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if title.is_empty() {
+                continue;
+            }
+            out.push(NavEntry {
+                title,
+                url: entry
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .filter(|s| !s.is_empty()),
+                lang: entry
+                    .get("lang")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .filter(|s| !s.is_empty()),
+                children: parse_nav_children(entry.get("children")),
+            });
+        }
+    }
+    out
 }
 
 impl Config {
@@ -514,6 +571,34 @@ impl Config {
                     if !name.is_empty() && !url.is_empty() {
                         cfg.friend_links.push(FriendLink { name, url });
                     }
+                }
+            }
+        }
+        if let Some(Value::Arr(items)) = m.get("nav") {
+            for item in items {
+                if let Value::Map(entry) = item {
+                    let title = entry
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if title.is_empty() {
+                        continue;
+                    }
+                    cfg.nav.push(NavEntry {
+                        title,
+                        url: entry
+                            .get("url")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .filter(|s| !s.is_empty()),
+                        lang: entry
+                            .get("lang")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .filter(|s| !s.is_empty()),
+                        children: parse_nav_children(entry.get("children")),
+                    });
                 }
             }
         }
@@ -1032,5 +1117,60 @@ enabled = false
         );
         assert!(!cfg.security.enabled);
         assert_eq!(cfg.security.csp_header(), "");
+    }
+
+    #[test]
+    fn nav_defaults_to_empty() {
+        let cfg = parse(r#"title = "X""#);
+        assert!(cfg.nav.is_empty());
+    }
+
+    #[test]
+    fn nav_parses_multi_level_entries() {
+        let cfg = parse(
+            r#"
+[[nav]]
+title = "Docs"
+url = "/pages/docs/"
+
+[[nav.children]]
+title = "Guide"
+url = "/pages/docs/guide/"
+
+[[nav.children]]
+title = "Notes"
+lang = "zh"
+
+[[nav]]
+title = "No URL"
+children = []
+
+[[nav]]
+title = "Blog"
+url = "/posts/"
+lang = "en"
+"#,
+        );
+        assert_eq!(cfg.nav.len(), 3);
+
+        let docs = &cfg.nav[0];
+        assert_eq!(docs.title, "Docs");
+        assert_eq!(docs.url.as_deref(), Some("/pages/docs/"));
+        assert_eq!(docs.children.len(), 2);
+        assert_eq!(docs.children[0].title, "Guide");
+        assert_eq!(docs.children[0].url.as_deref(), Some("/pages/docs/guide/"));
+        assert!(docs.children[0].lang.is_none());
+        assert_eq!(docs.children[1].title, "Notes");
+        assert!(docs.children[1].url.is_none());
+        assert_eq!(docs.children[1].lang.as_deref(), Some("zh"));
+
+        let no_url = &cfg.nav[1];
+        assert_eq!(no_url.title, "No URL");
+        assert!(no_url.url.is_none());
+        assert!(no_url.children.is_empty());
+
+        let blog = &cfg.nav[2];
+        assert_eq!(blog.title, "Blog");
+        assert_eq!(blog.lang.as_deref(), Some("en"));
     }
 }
