@@ -392,6 +392,8 @@ pub struct NavEntry {
     /// Link target. `None` (or empty) renders the entry without an `href`,
     /// i.e. it is not clickable — useful for a pure group header.
     pub url: Option<String>,
+    /// When `true`, the link renders with `target="_blank" rel="noopener"`.
+    pub external: bool,
     /// Optional language restriction: when set, the entry (and its children)
     /// only appear in headers for that language. `None` shows it everywhere.
     pub lang: Option<String>,
@@ -457,6 +459,7 @@ fn parse_nav_children(v: Option<&Value>) -> Vec<NavEntry> {
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
                     .filter(|s| !s.is_empty()),
+                external: entry.get("external").and_then(|v| v.as_bool()).unwrap_or(false),
                 lang: entry
                     .get("lang")
                     .and_then(|v| v.as_str())
@@ -603,6 +606,10 @@ impl Config {
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string())
                             .filter(|s| !s.is_empty()),
+                        external: entry
+                            .get("external")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false),
                         lang: entry
                             .get("lang")
                             .and_then(|v| v.as_str())

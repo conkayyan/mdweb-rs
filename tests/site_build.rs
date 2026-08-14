@@ -2397,6 +2397,68 @@ url = "/linked/"
 }
 
 #[test]
+fn custom_nav_external_links_open_in_new_tab() {
+    // Entries with `external = true` render with target="_blank"
+    // rel="noopener"; the flag is opt-in and independent of the url.
+    let dir = tempdir("navext");
+    write(
+        &dir,
+        "site.toml",
+        r#"title = "X"
+[[nav]]
+title = "External"
+url = "/external/"
+external = true
+
+[[nav]]
+title = "Plain"
+
+[[nav.children]]
+title = "Rust Blog"
+url = "https://blog.rust-lang.org/"
+external = true
+
+[[nav.children]]
+title = "Docs"
+url = "/posts/theme/"
+
+[[nav]]
+title = "Internal"
+url = "/about/"
+"#,
+    );
+    write(&dir, "content/_index.md", "---\n---\nbody\n");
+
+    let site = Site::build(&dir, None).expect("build");
+    let html = mdweb::render::render_home(&site, "en", 1).expect("render");
+    let header_start = html
+        .find("class=\"primary-nav\"")
+        .expect("primary nav present");
+    let header_end = html[header_start..]
+        .find("</nav>")
+        .map(|i| header_start + i)
+        .expect("primary nav closes");
+    let header = &html[header_start..header_end];
+
+    assert!(
+        header.contains("href=\"/external/\" target=\"_blank\" rel=\"noopener\""),
+        "top-level external link opens in a new tab: {header}"
+    );
+    assert!(
+        header.contains("href=\"https://blog.rust-lang.org/\" class=\"cat-link\" target=\"_blank\" rel=\"noopener\""),
+        "nested external child opens in a new tab: {header}"
+    );
+    assert!(
+        header.contains("href=\"/about/\"") && !header.contains("href=\"/about/\" target=\"_blank\""),
+        "link without the flag stays same-tab: {header}"
+    );
+    assert!(
+        header.contains("href=\"/posts/theme/\" class=\"cat-link\"") && !header.contains("href=\"/posts/theme/\" class=\"cat-link\" target=\"_blank\""),
+        "internal child without the flag stays same-tab: {header}"
+    );
+}
+
+#[test]
 fn aliases_parse_into_canonical_url_and_value() {
     // Frontmatter `aliases = ["about-us", "contact"]` makes the first alias
     // the canonical URL, exposes the full list on the Article, and leaks the

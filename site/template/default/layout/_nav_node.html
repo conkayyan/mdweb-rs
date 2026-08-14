@@ -1,5 +1,5 @@
 <li class="dropdown-item{% if c.has_children %} has-sub{% endif %}">
-  {% if c.url %}<a href="{{ c.url }}" class="cat-link{% if c.active %} is-active{% endif %}">{% else %}<span class="cat-link">{% endif %}{{ c.title }}{% if c.has_children %} <span class="sub-caret" aria-hidden="true">›</span>{% endif %}{% if c.url %}</a>{% else %}</span>{% endif %}
+  {% if c.url %}<a href="{{ c.url }}" class="cat-link{% if c.active %} is-active{% endif %}"{% if c.external %} target="_blank" rel="noopener"{% endif %}>{% else %}<span class="cat-link">{% endif %}{{ c.title }}{% if c.has_children %} <span class="sub-caret" aria-hidden="true">›</span>{% endif %}{% if c.url %}</a>{% else %}</span>{% endif %}
   {% if c.has_children %}
   <ul class="dropdown-sub">
     {% for c in c.children %}

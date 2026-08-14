@@ -250,6 +250,10 @@ fn nav_value(entries: &[crate::config::NavEntry], lang: &str, current_url: &str)
         out.push(Value::Map(BTreeMap::from([
             ("title".to_string(), Value::str(&e.title)),
             ("url".to_string(), url),
+            (
+                "external".to_string(),
+                Value::Bool(e.external),
+            ),
             ("active".to_string(), Value::Bool(active)),
             ("has_children".to_string(), Value::Bool(has_children)),
             ("children".to_string(), children),

@@ -35,16 +35,18 @@ show_friend_links = true
 # "Docs") and the flat page links (like "About"). To reposition it, edit
 # template/default/layout/header.html and move the `{% if nav %}` block. The
 # whole nav block is hidden when there are no [[nav]] entries. Each entry:
-#   - title   required label
-#   - url     optional; omit to render a non-clickable group header
-#   - lang    optional; restrict the entry (and its children) to one language
+#   - title    required label
+#   - url      optional; omit to render a non-clickable group header
+#   - external optional bool; when true the link opens in a new tab
+#     (target="_blank" rel="noopener")
+#   - lang     optional; restrict the entry (and its children) to one language
 #   - children (via [[nav.children]]) optional nested entries (multi-level;
 #     keep adding [[nav.children.children]] … for deeper dropdowns, and omit
 #     url on any level for a non-clickable group header)
 #
 # The example below shows all three: an entry restricted to one language,
 # a nested group without a url ("Guides") and links inside it, plus plain
-# external links.
+# external links (with `external = true` to open them in a new tab).
 #
 # NOTE: the [[nav]] and [[nav.children]] blocks are array headers; they follow
 # the same sticky-section rule as `[table]` headers, so keep bare top-level
@@ -68,10 +70,12 @@ url = "/posts/theme/"
 [[nav.children]]
 title = "Rust Blog"
 url = "https://blog.rust-lang.org/"
+external = true
 
 [[nav.children]]
 title = "crates.io"
 url = "https://crates.io/"
+external = true
 
 [[nav]]
 title = "外链"
@@ -92,10 +96,12 @@ url = "/zh/posts/theme/"
 [[nav.children]]
 title = "Rust 博客"
 url = "https://blog.rust-lang.org/"
+external = true
 
 [[nav.children]]
 title = "crates.io"
 url = "https://crates.io/"
+external = true
 
 # NOTE: every top-level key above MUST appear before any `[table]` header
 # below. The minimal TOML-subset parser used by `site.toml` keeps a sticky

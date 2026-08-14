@@ -304,7 +304,8 @@ Notes:
   **between** the page-section dropdowns and the flat page links (before
   `About` in the demo). It is a **separate config** from the sidebar friend
   links (`[[friend_links]]`). Each entry takes a `title`, an optional `url`
-  (omit it to render a non-clickable group header), an optional `lang`
+  (omit it to render a non-clickable group header), an optional `external`
+  bool (when true the link opens in a new tab), an optional `lang`
   restriction, and optional nested `[[nav.children]]` tables for multi-level
   dropdowns. The whole nav block is hidden when no `[[nav]]` entries are
   configured; its position is set by the `{% if nav %}` block in
@@ -482,6 +483,7 @@ url = "https://www.rust-lang.org/"
 # hidden when there are no [[nav]] entries. Each entry supports:
 #   - title   required label
 #   - url     optional; omit to render a non-clickable group header
+#   - external optional bool; when true the link opens in a new tab
 #   - lang    optional; restrict the entry (and its children) to one language
 #   - children (via [[nav.children]]) optional nested entries (multi-level;
 #     keep adding [[nav.children.children]] … for deeper dropdowns, and omit
@@ -493,10 +495,12 @@ lang = "en"
 [[nav.children]]
 title = "Rust Blog"
 url = "https://blog.rust-lang.org/"
+external = true
 
 [[nav.children]]
 title = "crates.io"
 url = "https://crates.io/"
+external = true
 
 [[nav]]
 title = "外链"
@@ -505,10 +509,12 @@ lang = "zh"
 [[nav.children]]
 title = "Rust 博客"
 url = "https://blog.rust-lang.org/"
+external = true
 
 [[nav.children]]
 title = "crates.io"
 url = "https://crates.io/"
+external = true
 ```
 
 ### Multi-language dropdown

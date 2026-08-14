@@ -47,7 +47,7 @@
         {% if n.has_children %}
         <div class="nav-item">
           {% if n.url %}
-          <a class="nav-link has-caret{% if n.active %} is-active{% endif %}" href="{{ n.url }}">{{ n.title }}</a>
+          <a class="nav-link has-caret{% if n.active %} is-active{% endif %}" href="{{ n.url }}"{% if n.external %} target="_blank" rel="noopener"{% endif %}>{{ n.title }}</a>
           {% else %}
           <span class="nav-link has-caret">{{ n.title }}</span>
           {% endif %}
@@ -59,7 +59,7 @@
         </div>
         {% else %}
           {% if n.url %}
-          <a class="nav-link{% if n.active %} is-active{% endif %}" href="{{ n.url }}">{{ n.title }}</a>
+          <a class="nav-link{% if n.active %} is-active{% endif %}" href="{{ n.url }}"{% if n.external %} target="_blank" rel="noopener"{% endif %}>{{ n.title }}</a>
           {% else %}
           <span class="nav-link">{{ n.title }}</span>
           {% endif %}
