@@ -139,13 +139,16 @@ pages        = "pages"         # pages container:      content/pages/... → /pa
 
 # Security response headers — on by default. Every response carries
 # `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`,
-# `Referrer-Policy: no-referrer` and a Content-Security-Policy tuned for the
+# `Referrer-Policy: unsafe-url` and a Content-Security-Policy tuned for the
 # default themes + analytics. `enabled = false` turns them all off; `csp`
 # replaces the built-in policy (empty string omits the CSP header entirely).
-#
-# [security]
-# enabled = true
-# csp = "default-src 'self'; frame-ancestors 'self'"
+# `referrer_policy` replaces the referrer policy; `unsafe-url` always sends
+# the full referrer so ad/analytics conversion tracking keeps working — set it
+# to `no-referrer` for maximum privacy (at the cost of breaking
+# referrer-based attribution).
+[security]
+enabled = true
+referrer_policy = "unsafe-url"
 
 [lang.en]
 title = "My Blog"

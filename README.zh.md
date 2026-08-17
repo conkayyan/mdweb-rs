@@ -543,17 +543,20 @@ pages        = "pages"         # 页面容器：         content/pages/... → /
 ### 安全响应头（`[security]`）
 
 每个响应都会带 `X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`
-与 `Referrer-Policy: no-referrer`，外加一条针对默认主题与内置统计脚本调优过的
+与 `Referrer-Policy: unsafe-url`，外加一条针对默认主题与内置统计脚本调优过的
 `Content-Security-Policy`。以上均可通过 `[security]` 表自定义：
 
 ```toml
 [security]
 enabled = false            # 关闭所有附加响应头
 csp = "default-src 'self'" # 自定义完整策略；空值则不发送 CSP 头
+referrer_policy = "no-referrer" # 空值则不发送该头；默认为 unsafe-url
 ```
 
 `enabled` 默认 `true`。设置 `csp` 可替换内置策略（例如放行自建的统计域名）；
-设为空字符串则完全不发送 CSP 头。
+设为空字符串则完全不发送 CSP 头。默认的 `unsafe-url` 会始终发送完整
+referrer，保证广告/统计归因正常工作（部分统计代码在 referrer 缺失时会报错）；
+如需最大隐私可改回 `no-referrer`（代价是 referrer 类归因会失效）。
 
 ## 标签页面
 

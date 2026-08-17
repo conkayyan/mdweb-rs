@@ -474,10 +474,13 @@ fn respond(
         };
         (
             csp_line,
-            "X-Content-Type-Options: nosniff\r\nX-Frame-Options: SAMEORIGIN\r\nReferrer-Policy: no-referrer\r\n",
+            format!(
+                "X-Content-Type-Options: nosniff\r\nX-Frame-Options: SAMEORIGIN\r\n{referrer}",
+                referrer = security.referrer_header()
+            ),
         )
     } else {
-        (String::new(), "")
+        (String::new(), String::new())
     };
     let head = format!(
         "HTTP/1.1 {status} {reason}\r\nContent-Type: {ctype}\r\nContent-Length: {}\r\nConnection: close\r\nServer: mdweb\r\n{harden}{csp_line}\r\n",

@@ -583,7 +583,7 @@ the RSS feed and the sitemap — follows the new prefix (`posts = "blog"` turns
 ### Security headers
 
 Every response carries `X-Content-Type-Options: nosniff`,
-`X-Frame-Options: SAMEORIGIN` and `Referrer-Policy: no-referrer`, plus a
+`X-Frame-Options: SAMEORIGIN` and `Referrer-Policy: unsafe-url`, plus a
 `Content-Security-Policy` balanced for the default themes and the built-in
 analytics snippets. All of this is configurable under `[security]`:
 
@@ -591,11 +591,16 @@ analytics snippets. All of this is configurable under `[security]`:
 [security]
 enabled = false                        # turn off all extra headers
 csp = "default-src 'self'"             # full policy override; "" omits the header
+referrer_policy = "no-referrer"        # "" omits the header; default is unsafe-url
 ```
 
 `enabled` defaults to `true`. Set `csp` to replace the built-in policy with
 your own (for example to allow a self-hosted analytics origin); an empty value
-sends no `Content-Security-Policy` header at all.
+sends no `Content-Security-Policy` header at all. The default `unsafe-url`
+referrer policy always sends the full referrer, which keeps ad/analytics
+conversion tracking working (some trackers error out when the referrer is
+missing); switch it to `no-referrer` for maximum privacy (at the cost of
+breaking referrer-based attribution).
 
 ## Tag pages
 

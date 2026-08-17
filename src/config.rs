@@ -241,6 +241,11 @@ pub struct SecurityConfig {
     /// Content-Security-Policy override. `None` uses `DEFAULT_CSP`; an empty
     /// string omits the header entirely.
     pub csp: Option<String>,
+    /// `Referrer-Policy` value. Defaults to `unsafe-url` so the full referrer
+    /// is always sent to any destination — required by ad/analytics
+    /// conversion tracking that errors out when the referrer is missing.
+    /// Set to `no-referrer` for maximum privacy.
+    pub referrer_policy: String,
 }
 
 impl Default for SecurityConfig {
@@ -248,6 +253,7 @@ impl Default for SecurityConfig {
         SecurityConfig {
             enabled: true,
             csp: None,
+            referrer_policy: "unsafe-url".into(),
         }
     }
 }
@@ -259,6 +265,14 @@ impl SecurityConfig {
             return String::new();
         }
         self.csp.clone().unwrap_or_else(|| DEFAULT_CSP.to_string())
+    }
+
+    /// The `Referrer-Policy` header line, or an empty string to omit it.
+    pub fn referrer_header(&self) -> String {
+        if !self.enabled || self.referrer_policy.is_empty() {
+            return String::new();
+        }
+        format!("Referrer-Policy: {}\r\n", self.referrer_policy)
     }
 }
 
@@ -625,6 +639,9 @@ impl Config {
             }
             if let Some(s) = sm.get("csp").and_then(|v| v.as_str()) {
                 cfg.security.csp = Some(s.to_string());
+            }
+            if let Some(s) = sm.get("referrer_policy").and_then(|v| v.as_str()) {
+                cfg.security.referrer_policy = s.trim().to_string();
             }
         }
         if let Some(rm) = m.get("routes").and_then(|v| v.as_map()) {
@@ -1171,6 +1188,38 @@ enabled = false
         );
         assert!(!cfg.security.enabled);
         assert_eq!(cfg.security.csp_header(), "");
+        assert_eq!(cfg.security.referrer_header(), "");
+    }
+
+    #[test]
+    fn security_referrer_defaults_to_unsafe_url() {
+        let cfg = parse(r#"title = "X""#);
+        assert_eq!(cfg.security.referrer_header(), "Referrer-Policy: unsafe-url\r\n");
+    }
+
+    #[test]
+    fn security_referrer_can_be_overridden() {
+        let cfg = parse(
+            r#"
+[security]
+referrer_policy = "strict-origin-when-cross-origin"
+"#,
+        );
+        assert_eq!(
+            cfg.security.referrer_header(),
+            "Referrer-Policy: strict-origin-when-cross-origin\r\n"
+        );
+    }
+
+    #[test]
+    fn security_referrer_can_be_omitted() {
+        let cfg = parse(
+            r#"
+[security]
+referrer_policy = ""
+"#,
+        );
+        assert_eq!(cfg.security.referrer_header(), "");
     }
 
     #[test]
